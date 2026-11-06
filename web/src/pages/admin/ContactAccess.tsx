@@ -7,7 +7,7 @@ import { put, SENS, type PartyDetail as ContactDetail, type ProfileLine as Field
 import { Confirm, Pills, Toggle, useAction, useAsync, type ConfirmCfg } from '../../ui';
 import { fetchCatalog, GROUPS, Lock, Mono, type Domain } from '../../life';
 
-type Grants = ContactDetail['grants'];
+type Grants = ContactDetail['share'];
 type DomainGrant = { scope: 'all' | 'current'; includeSecret: boolean };
 type Level = 'off' | 'current' | 'all';
 
@@ -24,53 +24,54 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
   const [extraOpen, setExtraOpen] = useState<boolean | null>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-  const grants = c.grants;
-  const dg = grants.domains || {};
+  const grants = c.share;
+  const dg = grants.categories || {};
 
   const send = async (body: object, msg?: string) => {
-    const g = await run(() => put<Grants>(`/api/parties/${c.id}/grants`, body), msg);
+    const g = await run(() => put<Grants>(`/api/parties/${c.id}/share`, body), msg);
     if (g) onGrants(g);
     return g;
   };
 
   // ── profile fields ──
-  const standard = fields.filter((f) => f.sensitivity === 'standard');
-  const extraRows = fields.filter((f) => f.sensitivity !== 'standard' || !grants.profile);
-  const extraOn = grants.fields.length;
+  // The basic profile is the owner's list (Profile basics); extras are lines added for this person.
+  const standard = fields.filter((f) => f.inBasic);
+  const extraRows = fields.filter((f) => !f.inBasic || !grants.basic);
+  const extraOn = grants.lines.length;
   const requested = c.request?.requestedFields ?? [];
   const requestedSensitive = requested.some((k) => fields.find((f) => f.key === k)?.sensitivity !== 'standard');
   const showExtra = extraOpen ?? (extraOn > 0 || requestedSensitive);
   const toggleField = (f: Field) => {
-    const on = grants.fields.includes(f.key);
+    const on = grants.lines.includes(f.key);
     if (!on && f.sensitivity === 'secret') {
       return setConfirm({
         title: `Share ${f.label} with ${first}?`,
         body: `This is a secret field. ${first} will see the full value until you turn this off. Each read is logged in your activity.`,
         cta: 'Share it',
-        onConfirm: async () => { await send({ fields: { [f.key]: true }, confirm: true }, `${f.label} shared with ${first}`); setConfirm(null); },
+        onConfirm: async () => { await send({ lines: { [f.key]: true }, confirm: true }, `${f.label} shared with ${first}`); setConfirm(null); },
       });
     }
-    send({ fields: { [f.key]: !on } });
+    send({ lines: { [f.key]: !on } });
   };
 
   // ── categories ──
   const levelOf = (d: Domain): Level => (dg[d.id] ? (d.dated ? dg[d.id].scope : 'all') : 'off');
   const hasSecretParts = (d: Domain) => d.parts.some((p) => p.sensitivity === 'secret');
   const setLevel = (d: Domain, level: Level, includeSecret = dg[d.id]?.includeSecret ?? false) => {
-    if (level === 'off') return send({ domains: { [d.id]: false } }, `${d.label} hidden from ${first}`);
+    if (level === 'off') return send({ categories: { [d.id]: false } }, `${d.label} hidden from ${first}`);
     const grant: DomainGrant = { scope: level === 'current' ? 'current' : 'all', includeSecret };
-    if ((d.sensitivity === 'secret' && !dg[d.id]) || (includeSecret && !dg[d.id]?.includeSecret)) {
+    if ((d.confirmShare && !dg[d.id]) || (includeSecret && !dg[d.id]?.includeSecret)) {
       const secretParts = d.parts.filter((p) => p.sensitivity === 'secret').map((p) => p.label.toLowerCase());
       return setConfirm({
         title: `Share ${d.label} with ${first}?`,
         body: includeSecret
           ? `${first} will also see the secret details: ${secretParts.join(', ')}. Each read is logged in your activity.`
-          : `${d.label} is a secret category. ${first} will see it${d.dated ? (grant.scope === 'current' ? ' (current entries)' : ' (all entries)') : ''} until you turn this off.${secretParts.length ? ` Secret details (${secretParts.join(', ')}) stay hidden unless you include them.` : ''} Each read is logged.`,
+          : `${d.label} holds sensitive records. ${first} will see it${d.dated ? (grant.scope === 'current' ? ' (current entries)' : ' (all entries)') : ''} until you turn this off.${secretParts.length ? ` Secret details (${secretParts.join(', ')}) stay hidden unless you include them.` : ''} Each read is logged.`,
         cta: 'Share it',
-        onConfirm: async () => { await send({ domains: { [d.id]: grant }, confirm: true }, `${d.label} shared with ${first}`); setConfirm(null); },
+        onConfirm: async () => { await send({ categories: { [d.id]: grant }, confirm: true }, `${d.label} shared with ${first}`); setConfirm(null); },
       });
     }
-    return send({ domains: { [d.id]: grant } });
+    return send({ categories: { [d.id]: grant } });
   };
 
   const applyPreset = async (p: (typeof PRESETS)[number]) => {
@@ -79,16 +80,16 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
     for (const d of catalog) {
       const want = p.domains[d.id];
       // Presets never switch on secret categories; "Just the basics" switches everything off.
-      if (d.sensitivity === 'secret' && p.id !== 'basic') continue;
+      if (d.confirmShare && p.id !== 'basic') continue;
       if (want) domains[d.id] = { scope: d.dated && want === 'current' ? 'current' : 'all', includeSecret: false };
       else if (dg[d.id]) domains[d.id] = false;
     }
-    await send({ profile: true, domains }, `${p.label} access applied`);
+    await send({ basic: true, categories: domains }, `${p.label} access applied`);
   };
 
   const sharedDomains = catalog?.filter((d) => dg[d.id]) ?? [];
-  const summary = [grants.profile ? 'Basic profile' : null, extraOn ? `${extraOn} extra field${extraOn === 1 ? '' : 's'}` : null, sharedDomains.length ? `${sharedDomains.length} categor${sharedDomains.length === 1 ? 'y' : 'ies'}` : null].filter(Boolean).join(' + ') || 'Nothing';
-  const activePreset = PRESETS.find((p) => catalog && catalog.filter((d) => d.sensitivity !== 'secret').every((d) => (p.domains[d.id] ?? 'off') === levelOf(d)) && grants.profile);
+  const summary = [grants.basic ? 'Basic profile' : null, extraOn ? `${extraOn} extra field${extraOn === 1 ? '' : 's'}` : null, sharedDomains.length ? `${sharedDomains.length} categor${sharedDomains.length === 1 ? 'y' : 'ies'}` : null].filter(Boolean).join(' + ') || 'Nothing';
+  const activePreset = PRESETS.find((p) => catalog && catalog.filter((d) => !d.confirmShare).every((d) => (p.domains[d.id] ?? 'off') === levelOf(d)) && grants.basic);
 
   return (
     <div className="card" style={{ padding: '22px 24px', gap: 14 }}>
@@ -116,9 +117,9 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderRadius: 24, background: 'var(--color-accent-2-100)' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--color-accent-2-900)' }}>Basic profile</div>
-            <div style={{ fontSize: 13, color: 'var(--color-accent-2-800)' }}>{grants.profile ? standard.map((f) => f.label).join(' · ') : `Off. ${first} only sees what you switch on below.`}</div>
+            <div style={{ fontSize: 13, color: 'var(--color-accent-2-800)' }}>{grants.basic ? standard.map((f) => f.label).join(' · ') : `Off. ${first} only sees what you switch on below.`}</div>
           </div>
-          <Toggle on={grants.profile} label="Share basic profile" onChange={() => { send({ profile: !grants.profile }); if (grants.profile) setExtraOpen(true); }} />
+          <Toggle on={grants.basic} label="Share basic profile" onChange={() => { send({ profile: !grants.basic }); if (grants.basic) setExtraOpen(true); }} />
         </div>
         <button className="btn btn-ghost" onClick={() => setExtraOpen(!showExtra)} style={{ justifySelf: 'start', fontSize: 13 }}>
           {showExtra ? 'Hide extra profile fields' : extraOn ? `Extra profile fields · ${extraOn} shared` : 'Share an extra profile field…'}
@@ -130,7 +131,7 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14 }}>{f.label}</div><div className="text-muted" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.value || 'Not added'}</div></div>
                 {requested.includes(f.key) && <span className="tag tag-accent">Requested</span>}
                 <span className={`tag ${SENS[f.sensitivity][1]}`}>{SENS[f.sensitivity][0]}</span>
-                <Toggle on={grants.fields.includes(f.key)} label={`Share ${f.label}`} onChange={() => toggleField(f)} />
+                <Toggle on={grants.lines.includes(f.key)} label={`Share ${f.label}`} onChange={() => toggleField(f)} />
               </div>
             ))}
           </div>

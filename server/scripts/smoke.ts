@@ -189,24 +189,42 @@ async function main() {
     ok(detB.sharedIn.some((f: any) => f.key === 'address'), 'B reads the sensitive field A offered');
     ok(!detB.sharedIn.some((f: any) => f.key === 'legal_name'), "B doesn't get A's legal name: it's sensitive, not in the basic profile");
 
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { fields: { legal_name: true } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { lines: { legal_name: true } });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(detB.sharedIn.some((f: any) => f.key === 'legal_name' && f.value === 'Maya Elin Lindqvist'), 'B reads the legal name once it’s shared with them');
     await a.call('PATCH', `/api/data/names/${legalName.id}`, { sensitivity: 'secret' });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(!detB.sharedIn.some((f: any) => f.key === 'legal_name'), 'once the entry is secret, the line stops leaving');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { fields: { legal_name: true } }, [400]);
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { lines: { legal_name: true } }, [400]);
     ok(true, 'and a secret line can’t be granted');
     await a.call('PATCH', `/api/data/names/${legalName.id}`, { sensitivity: null });
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { profile: false, fields: { legal_name: false, address: false } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { basic: false, lines: { legal_name: false, address: false } });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(detB.sharedIn.length === 0, 'turning sharing off removes it on the next read');
     const audit = (await a.call('GET', '/api/audit?limit=50')).items;
     ok(audit.some((e: any) => e.action === 'field.read'), "A's audit log records B's reads");
 
+    // The basic profile is a list you edit; your Little Dipper is always on it.
+    const basicNow = await a.call('GET', '/api/profile/basic');
+    ok(basicNow.lines.join() === 'little_dipper,preferred_name,lives_in,email', 'the basic profile starts as your Little Dipper, preferred name, where you live and email');
+    await a.call('PUT', '/api/profile/basic', { lines: ['preferred_name', 'phone'] });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { basic: true });
+    detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
+    ok(detB.sharedIn.some((f: any) => f.key === 'phone') && !detB.sharedIn.some((f: any) => f.key === 'email') && detB.sharedIn.some((f: any) => f.key === 'little_dipper' && f.value.includes('ldn_')), 'editing the basic profile changes what connections get; the Little Dipper line stays');
+    await a.call('PUT', '/api/profile/basic', { lines: ['legal_name', 'nope'] }, [400]);
+    await a.call('PUT', '/api/profile/basic', { lines: ['preferred_name', 'lives_in', 'email'] });
+    // One entry shared on its own, without its category.
+    const kyoto = (await a.call('GET', '/api/data/residences')).items[0];
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { entries: { [kyoto.id]: true } });
+    detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
+    const oneJob = detB.sharedDomains.find((d: any) => d.domain === 'residences');
+    ok(oneJob?.records.length === 1 && oneJob.records[0].id === kyoto.id, 'a single entry can be shared without its whole category');
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { entries: { [kyoto.id]: false } });
+    detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
+    ok(!detB.sharedDomains.some((d: any) => d.domain === 'residences'), 'and unshared again');
     const rot = await a.call('POST', `/api/federation/links/${detA.node.linkId}/rotate`, {});
     ok(rot.rotated, 'connection refreshed (tokens rotated)');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { profile: true });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { basic: true });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(detB.sharedIn.length > 0 && !detB.syncError, 'reads still work after rotation');
 
@@ -476,26 +494,26 @@ async function main() {
     ok(!(await a.call('GET', '/api/notifications')).items.some((n: any) => n.id === reviewNote.id), 'a dismissed notification stays hidden');
     for (const r of (await a.call('GET', '/api/reviews')).items) await a.call('POST', `/api/reviews/${r.id}/reject`);
     // Sharing a domain with a connection
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { employment: { scope: 'current' } } });
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { ids: true } }, [409]);
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { employment: { scope: 'current' } } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { ids: true } }, [409]);
     ok(true, 'secret domain needs confirmation');
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     const sharedJobs = detB.sharedDomains.find((d: any) => d.domain === 'employment');
     ok(sharedJobs && sharedJobs.records.length === 1 && sharedJobs.records[0].title === 'Design lead at Alder Studio', 'B sees only the current job');
     ok(!sharedJobs.records[0].fields.some((f: any) => f.key === 'currentPay' || f.key === 'employeeId'), 'secret parts are not shared');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { employment: { scope: 'all', includeSecret: true } }, confirm: true });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { employment: { scope: 'all', includeSecret: true } }, confirm: true });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     const jobs2 = detB.sharedDomains.find((d: any) => d.domain === 'employment');
     ok(jobs2.records.length === 2 && jobs2.records[0].fields.some((f: any) => f.key === 'currentPay'), 'scope all + confirmed secrets');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { employment: false } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { employment: false } });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(!detB.sharedDomains.length, 'unsharing removes it');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { education: true } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { education: true } });
     await a.call('POST', '/api/data/education', { data: { institution: await org('Konstfack'), degree: 'MFA', outcome: 'graduated', conferredOn: '2014-06' }, validFrom: '2012-09', validTo: '2014-06' });
     await sleep(3000);
     detB = await b.call('GET', `/api/parties/${cB.id}`);
     ok(detB.sharedDomains.some((d: any) => d.domain === 'education' && d.records.length === 1), 'grant + edit nudge B to sync without asking');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { education: false } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { education: false } });
     console.log('calendar');
     const dentist = await a.call('POST', '/api/data/events', { data: { title: 'Dentist', start: { at: '2026-11-04T09:30', tz: 'America/New_York' }, end: { at: '2026-11-04T10:15', tz: 'America/New_York' }, location: 'Main St' } });
     const backwards = await fetch(`${a.base}/api/data/events`, { method: 'POST', headers: { 'content-type': 'application/json', origin: a.base, cookie: [...a.jar].map(([k, v]) => `${k}=${v}`).join('; ') }, body: JSON.stringify({ data: { title: 'Oops', start: { at: '2026-11-04T10:00', tz: 'UTC' }, end: { at: '2026-11-04T09:00', tz: 'UTC' } } }) });
@@ -530,12 +548,12 @@ async function main() {
     ok(cal.map((i: any) => i.startDate).every((d: string, i: number, all: string[]) => !i || all[i - 1] <= d), 'the calendar is in date order');
     await a.call('GET', '/api/calendar?from=2026-11-30&to=2026-11-01', undefined, [400]);
     ok(true, 'a backwards range is refused');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { events: true } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { events: true } });
     await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     const calB = (await b.call('GET', '/api/calendar?from=2026-11-01&to=2026-11-30')).items;
     ok(calB.some((i: any) => i.title === 'Dentist' && i.contact?.name === 'Maya Lindqvist' && i.start.at === '2026-11-04T09:30:00-05:00') && calB.filter((i: any) => i.title === 'Yoga').length === 5, "shared events show on the contact's calendar, with whose they are");
     ok(!calB.some((i: any) => i.kind === 'birthday' || i.kind === 'trip'), 'only events are shared, not the dates in other categories');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { events: false } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { events: false } });
     await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(!(await b.call('GET', '/api/calendar?from=2026-11-01&to=2026-11-30')).items.some((i: any) => i.contact), 'unsharing takes them off');
     console.log('receipts & documents');
@@ -642,10 +660,10 @@ async function main() {
     ok(list[0].id === rc2.id && list[1].id === rc1.id && list[1].documents.length === 1, 'receipts are ordered by purchase date, with their photos');
     const att = (await a.call('GET', '/api/attention?days=30')).items;
     ok(att.some((x: any) => x.id === rc1.id && x.part === 'Return by' && x.kind === 'deadline'), 'return-by date shows on Home');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { receipts: { scope: 'all' } } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { receipts: { scope: 'all' } } });
     const shared = (await b.call('GET', `/api/parties/${cB.id}?sync=1`)).sharedDomains.find((d: any) => d.domain === 'receipts');
     ok(shared?.records.length === 2 && shared.records.some((r: any) => r.data.items?.length === 2), 'shared receipts carry their line items');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { receipts: false } });
+    await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { receipts: false } });
     // Deleting an entry deletes documents linked only to it, and unlinks shared ones
     await a.call('PATCH', `/api/documents/${up.body.id}`, { links: [{ domain: 'ids', recordId: accepted.record.id }, { domain: 'receipts', recordId: rc1.id }] });
     const del1 = await a.call('DELETE', `/api/data/receipts/${rc1.id}`);
@@ -763,7 +781,7 @@ async function main() {
     ok(bdv.contact && bdv.chosen.join() === 'interface', `connect sends the request (${bdc?.contactId ? 'new' : 'already known'}) and Big Dipper shows as a contact`);
     if (bdc?.contactId) {
       const g = await a.call('GET', `/api/parties/${bdc.contactId}`);
-      ok(!g.grants.profile && !g.grants.fields.length, 'Big Dipper gets no profile and no fields');
+      ok(!g.share.basic && !g.share.lines.length, 'Big Dipper gets no profile and no fields');
     }
 
     console.log('backups & export');

@@ -193,7 +193,7 @@ export default function ContactDetail() {
           <button className="btn btn-ghost" onClick={remove} style={{ justifySelf: 'start', fontSize: 13, color: 'var(--color-accent-700)' }}>Delete contact</button>
         </div>
 
-        {isNode && <ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, grants: g })} />}
+        {isNode && <ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} />}
       </div>
 
       {edit && (

@@ -8,7 +8,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 export const COLLECTIONS = [
-  'nodes', 'owners', 'parties', 'nodeLinks', 'grants',
+  'nodes', 'owners', 'parties', 'nodeLinks',
   'connectionRequests', 'invites', 'apiKeys', 'publicProfile', 'audit', 'challenges', 'backups',
   'records', 'domainDefs', 'messages', 'files', 'documents', 'shares', 'copies', 'recordVersions',
   'reviews', 'oauthClients', 'oauthCodes', 'oauthTokens', 'notices',
@@ -112,6 +112,7 @@ const SQLITE_INDEXES: [Collection, string[]][] = [
   ['messages', ['status']],
   ['files', ['documentId']],
   ['shares', ['tokenHash']],
+  ['shares', ['party', 'mode']],
   ['copies', ['contactId']],
   ['recordVersions', ['recordId']],
   ['recordVersions', ['domain', 'action']],

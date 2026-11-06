@@ -6,11 +6,12 @@ import { audit } from '../audit.js';
 import { bad, findKey, HttpError, rateLimit } from '../auth.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import {
-  grantsFor, hasMutual, lookupDescriptor, now, openEnvelope, parsePeerInput, REQUEST_TTL_DAYS, sealToken, tokenHash,
+  hasMutual, lookupDescriptor, now, openEnvelope, parsePeerInput, REQUEST_TTL_DAYS, sealToken, tokenHash,
   type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc, type RequestDoc,
 } from '../federation.js';
 import { getDomain } from '../domains/records.js';
-import { sharedDomainOut } from '../domains/sharing.js';
+import { sharedDomainIds, sharedDomainOut } from '../domains/sharing.js';
+import { endLiveShare, setLiveShare, whatTheyGet } from '../shares.js';
 import { endLink, existingForNode, firstName, issuePeerToken, newNodeParty, pushTimeline, sharedOut, syncContact } from '../contacts.js';
 import { receiveMessage, type WireMessage } from '../messages.js';
 
@@ -95,7 +96,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     } else {
       ({ contact, link } = await newNodeParty({ name, address: origin, nodeId: intro.nodeId, signingKey: intro.signingKey, version: intro.version || null, status: 'pending_in', requestId: p.requestId }));
       // Default if accepted: basic profile only. Requests never pre-select sensitive fields.
-      await ctx.store.insert('grants', { _id: newId('grt'), contactId: contact._id, profile: true, access: 'read', confirmedSecret: false, grantedAt: now(), expiresAt: null });
+      await setLiveShare(contact._id, { basic: true });
     }
     const t = now();
     await ctx.store.insert<RequestDoc>('connectionRequests', {
@@ -137,7 +138,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     const r = await ctx.store.findOne<RequestDoc>('connectionRequests', { linkId: link._id, status: 'pending' });
     if (r) await ctx.store.update('connectionRequests', r._id, { status: 'declined' });
     await endLink(link, 'Request declined');
-    await ctx.store.removeMany('grants', { contactId: link.contactId });
+    await endLiveShare(link.contactId);
     await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.declined', resource: `parties/${link.contactId}`, text: `${contact?.name || displayAddr(link.peerUrl)} declined your request`, tone: 'peer' });
     return { ok: true };
   });
@@ -207,11 +208,11 @@ export default async function peerRoutes(app: FastifyInstance) {
   /** Domains this contact has been granted (employment, residences…). */
   app.get('/peer/domains', async (req) => {
     const c = await peerContact(req);
-    const g = await grantsFor(c._id);
+    const w = await whatTheyGet(c._id);
     const out = [];
-    for (const [id, grant] of Object.entries(g.domains)) {
+    for (const id of await sharedDomainIds(c._id)) {
       const d = await getDomain(id);
-      if (d) out.push({ id, label: d.label, scope: grant.scope });
+      if (d) out.push({ id, label: d.label, scope: w.categories[id]?.scope ?? 'all' });
     }
     return { domains: out };
   });

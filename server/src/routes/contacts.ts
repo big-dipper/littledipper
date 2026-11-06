@@ -4,12 +4,13 @@ import { fingerprint, newId, randomToken } from '../crypto.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner } from '../auth.js';
 import { ownerName, profileLines, PROFILE_LINES, publicName } from '../profile.js';
-import { getDomain, isPartialDate, partyReferences, unlinkParty } from '../domains/records.js';
+import { entrySens, getDomain, isPartialDate, partyReferences, plainData, recordOut, unlinkParty, type RecordDoc } from '../domains/records.js';
+import { endLiveShare, setLiveShare, whatTheyGet, type WhatTheyGet } from '../shares.js';
 import { checkMethods } from '../methods.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import { getOwner } from '../owner.js';
 import {
-  grantsFor, lookupDescriptor, mutualHints, now, parsePeerInput, REQUEST_TTL_DAYS, sealToken, sendSigned, setDomainGrant, setFieldGrant, setProfileGrant, tokenHash,
+  lookupDescriptor, mutualHints, now, parsePeerInput, REQUEST_TTL_DAYS, sealToken, sendSigned, tokenHash,
   type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc, type RequestDoc,
 } from '../federation.js';
 import {
@@ -17,6 +18,55 @@ import {
 } from '../contacts.js';
 
 const STALE_MS = 10 * 60_000;
+
+type ShareInput = {
+  basic?: boolean; lines?: Record<string, boolean>; confirm?: boolean;
+  categories?: Record<string, boolean | { scope?: 'all' | 'current'; includeSecret?: boolean }>;
+  entries?: Record<string, boolean | { includeSecret?: boolean }>;
+};
+
+const shareOut = (w: WhatTheyGet) => ({ basic: w.basic, lines: w.lines, categories: w.categories, entries: w.entries });
+
+/** Apply changes to a party's live share; returns what changed, in words, for the activity log. */
+async function applyShare(partyId: string, b: ShareInput): Promise<string[]> {
+  const cur = await whatTheyGet(partyId);
+  const lines = new Set(cur.lines), categories = { ...cur.categories }, entries = new Map(cur.entries.map((e) => [e.id, e]));
+  const profile = await profileLines();
+  const changes: string[] = [];
+  if (typeof b.basic === 'boolean' && b.basic !== cur.basic) changes.push(`basic profile ${b.basic ? 'on' : 'off'}`);
+  for (const [key, on] of Object.entries(b.lines || {})) {
+    const label = PROFILE_LINES.find(([k]) => k === key)?.[1];
+    if (!label) throw bad('unknown_field', `Your profile has no ${key}`);
+    if (on && profile.find((l) => l.key === key)?.sensitivity === 'secret') throw bad('secret_line', `${label} is secret, so it never leaves your profile. Share its category instead.`);
+    if (on) lines.add(key); else lines.delete(key);
+    changes.push(`${label} ${on ? 'shared' : 'unshared'}`);
+  }
+  for (const [id, v] of Object.entries(b.categories || {})) {
+    const d = await getDomain(id);
+    if (!d) throw bad('unknown_domain', id);
+    if (!v) { delete categories[id]; changes.push(`${d.label} unshared`); continue; }
+    const g = v === true ? {} : v;
+    const scope = g.scope === 'current' ? 'current' : 'all';
+    const includeSecret = !!g.includeSecret;
+    if ((d.confirmShare || includeSecret) && b.confirm !== true) throw new HttpError(409, 'confirm_required', `Sharing ${d.label} needs confirmation`);
+    categories[id] = { domain: id, scope, includeSecret };
+    changes.push(`${d.label} shared (${scope === 'current' ? 'current only' : 'all'}${includeSecret ? ', with secret details' : ''})`);
+  }
+  for (const [rid, v] of Object.entries(b.entries || {})) {
+    const r = await ctx.store.get<RecordDoc>('records', rid);
+    const d = r && (await getDomain(r.domain));
+    if (!r || !d) throw bad('invalid_value', 'No such entry');
+    const title = recordOut(d, r).title;
+    if (!v) { entries.delete(rid); changes.push(`${title} unshared`); continue; }
+    const includeSecret = v !== true && !!v.includeSecret;
+    const secret = entrySens(d, r, plainData(r)) === 'secret';
+    if ((d.confirmShare || secret || includeSecret) && b.confirm !== true) throw new HttpError(409, 'confirm_required', `Sharing ${title} needs confirmation`);
+    entries.set(rid, { id: rid, includeSecret });
+    changes.push(`${title} shared`);
+  }
+  await setLiveShare(partyId, { basic: b.basic ?? cur.basic, lines: [...lines], categories: Object.values(categories), entries: [...entries.values()] });
+  return changes;
+}
 
 async function getContact(id: string) {
   const c = await ctx.store.get<PartyDoc>('parties', id);
@@ -94,8 +144,7 @@ export async function requestConnection(keyId: string, address: string, offeredF
     throw e;
   }
   // What we'll share once they approve: basic profile (unless told not to; no grant at all means shared) + the extras we offered.
-  await setProfileGrant(contact._id, shareProfile);
-  for (const k of offered) await setFieldGrant(contact._id, k, true);
+  await setLiveShare(contact._id, { basic: shareProfile, lines: offered });
   const t = now();
   await ctx.store.insert<RequestDoc>('connectionRequests', {
     _id: newId('req'), direction: 'out', requestId, fromNodeId: n._id, peerName: name, fromNode: displayAddr(canonicalUrl(n)), toNode: displayAddr(d.address),
@@ -184,7 +233,7 @@ export default async function contactRoutes(app: FastifyInstance) {
       try { await sendSigned(link.peerUrl, '/peer/links/revoke', { type: 'link.revoke' }); } catch { /* peer offline: our side still revokes */ }
     }
     if (link) { await revokeIssuedToken(link); await ctx.store.remove('nodeLinks', link._id); }
-    await ctx.store.removeMany('grants', { contactId: c._id });
+    await endLiveShare(c._id);
     await ctx.store.removeMany('connectionRequests', { contactId: c._id });
     await ctx.store.removeMany('messages', { contactId: c._id });
     // Links sent to them stop working; the copies stay in your history.
@@ -200,56 +249,29 @@ export default async function contactRoutes(app: FastifyInstance) {
     return { deleted: true, unlinked: usedBy.length };
   });
 
-  app.get('/api/parties/:id/grants', async (req) => {
+  /** What this party gets: the basic profile, extra lines, whole categories and specific entries. */
+  app.get('/api/parties/:id/share', async (req) => {
     await requireOwner(req, 'parties:read');
     const c = await getContact((req.params as { id: string }).id);
-    const g = await grantsFor(c._id);
-    return { profile: g.profile, fields: g.fields };
+    return shareOut(await whatTheyGet(c._id));
   });
 
   /**
-   * Body: { profile?: boolean, fields?: { [key]: boolean }, domains?: { [domain]: false | true | { scope?: 'all'|'current', includeSecret?: boolean } }, confirm?: boolean }
-   * Secret fields, secret domains and includeSecret need confirm:true.
+   * Change what a party gets. Body: { basic?: boolean, lines?: { [key]: boolean },
+   * categories?: { [domain]: false | true | { scope?: 'all'|'current', includeSecret?: boolean } },
+   * entries?: { [recordId]: false | true | { includeSecret?: boolean } }, confirm?: boolean }.
+   * Categories that hold IDs, health or money, secret entries and secret details need confirm:true.
    */
-  app.put('/api/parties/:id/grants', async (req) => {
+  app.put('/api/parties/:id/share', async (req) => {
     const p = await requireOwner(req, 'parties:write');
     const c = await getContact((req.params as { id: string }).id);
-    if (!c.node) throw bad('not_connected', 'Only people and organisations on Little Dipper can be granted access');
-    const b = (req.body || {}) as { profile?: boolean; fields?: Record<string, boolean>; domains?: Record<string, boolean | { scope?: 'all' | 'current'; includeSecret?: boolean }>; confirm?: boolean };
-    const lines = await profileLines();
-    const changes: string[] = [];
-    if (typeof b.profile === 'boolean') {
-      await setProfileGrant(c._id, b.profile);
-      changes.push(`basic profile ${b.profile ? 'on' : 'off'}`);
-    }
-    for (const [key, on] of Object.entries(b.fields || {})) {
-      const label = PROFILE_LINES.find(([k]) => k === key)?.[1];
-      if (!label) throw bad('unknown_field', `Your profile has no ${key}`);
-      if (on && lines.find((l) => l.key === key)?.sensitivity === 'secret') throw bad('secret_line', `${label} is secret, so it never leaves your profile. Share its category instead.`);
-      await setFieldGrant(c._id, key, !!on, false);
-      changes.push(`${label} ${on ? 'shared' : 'unshared'}`);
-    }
-    for (const [id, v] of Object.entries(b.domains || {})) {
-      const d = await getDomain(id);
-      if (!d) throw bad('unknown_domain', id);
-      if (!v) {
-        await setDomainGrant(c._id, id, null);
-        changes.push(`${d.label} unshared`);
-        continue;
-      }
-      const g = v === true ? {} : v;
-      const scope = g.scope === 'current' ? 'current' : 'all';
-      const includeSecret = !!g.includeSecret;
-      if ((d.confirmShare || includeSecret) && b.confirm !== true) throw new HttpError(409, 'confirm_required', `Sharing ${d.label} needs confirmation`);
-      await setDomainGrant(c._id, id, { scope, includeSecret });
-      changes.push(`${d.label} shared (${scope === 'current' ? 'current only' : 'all'}${includeSecret ? ', with secret details' : ''})`);
-    }
+    if (!c.node) throw bad('not_connected', 'Only people and organisations on Little Dipper get a live share. Send them a copy instead.');
+    const changes = await applyShare(c._id, (req.body || {}) as ShareInput);
     if (changes.length) {
-      await audit({ actor: ownerActor(p.key._id), action: 'grant.update', resource: `parties/${c._id}/grants`, text: `Sharing with ${c.name}: ${changes.join(', ')}`, tone: 'owner' });
+      await audit({ actor: ownerActor(p.key._id), action: 'share.update', resource: `parties/${c._id}/share`, text: `Sharing with ${c.name}: ${changes.join(', ')}`, tone: 'owner' });
+      nudgePeers([c._id]);
     }
-    if (changes.length) nudgePeers([c._id]);
-    const g = await grantsFor(c._id);
-    return { profile: g.profile, fields: g.fields, domains: g.domains };
+    return shareOut(await whatTheyGet(c._id));
   });
 
   app.post('/api/parties/:id/invite', async (req) => {
@@ -327,10 +349,10 @@ export default async function contactRoutes(app: FastifyInstance) {
     await pushTimeline(link, 'Approved by you');
     await pushTimeline(link, 'Secure connection set up');
     await ctx.store.update('connectionRequests', r._id, { status: 'accepted' });
-    const g = await grantsFor(contact._id);
-    await audit({ actor: ownerActor(p.key._id), action: 'link.accept', resource: `parties/${contact._id}`, text: `You connected with ${contact.name}`, tone: 'peer', meta: { grants: g } });
+    const g = shareOut(await whatTheyGet(contact._id));
+    await audit({ actor: ownerActor(p.key._id), action: 'link.accept', resource: `parties/${contact._id}`, text: `You connected with ${contact.name}`, tone: 'peer', meta: { share: g } });
     try { await syncContact((await ctx.store.get<PartyDoc>('parties', contact._id))!); } catch { /* fetched later */ }
-    return { status: 'active', grants: { profile: g.profile, fields: g.fields, domains: g.domains }, issuedToken: doc.prefix };
+    return { status: 'active', share: g, issuedToken: doc.prefix };
   });
 
   app.post('/api/federation/requests/:id/decline', async (req) => {
@@ -350,7 +372,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     // Declined strangers don't linger in the address book.
     if (contact) await ctx.store.remove('parties', contact._id);
     if (link) await ctx.store.remove('nodeLinks', link._id);
-    await ctx.store.removeMany('grants', { contactId: r.contactId });
+    await endLiveShare(r.contactId);
     await ctx.store.update('connectionRequests', r._id, { status: 'declined' });
     await audit({ actor: ownerActor(p.key._id), action: 'link.decline', resource: `connectionRequests/${r._id}`, text: `You declined ${contact?.name || r.fromNode}'s request${block ? ' and blocked them' : ''}`, tone: 'owner' });
     return { status: 'declined' };

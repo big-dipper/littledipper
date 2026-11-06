@@ -4,7 +4,9 @@ import { bad, HttpError, requireOwner } from '../auth.js';
 import { mask } from '../fields.js';
 import { getOwner } from '../owner.js';
 import { ownerEmail, ownerName, profileLines, PROFILE_LINES } from '../profile.js';
-import { grantsFor, type LinkDoc, type PublicProfileDoc } from '../federation.js';
+import { type LinkDoc, type PublicProfileDoc } from '../federation.js';
+import { ALWAYS_SHARED, basicLines, whatTheyGet } from '../shares.js';
+import { nudgePeers } from '../contacts.js';
 
 export default async function ownerRoutes(app: FastifyInstance) {
   // The account: who signs in. The name and email are worked out from Names and Contact methods, never stored twice.
@@ -37,20 +39,44 @@ export default async function ownerRoutes(app: FastifyInstance) {
    * there), how sensitive it is, whether it's on your public page and how many connections can read it.
    * Secret lines are masked except in your own browser.
    */
+  /** Your basic profile: the lines every connection gets unless you choose otherwise. Your Little Dipper is always on it. */
+  app.get('/api/profile/basic', async (req) => {
+    await requireOwner(req, 'owner:read');
+    return { lines: await basicLines(), always: [ALWAYS_SHARED] };
+  });
+
+  app.put('/api/profile/basic', async (req) => {
+    const p = await requireOwner(req, 'owner:write');
+    if (p.key.assistant) throw new HttpError(403, 'owner_only', 'What every connection sees is the owner’s call.');
+    const { lines } = (req.body || {}) as { lines?: unknown };
+    if (!Array.isArray(lines)) throw bad('invalid_value', 'lines: a list of profile lines');
+    const keys = [...new Set(lines.map(String))].filter((k) => k !== ALWAYS_SHARED);
+    const unknown = keys.filter((k) => !PROFILE_LINES.some(([x]) => x === k));
+    if (unknown.length) throw bad('unknown_field', `Your profile has no ${unknown.join(', ')}`);
+    const secret = (await profileLines()).filter((l) => keys.includes(l.key) && l.sensitivity === 'secret');
+    if (secret.length) throw bad('secret_line', `${secret.map((l) => l.label).join(', ')} is secret, so it can't be in your basic profile.`);
+    const o = (await getOwner())!;
+    await ctx.store.update('owners', o._id, { basicProfile: keys });
+    nudgePeers(null);
+    return { lines: await basicLines(), always: [ALWAYS_SHARED] };
+  });
+
   app.get('/api/profile', async (req) => {
     const p = await requireOwner(req, 'owner:read');
     const lines = await profileLines();
     const pp = await ctx.store.get<PublicProfileDoc>('publicProfile', 'public');
     const links = await ctx.store.find<LinkDoc>('nodeLinks', { status: 'active' });
-    const grants = await Promise.all(links.map((l) => grantsFor(l.contactId)));
-    const basicN = grants.filter((g) => g.profile).length;
-    const reading = (key: string, standard: boolean) => grants.filter((g) => (standard && g.profile) || g.fields.includes(key)).length;
+    const shares = await Promise.all(links.map((l) => whatTheyGet(l.contactId)));
+    const basic = await basicLines();
+    const basicN = shares.filter((g) => g.basic).length;
+    const reading = (key: string) => shares.filter((g) => (g.basic && basic.includes(key)) || g.lines.includes(key)).length;
     return {
       items: lines.map((l) => ({
         ...l,
         value: l.sensitivity === 'secret' && !p.isSession ? mask(l.value) : l.value,
         public: l.sensitivity !== 'secret' && !!pp?.fieldKeys.includes(l.key),
-        sharedWith: l.sensitivity === 'secret' ? 0 : reading(l.key, l.sensitivity === 'standard'),
+        inBasic: basic.includes(l.key),
+        sharedWith: l.sensitivity === 'secret' ? 0 : reading(l.key),
       })),
       /** Every line the profile can have, for screens that offer them before they have a value. */
       lines: PROFILE_LINES.map(([key, label]) => ({ key, label })),

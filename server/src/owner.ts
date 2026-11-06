@@ -16,6 +16,8 @@ export type OwnerDoc = Doc & {
   totp: { enabled: boolean; secretEnc: string | null; pendingSecretEnc?: string | null };
   recoveryCodeHashes: { hash: string; usedAt: string | null }[];
   prefs: { showTechnical: boolean };
+  /** The profile lines every connection gets by default; unset means the default list (shares.ts). */
+  basicProfile?: string[];
   createdAt: string;
 };
 

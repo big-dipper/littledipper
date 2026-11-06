@@ -1,6 +1,6 @@
 /** What a connected contact may read from a domain (or a copy holds), shaped for display on their side. */
 import { ctx } from '../ctx.js';
-import { grantsFor } from '../federation.js';
+import { whatTheyGet } from '../shares.js';
 import { displayValue, entrySens, getDomain, isCurrent, partSens, plainData, recordsOf, renderTitle, sortRecords, type DomainDef, type PartDef, type RecordDoc } from './records.js';
 
 export type SharedRecord = {
@@ -17,12 +17,28 @@ export type SharedRecord = {
 };
 export type SharedDomain = { domain: string; label: string; scope: 'all' | 'current'; records: SharedRecord[] };
 
+/** Categories a party can read: whole ones shared with them, and ones holding entries shared one by one. */
+export async function sharedDomainIds(partyId: string) {
+  const w = await whatTheyGet(partyId);
+  const ids = new Set(Object.keys(w.categories));
+  for (const e of w.entries) { const r = await ctx.store.get<RecordDoc>('records', e.id); if (r) ids.add(r.domain); }
+  return [...ids];
+}
+
+/** What a party may read of one category: the whole category (all or current), plus entries shared one by one. */
 export async function sharedDomainOut(contactId: string, domainId: string): Promise<SharedDomain | null> {
-  const g = (await grantsFor(contactId)).domains[domainId];
+  const w = await whatTheyGet(contactId);
   const d = await getDomain(domainId);
-  if (!g || !d) return null;
-  const recs = sortRecords(d, await recordsOf(d.id)).filter((r) => g.scope === 'all' || isCurrent(d, r));
-  return { domain: d.id, label: d.label, scope: g.scope, records: await shapeRecords(d, recs, g.includeSecret) };
+  if (!d) return null;
+  const g = w.categories[domainId];
+  const all = sortRecords(d, await recordsOf(d.id));
+  const picked = new Map(w.entries.map((e) => [e.id, e]));
+  const recs = all.filter((r) => (g && (g.scope === 'all' || isCurrent(d, r))) || picked.has(r._id));
+  if (!recs.length && !g) return null;
+  // Secret details per category, or per entry shared on its own.
+  const out: SharedRecord[] = [];
+  for (const r of recs) out.push(...(await shapeRecords(d, [r], (g?.includeSecret ?? false) || (picked.get(r._id)?.includeSecret ?? false))));
+  return { domain: d.id, label: d.label, scope: g?.scope ?? 'all', records: out };
 }
 
 /** Records as someone else sees them: no notes, secret parts only with includeSecret, contacts as names. */

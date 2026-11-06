@@ -11,8 +11,8 @@ type Req = { _id: string; contactId: string; peerName: string; fromNode: string;
 export const shareSummary = (c: Contact) => {
   if (!c.node) return '—';
   if (c.status === 'pending_in') return 'Not yet';
-  const n = c.grants.fields.length;
-  return c.grants.profile ? (n ? `Basic profile + ${n}` : 'Basic profile') : n ? `${n} field${n === 1 ? '' : 's'} only` : 'Nothing';
+  const n = c.share.lines.length + Object.keys(c.share.categories).length + c.share.entries.length;
+  return c.share.basic ? (n ? `Basic profile + ${n}` : 'Basic profile') : n ? `${n} item${n === 1 ? '' : 's'} only` : 'Nothing';
 };
 
 export default function Contacts() {

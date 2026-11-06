@@ -11,6 +11,8 @@ import { countryName, entrySens, isCurrent, maxSens, partSens, plainData, record
 import type { DomainDef } from './domains/types.js';
 import type { Sensitivity } from './fields.js';
 import { displayPhone } from './methods.js';
+import { canonicalUrl, displayAddr, getNode } from './node.js';
+import { basicLines } from './shares.js';
 
 export type ProfileLine = {
   key: string;
@@ -26,7 +28,7 @@ export const PROFILE_DOMAINS = new Set(['names', 'birth', 'citizenship', 'reside
 
 /** Every line the profile can have, in order, with its label: what other screens offer before a value exists. */
 export const PROFILE_LINES: [string, string][] = [
-  ['preferred_name', 'Preferred name'], ['legal_name', 'Legal name'], ['birth_name', 'Birth name'], ['born', 'Born'],
+  ['little_dipper', 'Little Dipper'], ['preferred_name', 'Preferred name'], ['legal_name', 'Legal name'], ['birth_name', 'Birth name'], ['born', 'Born'],
   ['citizenship', 'Citizenship'], ['nationality', 'Non-citizen nationality'], ['residency', 'Residency status'],
   ['marital_status', 'Marital status'], ['lives_in', 'Lives in'], ['address', 'Home address'], ['email', 'Email'], ['phone', 'Phone'],
 ];
@@ -57,6 +59,10 @@ const current = (d: DomainDef, recs: RecordDoc[]) => sortRecords(d, recs.filter(
 
 export async function profileLines(): Promise<ProfileLine[]> {
   const out: (ProfileLine | null)[] = [];
+
+  // Your Little Dipper: the address people use and the Node ID that never changes. On every card, always.
+  const n = await getNode();
+  out.push({ key: 'little_dipper', label: label('little_dipper'), value: `${displayAddr(canonicalUrl(n))} · ${n._id}`, sensitivity: 'standard', from: [] });
 
   // Names: current preferred and legal; a birth name only when it differs from today's legal name.
   const names = dom('names');
@@ -161,7 +167,8 @@ export async function ownerEmail(): Promise<string> {
   return (await profileLines()).find((l) => l.key === 'email')?.value ?? '';
 }
 
-/** Lines another party may read: the basic profile is every standard line; extra lines need a grant each. Secret lines never leave. */
+/** Lines another party may read: the owner's basic profile list, plus extra lines shared one by one. Secret lines never leave. */
 export async function linesFor(opts: { basic: boolean; extra: string[] }) {
-  return (await profileLines()).filter((l) => l.sensitivity !== 'secret' && ((opts.basic && l.sensitivity === 'standard') || opts.extra.includes(l.key)));
+  const basic = opts.basic ? await basicLines() : [];
+  return (await profileLines()).filter((l) => l.sensitivity !== 'secret' && (basic.includes(l.key) || opts.extra.includes(l.key)));
 }

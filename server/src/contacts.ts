@@ -3,11 +3,12 @@ import { ctx } from './ctx.js';
 import { fingerprint, newId } from './crypto.js';
 import { issueKey } from './auth.js';
 import { linesFor } from './profile.js';
+import { partiesSharing, whatTheyGet } from './shares.js';
 import type { SharedDomain } from './domains/sharing.js';
 import { displayAddr } from './node.js';
 import type { ContactMethod } from './methods.js';
 import {
-  grantsFor, now, peerGet, sendSigned, type PartyDoc, type LinkDoc, type RequestDoc,
+  now, peerGet, sendSigned, type PartyDoc, type LinkDoc, type RequestDoc,
 } from './federation.js';
 
 export const firstName = (name: string) => name.replace(/^(Dr|Mr|Mrs|Ms|Mx)\.?\s+/i, '').split(' ')[0];
@@ -33,11 +34,11 @@ export async function lastActivityOf(c: PartyDoc, link: LinkDoc | null) {
 export async function partyOut(c: PartyDoc, opts: { detail?: boolean } = {}) {
   const link = await linkFor(c);
   const status: ContactStatus = c.node && link && link.status !== 'revoked' ? link.status : 'plain';
-  const g = await grantsFor(c._id);
+  const g = await whatTheyGet(c._id);
   const base = {
     id: c._id, type: c.type, name: c.name, status,
     node: c.node && link ? { url: displayAddr(link.peerUrl), nodeId: link.peerNodeId, linkId: link._id } : null,
-    grants: { profile: g.profile, fields: g.fields, domains: g.domains },
+    share: { basic: g.basic, lines: g.lines, categories: g.categories, entries: g.entries },
     lastActivity: await lastActivityOf(c, link), createdAt: c.createdAt,
     methods: c.methods, affiliations: c.affiliations ?? [], ...(c.birthDate ? { birthDate: c.birthDate } : {}),
   };
@@ -97,10 +98,10 @@ export async function endLink(link: LinkDoc, reason: string) {
 
 /** Profile lines this party's token may read right now: the basic profile (standard lines), or the extra lines granted one by one. */
 export async function sharedOut(contactId: string, which: 'profile' | 'fields'): Promise<{ key: string; label: string; value: string }[]> {
-  const g = await grantsFor(contactId);
+  const g = await whatTheyGet(contactId);
   const lines = which === 'profile'
-    ? (g.profile ? await linesFor({ basic: true, extra: [] }) : [])
-    : (await linesFor({ basic: false, extra: g.fields })).filter((l) => l.sensitivity !== 'standard' || !g.profile);
+    ? (g.basic ? await linesFor({ basic: true, extra: [] }) : [])
+    : await linesFor({ basic: false, extra: g.lines });
   return lines.map((l) => ({ key: l.key, label: l.label, value: l.value }));
 }
 
@@ -124,11 +125,8 @@ export function nudgePeers(contactIds: string[] | null) {
   })().catch(() => {});
 }
 
-/** Contacts with an active link that can read this domain. */
-export async function contactsSharing(domain: string) {
-  const grants = await ctx.store.find<{ _id: string; contactId: string; domain?: string }>('grants', { domain });
-  return grants.map((g) => g.contactId);
-}
+/** Parties that can read this category (or one of these entries in it). */
+export const contactsSharing = (domain: string, recordIds: string[] = []) => partiesSharing(domain, recordIds);
 
 export async function syncContact(c: PartyDoc) {
   const link = await linkFor(c);

@@ -5,6 +5,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ctx } from '../ctx.js';
 import { PROFILE_DOMAINS } from '../profile.js';
+import type { ShareDoc } from '../shares.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner, requireSession, type ApiKeyDoc } from '../auth.js';
 import { isIdentityChange, pendingReply, propose, reviewInput, type ReviewDoc } from '../reviews.js';
@@ -47,7 +48,7 @@ type Summary = { count: number; currentCount: number; preview: string[]; sharedW
 
 /** Count, current count, a few masked titles and how many connections can read it: what the hub shows per category. */
 async function summarize(domains: DomainDef[]): Promise<Record<string, Summary>> {
-  const grants = await ctx.store.find<{ _id: string; contactId: string; domain?: string }>('grants', {});
+  const shares = await ctx.store.find<ShareDoc>('shares', { mode: 'live' });
   const activeContacts = new Set((await ctx.store.find<{ _id: string; contactId: string; status: string }>('nodeLinks', { status: 'active' })).map((l) => l.contactId));
   const out: Record<string, Summary> = {};
   for (const d of domains) {
@@ -56,7 +57,7 @@ async function summarize(domains: DomainDef[]): Promise<Record<string, Summary>>
       count: recs.length,
       currentCount: recs.filter((r) => isCurrent(d, r)).length,
       preview: recs.slice(0, 3).map((r) => recordOut(d, r).title),
-      sharedWith: grants.filter((g) => g.domain === d.id && activeContacts.has(g.contactId)).length,
+      sharedWith: shares.filter((s) => s.party && activeContacts.has(s.party) && s.categories.some((c) => c.domain === d.id)).length,
     };
   }
   return out;
@@ -95,7 +96,7 @@ export async function createRecord(d: DomainDef, input: RecordInput, by: Actor, 
   await recordVersion(rec, 'create', by);
   await demoteOtherPrimaries(rec);
   const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
-  nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+  nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id, [rec._id]));
   await audit({ actor: ownerActor(by.id), action: 'record.create', resource: `${d.id}/${rec._id}`, text: `${who} added ${out.title} to ${d.label}`, tone: 'owner' });
   return out;
 }
@@ -108,7 +109,7 @@ export async function updateRecord(d: DomainDef, existing: RecordDoc, input: Rec
   await recordVersion(rec, 'update', by);
   await demoteOtherPrimaries(rec);
   const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
-  nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+  nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id, [_id]));
   await audit({ actor: ownerActor(by.id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${who} updated ${out.title} in ${d.label}`, tone: 'owner' });
   return out;
 }
@@ -143,7 +144,9 @@ export default async function domainRoutes(app: FastifyInstance) {
     if (n && (req.query as { force?: string }).force !== '1') throw new HttpError(409, 'not_empty', `${d.label} still has ${n} entr${n === 1 ? 'y' : 'ies'}`);
     for (const r of await recordsOf(d.id)) { await unlinkRecord(r._id, { type: 'owner', id: p.key._id }); await recordRemoved(r._id); }
     await ctx.store.removeMany('records', { domain: d.id });
-    await ctx.store.removeMany('grants', { domain: d.id });
+    for (const s of await ctx.store.find<ShareDoc>('shares', { mode: 'live' })) {
+      if (s.categories.some((c) => c.domain === d.id)) await ctx.store.update('shares', s._id, { categories: s.categories.filter((c) => c.domain !== d.id) });
+    }
     await ctx.store.remove('domainDefs', d.id);
     await audit({ actor: ownerActor(p.key._id), action: 'domain.delete', resource: `catalog/${d.id}`, text: `You removed the category ${d.label}`, tone: 'owner' });
     return { deleted: true };
@@ -280,7 +283,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     await recordVersion(r, 'delete', by);
     await ctx.store.remove('records', r._id);
     const docsDeleted = await recordRemoved(r._id);
-    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id, [r._id]));
     await audit({ actor: ownerActor(p.key._id), action: 'record.delete', resource: `${d.id}/${r._id}`, text: `${actorName(p)} removed ${title} from ${d.label}`, tone: 'owner' });
     return { deleted: true, documentsDeleted: docsDeleted, restorableForDays: KEEP_DELETED_DAYS };
   });
@@ -327,7 +330,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     else await ctx.store.insert('records', rec);
     await recordVersion(rec, 'restore', by);
     await demoteOtherPrimaries(rec);
-    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id, [rec._id]));
     const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
     await audit({ actor: ownerActor(p.key._id), action: 'record.restore', resource: `${d.id}/${id}`, text: `${actorName(p)} ${existing ? 'restored an earlier version of' : 'brought back'} ${out.title} in ${d.label}`, tone: 'owner' });
     return out;
@@ -342,7 +345,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     if (v.by.type !== 'app') throw bad('not_an_app_change', 'Only changes made by apps and assistants can be undone this way. Restore an earlier version instead.');
     const result = await undoOnRecord(id, [v], v.by.id, { type: 'owner', id: p.key._id });
     if (result.outcome === 'reverted' || result.outcome === 'removed') {
-      nudgePeers(DERIVED_DOMAINS.has(domain) ? null : await contactsSharing(domain));
+      nudgePeers(DERIVED_DOMAINS.has(domain) ? null : await contactsSharing(domain, [id]));
       await audit({ actor: ownerActor(p.key._id), action: 'undo.change', resource: `${domain}/${id}`, text: `You undid a change to ${result.title}`, tone: 'owner' });
     }
     return result;

@@ -29,6 +29,8 @@ export type Domain = {
   /** What this category invites once an entry is saved (a car: its title, insurance, loan). Never required. */
   companions?: { domain?: string; document?: string; label: string; when?: { part: string; in: string[] } }[];
   single?: boolean;
+  /** Sharing the whole category needs a confirm (IDs, health, money). */
+  confirmShare?: boolean;
   /** Entries take linked documents; new ones get this kind. */
   documents?: string;
 };

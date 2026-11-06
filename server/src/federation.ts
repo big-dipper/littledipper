@@ -85,22 +85,6 @@ export type RequestDoc = Doc & {
   expiresAt: string;
 };
 
-export type GrantDoc = Doc & {
-  contactId: string;
-  /** profile:true = every Standard field (the basic profile). */
-  profile?: boolean;
-  /** One doc per extra Sensitive/Secret field. */
-  fieldKey?: string;
-  /** One doc per shared domain (employment, residences…). */
-  domain?: string;
-  /** Domain grants: every record, or only current ones. */
-  scope?: 'all' | 'current';
-  access: 'read';
-  confirmedSecret: boolean;
-  grantedAt: string;
-  expiresAt: string | null;
-};
-
 export type InviteDoc = Doc & {
   tokenHash: string;
   offeredFields: string[];
@@ -227,39 +211,6 @@ export async function peerGet(link: LinkDoc, path: string) {
 }
 
 // ── grants ──────────────────────────────────────────────────────────────
-
-export async function grantsFor(contactId: string) {
-  const docs = await ctx.store.find<GrantDoc>('grants', { contactId });
-  const profileDoc = docs.find((d) => d.fieldKey === undefined && d.domain === undefined);
-  return {
-    profile: profileDoc ? profileDoc.profile !== false : true,
-    fields: docs.filter((d) => d.fieldKey).map((d) => d.fieldKey as string),
-    /** domain → what is shared. Secret parts only when includeSecret was confirmed. */
-    domains: Object.fromEntries(docs.filter((d) => d.domain).map((d) => [d.domain as string, { scope: d.scope || 'all', includeSecret: d.confirmedSecret }])) as Record<string, { scope: 'all' | 'current'; includeSecret: boolean }>,
-    docs,
-  };
-}
-
-export async function setProfileGrant(contactId: string, on: boolean) {
-  const g = await ctx.store.find<GrantDoc>('grants', { contactId });
-  const p = g.find((d) => d.fieldKey === undefined && d.domain === undefined);
-  if (p) await ctx.store.update('grants', p._id, { profile: on, grantedAt: now() });
-  else await ctx.store.insert<GrantDoc>('grants', { _id: newId('grt'), contactId, profile: on, access: 'read', confirmedSecret: false, grantedAt: now(), expiresAt: null });
-}
-
-export async function setFieldGrant(contactId: string, fieldKey: string, on: boolean, confirmedSecret = false) {
-  const existing = await ctx.store.findOne<GrantDoc>('grants', { contactId, fieldKey });
-  if (on && !existing) await ctx.store.insert<GrantDoc>('grants', { _id: newId('grt'), contactId, fieldKey, access: 'read', confirmedSecret, grantedAt: now(), expiresAt: null });
-  if (!on && existing) await ctx.store.remove('grants', existing._id);
-}
-
-export async function setDomainGrant(contactId: string, domain: string, grant: { scope: 'all' | 'current'; includeSecret: boolean } | null) {
-  const existing = await ctx.store.findOne<GrantDoc>('grants', { contactId, domain });
-  if (!grant) { if (existing) await ctx.store.remove('grants', existing._id); return; }
-  const patch = { scope: grant.scope, confirmedSecret: grant.includeSecret, grantedAt: now() };
-  if (existing) await ctx.store.update('grants', existing._id, patch);
-  else await ctx.store.insert<GrantDoc>('grants', { _id: newId('grt'), contactId, domain, access: 'read', expiresAt: null, ...patch });
-}
 
 /** sha256(peerNodeId + recipientNodeId) for each active peer: lets a recipient spot mutual contacts without learning the rest. */
 export async function mutualHints(recipientNodeId: string) {

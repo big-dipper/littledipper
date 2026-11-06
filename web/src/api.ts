@@ -28,7 +28,7 @@ export const del = <T = any>(p: string) => api<T>('DELETE', p);
 // ── shared shapes ──────────────────────────────────────────────────────
 export type Sensitivity = 'standard' | 'sensitive' | 'secret';
 /** One line of the owner's profile, worked out from their categories. `from` is where to edit it. */
-export type ProfileLine = { key: string; label: string; value: string; sensitivity: Sensitivity; from: { domain: string; recordId: string }[]; public?: boolean; sharedWith?: number };
+export type ProfileLine = { key: string; label: string; value: string; sensitivity: Sensitivity; from: { domain: string; recordId: string }[]; public?: boolean; sharedWith?: number; inBasic?: boolean };
 export type ProfileResp = { items: ProfileLine[]; lines: { key: string; label: string }[]; basicProfileContacts: number };
 export type PostalAddress = { street1?: string; street2?: string; city?: string; region?: string; postalCode?: string; country: string };
 /** One shape for every contact method, yours and every party's. Phones are E.164 (+15035550148). */
@@ -40,7 +40,9 @@ export type ContactStatus = 'plain' | 'pending_in' | 'pending_out' | 'active';
 /** A person or organisation in the owner's life. The screens still call them contacts. */
 export type Party = {
   id: string; type: 'person' | 'organisation'; name: string; status: ContactStatus;
-  node: { url: string; nodeId: string; linkId: string } | null; grants: { profile: boolean; fields: string[]; domains?: Record<string, { scope: 'all' | 'current'; includeSecret: boolean }> };
+  node: { url: string; nodeId: string; linkId: string } | null;
+  /** What they get: the basic profile, extra lines, whole categories and single entries. */
+  share: { basic: boolean; lines: string[]; categories: Record<string, { domain: string; scope: 'all' | 'current'; includeSecret: boolean }>; entries: { id: string; includeSecret: boolean }[] };
   lastActivity: { text: string; at: string }; createdAt: string; methods: ContactMethod[]; affiliations: { party: string; role: string }[]; birthDate?: string;
 };
 export type Reference = { domain: string; domainLabel: string; recordId: string; title: string; part: string; partLabel: string };
