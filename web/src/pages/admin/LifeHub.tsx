@@ -112,7 +112,7 @@ function Tile({ d }: { d: Domain }) {
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
         {d.sharedWith > 0 && <span className="tag tag-accent-2">Shared with {d.sharedWith}</span>}
-        {d.feeds.length > 0 && <span className="tag tag-neutral">Feeds your profile</span>}
+        {d.feedsProfile && <span className="tag tag-neutral">Feeds your profile</span>}
         {empty && <span style={{ fontSize: 12, color: g.ink, fontWeight: 600 }}>Add {/^[aeiou]/i.test(d.noun) ? 'an' : 'a'} {d.noun} →</span>}
       </div>
     </Link>

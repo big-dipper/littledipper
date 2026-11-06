@@ -6,7 +6,7 @@ import { useAdmin } from './Layout';
 
 type CatalogDomain = {
   id: string; label: string; group: string; description: string; sensitivity: Sensitivity; dated: boolean; builtIn: boolean; count: number;
-  feeds: string[]; scopes: { read: string; write: string }; schemaVersion: number;
+  feedsProfile?: boolean; scopes: { read: string; write: string }; schemaVersion: number;
   parts: { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; of?: { key: string; type: string }[] }[];
 };
 const useCatalog = () => useAsync(() => get<{ domains: CatalogDomain[] }>('/api/catalog'), []).data?.domains;
@@ -42,7 +42,7 @@ export function DataModel() {
               <span className={`tag ${SENS[d.sensitivity][1]}`}>{SENS[d.sensitivity][0]}</span>
               {d.dated && <span className="tag tag-neutral">Dated</span>}
               {!d.builtIn && <span className="tag tag-outline">Custom</span>}
-              {d.feeds.length > 0 && <span className="tag tag-neutral">Feeds {d.feeds.join(', ')}</span>}
+              {d.feedsProfile && <span className="tag tag-neutral">Feeds your profile</span>}
               <span className="tag tag-neutral">{d.count} record{d.count === 1 ? '' : 's'}</span>
             </div>
             <div style={{ overflowX: 'auto' }}>

@@ -6,7 +6,6 @@ import { byWhom, Details, duration, fetchCatalog, fmtRange, groupOf, Lock, Mono,
 import { plural } from './LifeHub';
 import { CopyList, SendCopy } from './Copies';
 
-const FEEDS: Record<string, string> = { address: 'Current address', city: 'Current city', country_res: 'Country of residence', email: 'Email', phone: 'Mobile phone' };
 
 /** A sentence that explains why a category is worth filling in. */
 const WHY: Record<string, string> = {
@@ -61,7 +60,7 @@ export default function Category() {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '18px 0 6px' }}>
         <span className={`tag ${SENS[d.sensitivity][1]}`} style={{ gap: 4 }}>{d.sensitivity === 'secret' && <Lock style={{ width: 8, height: 9 }} />}{SENS[d.sensitivity][0]}</span>
         <span className="tag tag-neutral">{d.sharedWith ? `Shared with ${d.sharedWith} contact${d.sharedWith === 1 ? '' : 's'}` : 'Not shared with anyone'}</span>
-        {d.feeds.length > 0 && <span className="tag tag-neutral">Feeds {d.feeds.map((f) => FEEDS[f] ?? f).join(' · ')}</span>}
+        {d.feedsProfile && <span className="tag tag-neutral">Feeds your profile</span>}
       </div>
 
       {data.items.length === 0 ? (

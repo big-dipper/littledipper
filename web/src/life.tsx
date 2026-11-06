@@ -5,7 +5,16 @@ import { DocTiles } from './docs';
 import { Confirm, Pills, Toggle, useAction, useToast, type ConfirmCfg } from './ui';
 
 // ── types ──────────────────────────────────────────────────────────────
-export type Part = { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean; deprecated?: boolean };
+export type Part = {
+  key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean; deprecated?: boolean;
+  /** money: per what (hour, week, month, year, once). */ periodic?: boolean;
+  /** record: the categories it may point to, and whether it holds several. */ to?: string[]; many?: boolean;
+  /** Only applies when another part holds one of these values. */ when?: { part: string; in: string[] };
+};
+/** Whether a part applies, given the values so far (collection details only once an account is in collections). */
+export const applies = (p: Part, vals: Record<string, unknown>) => !p.when || p.when.in.includes(String(vals[p.when.part] ?? ''));
+export type Address = { street1?: string; street2?: string; city?: string; region?: string; postalCode?: string; country?: string };
+const PERIODS: [string, string][] = [['hour', 'an hour'], ['week', 'a week'], ['month', 'a month'], ['year', 'a year'], ['once', 'once']];
 /** One entry in a record's history: the record as it stood after a change (before it, for a delete). */
 export type Version = { version: string; action: 'create' | 'update' | 'delete' | 'restore'; at: string; by: { type: string; id: string }; byLabel: string; record: Rec };
 /** "You" reads as "you" mid-sentence; an app's name stays as it is. */
@@ -13,13 +22,17 @@ export const byWhom = (label: string) => (label === 'You' ? 'you' : label);
 
 export type Domain = {
   id: string; label: string; noun: string; group: string; description: string; sensitivity: Sensitivity; dated: boolean; builtIn: boolean;
-  parts: Part[]; title: string; count: number; currentCount: number; preview: string[]; sharedWith: number; feeds: string[];
+  parts: Part[]; title: string; count: number; currentCount: number; preview: string[]; sharedWith: number;
+  /** The profile reads this category (names, birth, where you live…). */
+  feedsProfile?: boolean;
   /** Entries take linked documents; new ones get this kind. */
   documents?: string;
 };
 export type Rec = {
   id: string; domain: string; title: string; data: Record<string, unknown>; masked: string[]; validFrom: string | null; validTo: string | null;
   current: boolean; notes: string; createdAt: string; updatedAt: string;
+  /** How sensitive this entry is, and whether that's the category's default for its kind or the owner's choice. */
+  sensitivity?: Sensitivity; sensitivityDefault?: boolean;
   /** Who made the latest change, as the server names them: "You", an app's name, "Import"… */
   updatedByLabel?: string;
   /** Who added it, named the same way. */
@@ -136,7 +149,13 @@ export function show(p: Part, v: unknown, contacts: ContactLite[]): string {
   switch (p.type) {
     case 'enum': return p.options?.find(([k]) => k === v)?.[1] ?? String(v);
     case 'country': return countryName(String(v));
-    case 'money': return money(v as { amount: number; currency: string });
+    case 'money': { const m = v as { amount: number; currency: string; period?: string }; return m.period && m.period !== 'once' ? `${money(m)} ${PERIODS.find(([k]) => k === m.period)?.[1] ?? ''}` : money(m); }
+    case 'address': { const a = v as Address; return [a.street1, a.street2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country ? countryName(a.country) : ''].filter(Boolean).join(', '); }
+    case 'region': { const [c, r] = String(v).split('-'); return r ? `${r}, ${countryName(c)}` : countryName(c); }
+    case 'geo': { const g = v as { lat: number; lon: number }; return `${Math.abs(g.lat)}° ${g.lat >= 0 ? 'N' : 'S'}, ${Math.abs(g.lon)}° ${g.lon >= 0 ? 'E' : 'W'}`; }
+    case 'timezone': return String(v).replace(/_/g, ' ');
+    case 'repeat': return describeRepeat(String(v));
+    case 'record': { const n = Array.isArray(v) ? v.length : 1; return `${n} linked ${n === 1 ? 'entry' : 'entries'}`; }
     case 'list': { const n = (v as unknown[]).length; return n ? `${n} ${n === 1 ? 'row' : 'rows'}` : ''; }
     case 'boolean': return v ? 'Yes' : 'No';
     case 'date': return fmtDate(String(v));
@@ -203,16 +222,60 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOn
       return <Toggle on={!!value} label={p.label} onChange={() => onChange(!value)} />;
     case 'party':
     case 'contact':
-      return <Select id={id} value={String(value ?? '')} onChange={onChange} options={contacts.map((c) => [c.id, c.name])} placeholder={contacts.length ? 'Choose from your contacts' : 'No contacts yet'} />;
+      return <PartyPicker id={id} value={String(value ?? '')} onChange={onChange} contacts={contacts} />;
+    case 'record':
+      return <RecordPicker id={id} p={p} value={value} onChange={onChange} />;
     case 'money': {
-      const m = (value as { amount?: number | string; currency?: string } | null) ?? {};
+      const m = (value as { amount?: number | string; currency?: string; period?: string } | null) ?? {};
+      const next = (x: Partial<typeof m>) => ({ amount: m.amount ?? '', currency: m.currency || 'USD', ...(p.periodic ? { period: m.period || 'year' } : {}), ...x });
       return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 6 }}>
-          <input id={id} className="input" inputMode="decimal" placeholder={hiddenSaved ? 'Saved and hidden · type to replace' : 'Amount'} value={m.amount ?? ''} onChange={(e) => onChange(e.target.value === '' ? '' : { amount: e.target.value, currency: m.currency || 'USD' })} />
-          <input className="input mono" aria-label="Currency" maxLength={3} value={m.currency ?? 'USD'} onChange={(e) => onChange({ amount: m.amount ?? '', currency: e.target.value.toUpperCase() })} />
+        <div style={{ display: 'grid', gridTemplateColumns: p.periodic ? '1fr 80px 120px' : '1fr 90px', gap: 6 }}>
+          <input id={id} className="input" inputMode="decimal" placeholder={hiddenSaved ? 'Saved and hidden · type to replace' : 'Amount'} value={m.amount ?? ''} onChange={(e) => onChange(e.target.value === '' ? '' : next({ amount: e.target.value }))} />
+          <input className="input mono" aria-label="Currency" maxLength={3} value={m.currency ?? 'USD'} onChange={(e) => onChange(next({ currency: e.target.value.toUpperCase() }))} />
+          {p.periodic && <Select value={m.period || 'year'} onChange={(v) => onChange(next({ period: v || 'year' }))} options={PERIODS} />}
         </div>
       );
     }
+    case 'address': {
+      const a = (value as Address | null) ?? {};
+      const put = (k: keyof Address, v: string) => onChange({ ...a, [k]: v });
+      return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <input id={id} className="input" style={{ gridColumn: '1 / -1' }} placeholder="Street" value={a.street1 ?? ''} onChange={(e) => put('street1', e.target.value)} />
+          <input className="input" style={{ gridColumn: '1 / -1' }} aria-label="Apartment, suite, unit" placeholder="Apartment, suite, unit" value={a.street2 ?? ''} onChange={(e) => put('street2', e.target.value)} />
+          <input className="input" aria-label="City" placeholder="City" value={a.city ?? ''} onChange={(e) => put('city', e.target.value)} />
+          <input className="input" aria-label="State or region" placeholder="State / region" value={a.region ?? ''} onChange={(e) => put('region', e.target.value)} />
+          <input className="input" aria-label="Postal code" placeholder="Postal code" value={a.postalCode ?? ''} onChange={(e) => put('postalCode', e.target.value)} />
+          <Select value={a.country ?? ''} onChange={(v) => put('country', v)} options={countries()} placeholder="Country" />
+        </div>
+      );
+    }
+    case 'region': {
+      const [c = '', r = ''] = String(value ?? '').split('-');
+      const join = (nc: string, nr: string) => onChange(nc ? (nr.trim() ? `${nc}-${nr.trim().toUpperCase()}` : nc) : '');
+      return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 6 }}>
+          <Select id={id} value={c} onChange={(v) => join(v, r)} options={countries()} placeholder="Country" />
+          <input className="input mono" aria-label="State or region code" placeholder="e.g. OR" maxLength={3} value={r} onChange={(e) => join(c, e.target.value)} />
+        </div>
+      );
+    }
+    case 'time':
+      return <input id={id} className="input" type="time" step={1} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} style={{ maxWidth: 200 }} />;
+    case 'timezone':
+      return <Select id={id} value={String(value ?? '')} onChange={onChange} options={timeZones()} placeholder="Time zone" />;
+    case 'geo': {
+      const g = (value as { lat?: string | number; lon?: string | number } | null) ?? {};
+      const put = (x: object) => { const n = { ...g, ...x }; onChange(n.lat === '' && n.lon === '' ? '' : n); };
+      return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <input id={id} className="input mono" inputMode="decimal" placeholder="Latitude, e.g. 40.6936" value={g.lat ?? ''} onChange={(e) => put({ lat: e.target.value })} />
+          <input className="input mono" inputMode="decimal" aria-label="Longitude" placeholder="Longitude, e.g. -89.589" value={g.lon ?? ''} onChange={(e) => put({ lon: e.target.value })} />
+        </div>
+      );
+    }
+    case 'repeat':
+      return <RepeatInput id={id} value={String(value ?? '')} onChange={onChange} />;
     case 'list':
       return <ListInput p={p} value={(value as Row[] | undefined) ?? []} onChange={onChange} currency={currency} />;
     case 'last4':
@@ -222,6 +285,113 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOn
     default:
       return <input id={id} className="input" type={p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : p.type === 'url' ? 'url' : 'text'} placeholder={ph} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} />;
   }
+}
+
+const DAYS: Record<string, string> = { MO: 'Monday', TU: 'Tuesday', WE: 'Wednesday', TH: 'Thursday', FR: 'Friday', SA: 'Saturday', SU: 'Sunday' };
+const NTH: Record<string, string> = { '1': 'first', '2': 'second', '3': 'third', '4': 'fourth', '-1': 'last' };
+/** A repeat rule (iCalendar RRULE) in words: "Every 2 weeks on Tuesday", "Monthly on the second Monday". */
+export function describeRepeat(rule: string): string {
+  const m = Object.fromEntries(rule.split(';').map((x) => x.split('=')));
+  const n = Number(m.INTERVAL || 1);
+  const unit = ({ DAILY: 'day', WEEKLY: 'week', MONTHLY: 'month', YEARLY: 'year' } as Record<string, string>)[m.FREQ] ?? '';
+  let out = n === 1 ? ({ DAILY: 'Daily', WEEKLY: 'Weekly', MONTHLY: 'Monthly', YEARLY: 'Yearly' } as Record<string, string>)[m.FREQ] ?? rule : `Every ${n} ${unit}s`;
+  if (m.BYDAY) out += ' on ' + String(m.BYDAY).split(',').map((d) => { const x = d.match(/^([+-]?\d{1,2})?([A-Z]{2})$/); return !x ? d : x[1] ? `the ${NTH[x[1].replace('+', '')] ?? x[1]} ${DAYS[x[2]]}` : DAYS[x[2]]; }).join(', ');
+  else if (m.BYMONTHDAY) out += ` on day ${m.BYMONTHDAY}`;
+  if (m.COUNT) out += `, ${m.COUNT} times`;
+  if (m.UNTIL) out += `, until ${m.UNTIL.slice(0, 4)}-${m.UNTIL.slice(4, 6)}-${m.UNTIL.slice(6, 8)}`;
+  return out;
+}
+
+const REPEATS: [string, string][] = [['FREQ=DAILY', 'Every day'], ['FREQ=WEEKLY', 'Every week'], ['FREQ=WEEKLY;INTERVAL=2', 'Every 2 weeks'], ['FREQ=MONTHLY', 'Every month'], ['FREQ=YEARLY', 'Every year'], ['custom', 'Custom…']];
+/** Common choices, or any iCalendar rule ("the second Monday of each month") typed as a rule and read back in words. */
+function RepeatInput({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+  const preset = REPEATS.some(([k]) => k === value);
+  const [custom, setCustom] = useState(!!value && !preset);
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      <Select id={id} value={custom ? 'custom' : value} placeholder="Doesn’t repeat" options={REPEATS} onChange={(v) => { if (v === 'custom') { setCustom(true); return; } setCustom(false); onChange(v); }} />
+      {custom && <>
+        <input className="input mono" aria-label="Repeat rule" placeholder="FREQ=MONTHLY;BYDAY=2MO" value={value} onChange={(e) => onChange(e.target.value.toUpperCase())} />
+        {value && <div className="text-muted" style={{ fontSize: 12 }}>{describeRepeat(value)}</div>}
+      </>}
+    </div>
+  );
+}
+
+/** Pick a person or organisation, or add a new one right here: a name is never just typed into an entry. */
+function PartyPicker({ id, value, onChange, contacts }: { id: string; value: string; onChange: (v: string) => void; contacts: ContactLite[] }) {
+  const [added, setAdded] = useState<ContactLite[]>([]);
+  const [adding, setAdding] = useState<{ name: string; type: 'person' | 'organisation' } | null>(null);
+  const [error, setError] = useState('');
+  const all = [...contacts, ...added.filter((a) => !contacts.some((c) => c.id === a.id))];
+  const create = async () => {
+    if (!adding?.name.trim()) return;
+    try {
+      const p = await post<ContactLite>('/api/parties', { type: adding.type, name: adding.name.trim() });
+      setAdded((x) => [...x, { id: p.id, name: p.name, type: p.type }]);
+      onChange(p.id);
+      setAdding(null);
+      setError('');
+    } catch (e) { setError((e as Error).message); }
+  };
+  if (adding) return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      <Pills value={adding.type} options={[['person', 'A person'], ['organisation', 'An organisation']]} onChange={(v) => setAdding({ ...adding, type: v as 'person' | 'organisation' })} size={12} />
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input id={id} className="input" autoFocus placeholder="Their name" value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } }} />
+        <button type="button" className="btn btn-primary" onClick={create} disabled={!adding.name.trim()}>Add</button>
+        <button type="button" className="btn btn-ghost" onClick={() => setAdding(null)}>Cancel</button>
+      </div>
+      {error && <div style={{ color: 'var(--color-accent-700)', fontSize: 12 }}>{error}</div>}
+    </div>
+  );
+  return (
+    <Select id={id} value={value} placeholder={all.length ? 'Choose from your contacts' : 'No contacts yet'}
+      options={[...all.map((c) => [c.id, c.name] as [string, string]), ['__new', '＋ Someone new…']]}
+      onChange={(v) => (v === '__new' ? setAdding({ name: '', type: 'person' }) : onChange(v))} />
+  );
+}
+
+/** Point to other entries (the passport that proves a citizenship), or add the entry right here if it isn't in yet. */
+function RecordPicker({ id, p, value, onChange }: { id: string; p: Part; value: unknown; onChange: (v: unknown) => void }) {
+  const [options, setOptions] = useState<{ id: string; title: string; domain: string }[]>([]);
+  const [targets, setTargets] = useState<Domain[]>([]);
+  const [creating, setCreating] = useState<Domain | null>(null);
+  const contacts = useContactsLite();
+  const load = async () => {
+    const cat = await fetchCatalog();
+    const ds = cat.filter((d) => !p.to?.length || p.to.includes(d.id));
+    setTargets(ds);
+    const lists = await Promise.all(ds.map((d) => get<{ items: Rec[] }>(`/api/data/${d.id}`).then((r) => r.items.map((x) => ({ id: x.id, title: ds.length > 1 ? `${x.title} (${d.label})` : x.title, domain: d.id })))));
+    setOptions(lists.flat());
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load().catch(() => {}); }, []);
+  const chosen = p.many ? ((value as string[] | undefined) ?? []) : value ? [String(value)] : [];
+  const toggle = (rid: string) => onChange(p.many ? (chosen.includes(rid) ? chosen.filter((x) => x !== rid) : [...chosen, rid]) : rid);
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      {p.many ? (
+        <div id={id} style={{ display: 'grid', gap: 4 }}>
+          {options.map((o) => (
+            <label key={o.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14 }}>
+              <input type="checkbox" checked={chosen.includes(o.id)} onChange={() => toggle(o.id)} />{o.title}
+            </label>
+          ))}
+          {!options.length && <div className="text-muted" style={{ fontSize: 13 }}>Nothing in {targets.map((d) => d.label).join(' or ') || 'there'} yet.</div>}
+        </div>
+      ) : (
+        <Select id={id} value={chosen[0] ?? ''} onChange={(v) => onChange(v)} options={options.map((o) => [o.id, o.title])} placeholder="Choose…" />
+      )}
+      {targets.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {targets.map((d) => <button key={d.id} type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => setCreating(d)}>＋ Add {targets.length > 1 ? `to ${d.label}` : `a new ${d.noun}`}</button>)}
+        </div>
+      )}
+      {creating && <RecordEditor d={creating} rec={null} contacts={contacts} onClose={() => setCreating(null)}
+        onSaved={(saved) => { setCreating(null); if (saved) { load().catch(() => {}); onChange(p.many ? [...chosen, saved.id] : saved.id); } }} />}
+    </div>
+  );
 }
 
 // ── changes: who changed what, and going back ─────────────────────────
@@ -343,6 +513,11 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   const [to, setTo] = useState(rec?.validTo ?? '');
   const [current, setCurrent] = useState(rec ? !rec.validTo : true);
   const [notes, setNotes] = useState(rec?.notes ?? '');
+  // 'default' = follow the category's default for this kind of entry.
+  const startSens = rec && !rec.sensitivityDefault && rec.sensitivity ? rec.sensitivity : 'default';
+  const [sensChoice, setSensChoice] = useState<Sensitivity | 'default'>(startSens);
+  const sensChanged = sensChoice !== startSens;
+  const sens = sensChoice === 'default' ? null : sensChoice;
   const [more, setMore] = useState(false);
   const [error, setError] = useState('');
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
@@ -382,7 +557,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
 
   const tKeys = titleKeys(d);
   // Deprecated parts stay editable on records that already use them, but aren't offered otherwise.
-  const offered = d.parts.filter((p) => !p.deprecated || (vals[p.key] !== undefined && vals[p.key] !== '') || rec?.masked.includes(p.key));
+  const offered = d.parts.filter((p) => applies(p, vals) && (!p.deprecated || (vals[p.key] !== undefined && vals[p.key] !== '') || rec?.masked.includes(p.key)));
   const essential = offered.filter((p, i) => p.required || tKeys.includes(p.key) || i < 4);
   const extra = offered.filter((p) => !essential.includes(p));
   const extraFilled = extra.some((p) => vals[p.key] !== undefined && vals[p.key] !== '' || rec?.masked.includes(p.key));
@@ -411,9 +586,19 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
     for (const p of d.parts) {
       if (rec && !touched.has(p.key)) continue;
       let v = vals[p.key];
+      // A part that doesn't apply right now isn't sent (its stored value, if any, stays: it was true).
+      if (!applies(p, vals)) continue;
       if (p.type === 'money' && v && typeof v === 'object') {
-        const m = v as { amount: string | number; currency: string };
-        v = m.amount === '' || m.amount === undefined ? null : { amount: Number(m.amount), currency: m.currency || 'USD' };
+        const m = v as { amount: string | number; currency: string; period?: string };
+        v = m.amount === '' || m.amount === undefined ? null : { amount: Number(m.amount), currency: m.currency || 'USD', ...(p.periodic ? { period: m.period || 'year' } : {}) };
+      }
+      if (p.type === 'geo' && v && typeof v === 'object') {
+        const g = v as { lat: string | number; lon: string | number };
+        v = g.lat === '' || g.lon === '' ? null : { lat: Number(g.lat), lon: Number(g.lon) };
+      }
+      if (p.type === 'address' && v && typeof v === 'object') {
+        const a = Object.fromEntries(Object.entries(v as Address).filter(([, x]) => String(x ?? '').trim()));
+        v = Object.keys(a).length ? a : null;
       }
       if (p.type === 'number' && v !== '' && v !== undefined) v = Number(v);
       if (p.type === 'datetime' && v && typeof v === 'object' && !(v as Partial<DateTime>).at) v = undefined;
@@ -422,7 +607,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
       data[p.key] = v === '' || v === undefined ? (rec ? null : undefined) : v;
       if (data[p.key] === undefined) delete data[p.key];
     }
-    const body = { data, notes, ...(d.dated ? { validFrom: from || null, validTo: current ? null : to || null } : {}) };
+    const body = { data, notes, ...(d.dated ? { validFrom: from || null, validTo: current ? null : to || null } : {}), ...(sensChanged ? { sensitivity: sens } : {}) };
     try {
       const saved = rec ? await patch<Rec>(`/api/data/${d.id}/${rec.id}`, body) : await post<Rec>(`/api/data/${d.id}`, body);
       // Documents picked before the entry existed go up now, filed on it.
@@ -495,6 +680,12 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
               {(more || extraFilled) && extra.map(field)}
             </>
           )}
+          <div className="field">
+            <label>Who can see this</label>
+            <Pills value={sensChoice} size={12} onChange={(v) => setSensChoice(v as Sensitivity | 'default')}
+              options={[['default', rec?.sensitivityDefault && rec.sensitivity ? `Default (${rec.sensitivity})` : 'Default'], ['standard', 'Standard'], ['sensitive', 'Sensitive'], ['secret', 'Secret']]} />
+            <div className="text-muted" style={{ fontSize: 12 }}>Standard can be in your basic profile; sensitive only where you share it; secret is encrypted and never leaves without your confirm.</div>
+          </div>
           <div className="field"><label htmlFor="notes">Notes</label><textarea id="notes" className="input" style={{ borderRadius: 20, minHeight: 70 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering" /></div>
           {rec?.updatedByLabel && (
             <div className="text-muted" style={{ fontSize: 12 }}>
