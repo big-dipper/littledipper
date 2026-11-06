@@ -61,8 +61,8 @@ try {
   await rejects(() => buildRecord(t, { data: { name: 'x', repeat: 'FREQ=WEEKLY;COUNT=3;UNTIL=20270101' } }, null, owner), 'invalid_value', 'a repeat rule can’t have both COUNT and UNTIL');
   await rejects(() => buildRecord(t, { data: { name: 'x', pay: { amount: 10, currency: 'USD' } } }, null, owner), 'invalid_value', 'periodic money must say per what');
   await rejects(() => buildRecord(t, { data: { name: 'x', who: 'con_nobody' } }, null, owner), 'invalid_value', 'a party must exist');
-  const party = { _id: newId('con'), kind: 'person', displayName: 'Ana Ruiz', org: null, methods: [], notes: '', node: null, sharedIn: [], sharedInFetchedAt: null, requested: [], offered: [], lastActivity: { text: '', at: '' }, createdAt: '' };
-  await ctx.store.insert('contacts', party);
+  const party = { _id: newId('pty'), type: 'person', name: 'Ana Ruiz', methods: [], notes: '', affiliations: [], node: null, sharedIn: [], sharedInFetchedAt: null, createdAt: '' };
+  await ctx.store.insert('parties', party);
   ok((await buildRecord(t, { data: { name: 'x', who: party._id } }, null, owner)).data.who === party._id, 'a party that exists is linked by id');
 
   console.log('links between entries');
