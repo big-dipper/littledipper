@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { copy, firstName, get, initials, post, SENS, type ProfileLine as Field } from '../../api';
+import { copy, firstName, initials, post } from '../../api';
+import { AskChooser, ShareChooser, toShare, useSharing, type Choice, type Relation } from '../../sharing';
 import { Dialog, Pills, QR, Striped, Toggle, useAction, useAsync, useToast } from '../../ui';
 import { useAdmin } from './Layout';
 
@@ -15,13 +16,13 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
   const [nodeUrl, setNodeUrl] = useState('');
   const [found, setFound] = useState<Lookup | null>(null);
   const [lookupError, setLookupError] = useState('');
-  const [offer, setOffer] = useState<Record<string, boolean>>({});
+  const sharing = useSharing();
+  const [choice, setChoice] = useState<Choice>({ extras: [] });
+  const [relation, setRelation] = useState<Relation | ''>('');
+  const [asks, setAsks] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [exp, setExp] = useState<'24h' | '7d' | '30d'>('7d');
   const [invite, setInvite] = useState<{ url: string; expiresAt: string } | null>(null);
-  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/profile'), []);
-
-  const sensitive = (fields?.items || []).filter((f) => f.sensitivity === 'sensitive' && !!f.value);
   const name = found?.displayName || found?.address || '';
 
   const lookup = async () => {
@@ -41,7 +42,7 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
   };
 
   const send = async () => {
-    const r = await run(() => post('/api/federation/requests', { address: nodeUrl, offeredFields: Object.keys(offer).filter((k) => offer[k]), note }), `Request sent to ${firstName(name)}`);
+    const r = await run(() => post('/api/federation/requests', { address: nodeUrl, share: toShare(choice), asks, note }), `Request sent to ${firstName(name)}`);
     if (r) onDone(r.contactId);
   };
 
@@ -103,13 +104,8 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
                 <div style={{ fontSize: 13, color: 'var(--color-accent-800)' }}>{firstName(name)} isn't accepting connection requests right now. Ask them for an invite link and paste it above.</div>
               ) : (
                 <>
-                  <div style={{ fontSize: 13, marginTop: 4 }}>{firstName(name)} will get your <strong>basic profile</strong>.{sensitive.length > 0 && ' Also offer:'}</div>
-                  {sensitive.map((f) => (
-                    <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0', borderBottom: '1px solid var(--color-divider)' }}>
-                      <span style={{ flex: 1, fontSize: 14 }}>{f.label}</span><span className={`tag ${SENS[f.sensitivity][1]}`}>{SENS[f.sensitivity][0]}</span>
-                      <Toggle on={!!offer[f.key]} label={`Offer ${f.label}`} onChange={() => setOffer({ ...offer, [f.key]: !offer[f.key] })} />
-                    </div>
-                  ))}
+                  {sharing && <ShareChooser data={sharing} first={firstName(name)} choice={choice} onChange={setChoice} relation={relation} onRelation={setRelation} />}
+                  {sharing && <AskChooser data={sharing} first={firstName(name)} asks={asks} onChange={setAsks} />}
                   <div className="field"><label htmlFor="nt">Note to {firstName(name)} (optional)</label><input id="nt" className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Hey, it's me from the studio" /></div>
                 </>
               )}

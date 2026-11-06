@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { get, LINE_SOURCE, put, type ProfileResp } from '../../api';
 import { ErrorNote, Loading, Toggle, useAction, useAsync } from '../../ui';
 import { fetchCatalog, Lock, RecordEditor, useContactsLite, type Domain, type Rec } from '../../life';
+import { itemLabel, loadSharing, RELATION_LABEL, type Relation, type SharingData } from '../../sharing';
+import { Dialog } from '../../ui';
 
 /** Lines that stay out of view here: worked out for forms and assistants, but not part of your card. */
 const OFF_CARD = new Set(['marital_status']);
@@ -78,8 +80,61 @@ export default function MyData() {
         {chosen.map(({ key, label }) => row(key, label, false))}
       </div>
 
+      <Suggestions />
+
       <p className="text-muted" style={{ fontSize: 13, marginTop: 14 }}>Want to keep something else? Add a category in My data: it can hold a single detail.</p>
       {editing && <RecordEditor d={editing.d} rec={editing.rec} contacts={contacts} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+    </div>
+  );
+}
+
+/** Things a relationship can suggest beyond profile lines, in words. */
+const CATEGORY_ITEMS = ['category:employment:current', 'category:residences:current', 'category:education:all', 'category:credentials:all', 'category:events:all'];
+
+/**
+ * "Suggestions when you connect": what each relationship pre-ticks when you say who someone is. Only suggestions:
+ * you see them ticked and can untick before connecting.
+ */
+function Suggestions() {
+  const [data, setData] = useState<SharingData | null>(null);
+  const [editing, setEditing] = useState<{ relation: Relation; items: string[] } | null>(null);
+  const { run, busy } = useAction();
+  const load = () => loadSharing().then(setData).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []);
+  if (!data) return null;
+  const choices = [...data.profile.lines.map((l) => l.key).filter((k) => !['little_dipper', 'preferred_name', 'marital_status', 'nationality', 'birth_name'].includes(k) && !data.profile.basic.includes(k)), ...CATEGORY_ITEMS];
+  const save = async () => {
+    if (!editing) return;
+    if (await run(() => put('/api/profile/suggestions', { relation: editing.relation, items: editing.items }), 'Suggestions saved')) { setEditing(null); load(); }
+  };
+  return (
+    <div className="card" style={{ padding: '18px 24px 10px', marginTop: 18 }}>
+      <div className="card-kicker">Suggestions when you connect</div>
+      <div className="text-muted" style={{ fontSize: 12, margin: '4px 0 6px' }}>When you say who someone is, these come pre-ticked. You can always untick them.</div>
+      {(Object.keys(RELATION_LABEL) as Relation[]).map((r) => (
+        <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0', borderBottom: '1px solid var(--color-divider)' }}>
+          <span style={{ width: 130, flex: 'none' }}>{RELATION_LABEL[r]}</span>
+          <span className="text-muted" style={{ flex: 1, fontSize: 14 }}>{data.suggestions[r].map((x) => itemLabel(x, data)).join(' · ') || 'Nothing extra'}</span>
+          <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setEditing({ relation: r, items: data.suggestions[r] })}>Edit</button>
+        </div>
+      ))}
+      {editing && (
+        <Dialog title={`When someone is ${RELATION_LABEL[editing.relation].toLowerCase()}`} onClose={() => setEditing(null)} width={480} actions={<>
+          <button className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
+          <button className="btn btn-primary" disabled={busy} onClick={save}>Save</button>
+        </>}>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div className="text-muted" style={{ fontSize: 13 }}>Pre-tick these, on top of your basic profile:</div>
+            {choices.map((x) => (
+              <label key={x} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, cursor: 'pointer' }}>
+                <input type="checkbox" checked={editing.items.includes(x)} onChange={() => setEditing({ ...editing, items: editing.items.includes(x) ? editing.items.filter((y) => y !== x) : [...editing.items, x] })} />
+                {itemLabel(x, data)}
+              </label>
+            ))}
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -53,6 +53,8 @@ export type PartyDetail = Party & {
   sharedDomains?: { domain: string; label: string; scope: 'all' | 'current'; records: { id: string; title: string; fields: { key: string; label: string; value: string }[]; validFrom: string | null; validTo: string | null; current: boolean }[] }[];
   keys: { peerSigningKey: string; peerVersion: string | null; tokenIssued: { prefix: string; scopes: string[]; lastUsedAt: string | null } | null; tokenFromPeer: { stored: boolean; lastUsedAt: string | null } | null; lastSyncAt: string | null; rotatedAt: string | null } | null;
   usedBy: Reference[];
+  /** What you asked them for when you connected, and whether it came. */
+  asked: { key: string; label: string; shared: boolean }[];
   syncError?: string | null;
 };
 

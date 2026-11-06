@@ -17,7 +17,9 @@ import { authenticator } from 'otplib';
 import { SoftKey } from './softkey.js';
 
 const PASSWORD = 'little-dipper-demo';
-const secretFile = (who: string) => path.join(os.tmpdir(), `little-dipper-demo${who === 'maya' ? '' : `-${who}`}.totp`);
+/** DEMO_PORT moves the demo (Maya on it, Theo on the next), so two demos can run side by side. */
+const PORT = Number(process.env.DEMO_PORT || 4300);
+const secretFile = (who: string) => path.join(os.tmpdir(), `little-dipper-demo${PORT === 4300 ? '' : `-${PORT}`}${who === 'maya' ? '' : `-${who}`}.totp`);
 
 if (process.argv.includes('code')) {
   const who = process.argv.includes('theo') ? 'theo' : 'maya';
@@ -81,8 +83,8 @@ async function node(port: number, name: string, who: string) {
   return { base, call };
 }
 
-const maya = await node(4300, 'Maya Lindqvist', 'maya');
-const theo = await node(4301, 'Theo Nakamura', 'theo');
+const maya = await node(PORT, 'Maya Lindqvist', 'maya');
+const theo = await node(PORT + 1, 'Theo Nakamura', 'theo');
 const call = maya.call;
 
 // ── sample data ──────────────────────────────────────────────────────────
@@ -122,15 +124,12 @@ await add('preferences', { category: 'drink', name: 'Coffee order', value: 'Oat 
 // ── Theo, a friend on his own Little Dipper, connected through an invite ──
 await theo.call('POST', '/api/data/residences', { data: { street1: '88 Rose St', city: 'Seattle', region: 'WA', country: 'US', primary: true }, validFrom: '2020-04' });
 await theo.call('POST', '/api/data/contact_methods', { data: { kind: 'phone', value: '(206) 555-0199', primary: true } });
+// Theo asks to connect (with a note, offering his phone, asking for Maya's address) and waits for Maya: the connect moment.
 const invite = await call('POST', '/api/federation/invites', { expiresIn: '7d' });
-await theo.call('POST', '/api/federation/requests', { address: invite.url, note: 'Hi Maya, it’s Theo' });
-const waiting = (await call('GET', '/api/federation/requests?status=pending&direction=in')).items[0];
-await call('POST', `/api/federation/requests/${waiting._id}/accept`, {});
-const theoParty = (await call('GET', '/api/parties')).items.find((p: { name: string }) => p.name === 'Theo Nakamura');
-await call('PUT', `/api/parties/${theoParty.id}/share`, { categories: { events: true } });
+await theo.call('POST', '/api/federation/requests', { address: invite.url, note: 'Hi Maya, it’s Theo from the studio', share: { basic: true, lines: ['phone'] }, asks: ['address'] });
 
 console.log(`
-Little Dipper demo is running, two nodes already connected:
+Little Dipper demo is running, two nodes. Theo has asked to connect: see Contacts on Maya's node.
   Maya:  ${maya.base}   code: npm run demo -w server -- code
   Theo:  ${theo.base}   code: npm run demo -w server -- code theo
   Password for both:  ${PASSWORD}

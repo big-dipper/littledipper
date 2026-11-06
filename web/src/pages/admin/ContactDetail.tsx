@@ -6,6 +6,7 @@ import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
 import { fetchCatalog, fmtRange, PartialDate, Select } from '../../life';
 import { CopyList, SendCopy } from './Copies';
+import { itemLabel, ShareChooser, toShare, useSharing, type Choice, type Relation, type SharingData } from '../../sharing';
 
 export default function ContactDetail() {
   const { id = '' } = useParams();
@@ -20,6 +21,11 @@ export default function ContactDetail() {
   const [sent, setSent] = useState(0);
   const { data: catalog } = useAsync(fetchCatalog, []);
   const [edit, setEdit] = useState<Edit | null>(null);
+  const sharing = useSharing();
+  const [choice, setChoice] = useState<Choice>({ extras: [] });
+  const [relation, setRelation] = useState<Relation | ''>('');
+  const [changing, setChanging] = useState(false);
+  const [weeds, setWeeds] = useState(false);
 
   if (error) return <div><Link className="btn btn-ghost" to="/admin/contacts">← All contacts</Link><ErrorNote error={error} /></div>;
   if (!c || !fieldsResp) return <Loading />;
@@ -31,7 +37,8 @@ export default function ContactDetail() {
 
   const accept = async () => {
     if (!c.request) return;
-    if (await run(() => post(`/api/federation/requests/${c.request!.id}/accept`), 'Connected. Keys exchanged.')) { reload(); refresh(); }
+    // What you chose on the connect card: your basic profile plus the extras you kept ticked.
+    if (await run(() => post(`/api/federation/requests/${c.request!.id}/accept`, { share: toShare(choice) }), `Connected with ${first}`)) { reload(); refresh(); }
   };
   const decline = async () => {
     if (!c.request) return;
@@ -93,13 +100,21 @@ export default function ContactDetail() {
       </div>
 
       {s === 'pending_in' && (
-        <div style={{ marginTop: 22, borderRadius: 32, background: 'var(--color-accent-100)', padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 240 }}>
-            <div style={{ fontWeight: 600 }}>{first} sent a connection request</div>
-            <div style={{ fontSize: 13, color: 'var(--color-accent-800)' }}>Choose what they can see first, then accept. Nothing is shared until you do.{c.request?.note ? ` Their note: “${c.request.note}”` : ''}</div>
+        <div className="card" style={{ marginTop: 22, padding: '22px 26px', gap: 16, background: 'var(--color-accent-100)', maxWidth: 640 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22 }}>{c.name} wants to connect</div>
+            <div style={{ fontSize: 13, color: 'var(--color-accent-800)' }}><span className="mono">{sub}</span> · Little Dipper ✓ (it’s really them)</div>
+            {c.request?.note && <div style={{ marginTop: 8, fontStyle: 'italic' }}>“{c.request.note}”</div>}
           </div>
-          <button className="btn btn-secondary" disabled={busy} onClick={decline}>Decline</button>
-          <button className="btn btn-primary" disabled={busy} onClick={accept}>Accept</button>
+          <div>
+            <div style={{ fontWeight: 600 }}>{first} will share with you</div>
+            <div className="text-muted" style={{ fontSize: 14 }}>{(c.request?.offeredLabels ?? []).join(' · ') || 'Nothing yet'}</div>
+          </div>
+          {sharing ? <ShareChooser data={sharing} first={first} choice={choice} onChange={setChoice} requested={c.request?.requestedFields ?? []} relation={relation} onRelation={setRelation} /> : <Loading />}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" disabled={busy} onClick={accept}>Connect</button>
+            <button className="btn btn-ghost" disabled={busy} onClick={decline}>Not now</button>
+          </div>
         </div>
       )}
       {s === 'pending_out' && (
@@ -193,7 +208,28 @@ export default function ContactDetail() {
           <button className="btn btn-ghost" onClick={remove} style={{ justifySelf: 'start', fontSize: 13, color: 'var(--color-accent-700)' }}>Delete contact</button>
         </div>
 
-        {isNode && <ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} />}
+        {isNode && s === 'active' && sharing && (
+          <div className="card" style={{ padding: '20px 24px', gap: 12 }}>
+            <div className="card-kicker">What {first} sees</div>
+            <div style={{ fontSize: 16 }}>{seesSentence(c, sharing)}</div>
+            {c.asked.length > 0 && <div className="text-muted" style={{ fontSize: 13 }}>You asked for {c.asked.map((a) => `${a.label.toLowerCase()} (${a.shared ? 'shared' : 'not shared'})`).join(', ')}.</div>}
+            {!changing ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-secondary" onClick={() => { setChoice({ extras: currentExtras(c) }); setChanging(true); }}>Change</button>
+                <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setWeeds(!weeds)}>{weeds ? 'Fewer options' : 'More options'}</button>
+              </div>
+            ) : (
+              <>
+                <ShareChooser data={sharing} first={first} choice={choice} onChange={setChoice} relation={relation} onRelation={setRelation} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-primary" disabled={busy} onClick={async () => { if (await saveChoice(c, choice, run, put)) { setChanging(false); reload(); } }}>Save</button>
+                  <button className="btn btn-ghost" onClick={() => setChanging(false)}>Cancel</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        {isNode && s === 'active' && weeds && <ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} />}
       </div>
 
       {edit && (
@@ -229,4 +265,23 @@ const STRING_KINDS: ContactMethod['kind'][] = ['email', 'phone', 'website', 'soc
 function saveContact(id: string, e: Edit) {
   const methods = e.methods.filter((m) => typeof m.value === 'object' || m.value.trim());
   return patch(`/api/parties/${id}`, { name: e.name, type: e.type, notes: e.notes, methods, ...(e.type === 'person' ? { birthDate: e.birthDate || null } : {}) });
+}
+
+/** The extras a party gets now, as chooser items: profile lines and whole categories (single entries stay in More options). */
+const currentExtras = (c: CD) => [...c.share.lines, ...Object.values(c.share.categories).map((g) => `category:${g.domain}:${g.scope}`)];
+
+/** "Theo sees your basic profile, your mobile and your home address." */
+function seesSentence(c: CD, data: SharingData) {
+  if (!c.share.basic && !currentExtras(c).length && !c.share.entries.length) return 'Nothing yet.';
+  const parts = [c.share.basic ? 'your basic profile' : null, ...currentExtras(c).map((x) => itemLabel(x, data).replace(/^Your /, 'your ').replace(/^All your /, 'all your ')), c.share.entries.length ? `${c.share.entries.length} single entr${c.share.entries.length === 1 ? 'y' : 'ies'}` : null].filter(Boolean) as string[];
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0];
+  return `${firstName(c.name)} sees ${list}.`;
+}
+
+/** Save a "Change": the extras become exactly what's ticked (lines and categories); single entries are untouched. */
+async function saveChoice(c: CD, choice: Choice, run: ReturnType<typeof useAction>['run'], putFn: typeof put) {
+  const want = toShare(choice);
+  const lines = Object.fromEntries([...new Set([...c.share.lines, ...want.lines])].map((k) => [k, want.lines.includes(k)]));
+  const cats = Object.fromEntries([...new Set([...Object.keys(c.share.categories), ...Object.keys(want.categories)])].map((d) => [d, want.categories[d] ?? false]));
+  return run(() => putFn(`/api/parties/${c.id}/share`, { basic: true, lines, categories: cats }), 'Saved');
 }
