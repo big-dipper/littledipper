@@ -3,9 +3,10 @@
  * Profile first (basic profile + extra fields), then every life category with Off / Current / All.
  */
 import { useState } from 'react';
-import { put, SENS, type PartyDetail as ContactDetail, type ProfileLine as Field } from '../../api';
+import { Link } from 'react-router-dom';
+import { get, put, type PartyDetail as ContactDetail, type ProfileLine as Field } from '../../api';
 import { Confirm, Pills, Toggle, useAction, useAsync, type ConfirmCfg } from '../../ui';
-import { fetchCatalog, GROUPS, Lock, Mono, type Domain } from '../../life';
+import { fetchCatalog, GROUPS, Lock, Mono, Select, type Domain, type Rec } from '../../life';
 
 type Grants = ContactDetail['share'];
 type DomainGrant = { scope: 'all' | 'current'; includeSecret: boolean };
@@ -36,7 +37,8 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
   // ── profile fields ──
   // The basic profile is the owner's list (Profile basics); extras are lines added for this person.
   const standard = fields.filter((f) => f.inBasic);
-  const extraRows = fields.filter((f) => !f.inBasic || !grants.basic);
+  // Secret lines never leave, so they aren't offered.
+  const extraRows = fields.filter((f) => (!f.inBasic || !grants.basic) && f.sensitivity !== 'secret' && f.key !== 'little_dipper');
   const extraOn = grants.lines.length;
   const requested = c.request?.requestedFields ?? [];
   const requestedSensitive = requested.some((k) => fields.find((f) => f.key === k)?.sensitivity !== 'standard');
@@ -94,7 +96,7 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
   return (
     <div className="card" style={{ padding: '22px 24px', gap: 14 }}>
       <div>
-        <div className="card-kicker">What {first} can see</div>
+        <div className="card-kicker">What {first} gets</div>
         <div className="card-title" style={{ fontSize: 22, marginTop: 4 }}>{summary}</div>
         <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>Changes apply right away. {first}’s Little Dipper picks them up on its next sync, and every read is logged in your activity.</div>
       </div>
@@ -116,13 +118,13 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
         <SubHead>Profile</SubHead>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderRadius: 24, background: 'var(--color-accent-2-100)' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--color-accent-2-900)' }}>Basic profile</div>
+            <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--color-accent-2-900)' }}>Your basic profile <Link to="/admin/life/profile" style={{ fontWeight: 400, fontSize: 12, marginLeft: 6 }}>Change what everyone gets</Link></div>
             <div style={{ fontSize: 13, color: 'var(--color-accent-2-800)' }}>{grants.basic ? standard.map((f) => f.label).join(' · ') : `Off. ${first} only sees what you switch on below.`}</div>
           </div>
-          <Toggle on={grants.basic} label="Share basic profile" onChange={() => { send({ profile: !grants.basic }); if (grants.basic) setExtraOpen(true); }} />
+          <Toggle on={grants.basic} label="Share basic profile" onChange={() => { send({ basic: !grants.basic }); if (grants.basic) setExtraOpen(true); }} />
         </div>
         <button className="btn btn-ghost" onClick={() => setExtraOpen(!showExtra)} style={{ justifySelf: 'start', fontSize: 13 }}>
-          {showExtra ? 'Hide extra profile fields' : extraOn ? `Extra profile fields · ${extraOn} shared` : 'Share an extra profile field…'}
+          {showExtra ? 'Hide' : extraOn ? `Also for ${first} · ${extraOn}` : `Add something just for ${first}…`}
         </button>
         {showExtra && (
           <div style={{ display: 'grid' }}>
@@ -130,7 +132,6 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
               <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: '1px solid var(--color-divider)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14 }}>{f.label}</div><div className="text-muted" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.value || 'Not added'}</div></div>
                 {requested.includes(f.key) && <span className="tag tag-accent">Requested</span>}
-                <span className={`tag ${SENS[f.sensitivity][1]}`}>{SENS[f.sensitivity][0]}</span>
                 <Toggle on={grants.lines.includes(f.key)} label={`Share ${f.label}`} onChange={() => toggleField(f)} />
               </div>
             ))}
@@ -140,7 +141,9 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
 
       {/* Life categories */}
       <div style={{ display: 'grid', gap: 8 }}>
-        <SubHead>Life categories</SubHead>
+        <SubHead>Single entries</SubHead>
+        <SingleEntries c={c} catalog={catalog ?? []} first={first} send={send} ask={setConfirm} />
+        <SubHead>Whole categories</SubHead>
         {!catalog ? <div className="text-muted" style={{ fontSize: 13 }}>Loading…</div> : GROUPS.map((g) => {
           const list = catalog.filter((d) => d.group === g.id);
           if (!list.length) return null;
@@ -186,6 +189,43 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
         })}
       </div>
       {confirm && <Confirm cfg={confirm} onClose={() => setConfirm(null)} />}
+    </div>
+  );
+}
+
+/** Entries shared one by one (just this residence, just this job), with a picker to add one. */
+function SingleEntries({ c, catalog, first, send, ask }: { c: ContactDetail; catalog: Domain[]; first: string; send: (body: object, msg?: string) => Promise<unknown>; ask: (cfg: ConfirmCfg | null) => void }) {
+  const [domain, setDomain] = useState('');
+  const [recs, setRecs] = useState<Rec[]>([]);
+  const pick = async (d: string) => { setDomain(d); setRecs(d ? (await get<{ items: Rec[] }>(`/api/data/${d}`)).items : []); };
+  const shared = c.share.entries;
+  // IDs, health, money and secret entries ask first, like whole categories do.
+  const share = async (id: string) => {
+    const d = catalog.find((x) => x.id === domain);
+    const title = recs.find((r) => r.id === id)?.title ?? 'this entry';
+    const secret = recs.find((r) => r.id === id)?.sensitivity === 'secret';
+    if (d?.confirmShare || secret) {
+      return ask({
+        title: `Share ${title} with ${first}?`, body: `${first} will see it until you stop sharing it. Each read is logged in your activity.`, cta: 'Share it',
+        onConfirm: async () => { await send({ entries: { [id]: true }, confirm: true }, `Shared with ${first}`); ask(null); pick(''); },
+      });
+    }
+    await send({ entries: { [id]: true } }, `Shared with ${first}`);
+    pick('');
+  };
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      {shared.map((e) => (
+        <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--color-divider)' }}>
+          <span style={{ flex: 1, fontSize: 14 }}>{e.title ?? 'An entry'} <span className="text-muted" style={{ fontSize: 12 }}>· {e.domainLabel}</span></span>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => send({ entries: { [e.id]: false } }, `No longer shared with ${first}`)}>Stop sharing</button>
+        </div>
+      ))}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <Select value={domain} onChange={pick} placeholder="Share one entry from…" options={catalog.filter((d) => d.count > 0).map((d) => [d.id, d.label])} />
+        {domain && <Select value="" onChange={(id) => id && share(id)} placeholder="Choose the entry"
+          options={recs.filter((r) => !shared.some((e) => e.id === r.id)).map((r) => [r.id, r.title])} />}
+      </div>
     </div>
   );
 }

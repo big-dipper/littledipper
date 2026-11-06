@@ -56,6 +56,18 @@ export async function whatTheyGet(partyId: string): Promise<WhatTheyGet> {
   return { basic: s.basic, lines: s.lines, categories: Object.fromEntries(s.categories.map((c) => [c.domain, c])), entries: s.entries };
 }
 
+/** Single entries as people read them: id, title and category, for the owner's screens. */
+export async function describeEntries(entries: EntryShare[]) {
+  const { getDomain, recordOut } = await import('./domains/records.js');
+  const out = [];
+  for (const e of entries) {
+    const r = await ctx.store.get<import('./domains/types.js').RecordDoc>('records', e.id);
+    const d = r && (await getDomain(r.domain));
+    if (r && d) out.push({ ...e, title: recordOut(d, r).title, domain: d.id, domainLabel: d.label });
+  }
+  return out;
+}
+
 /** Create or change a party's live share. Fields left out stay as they are. */
 export async function setLiveShare(partyId: string, patch: Partial<Pick<ShareDoc, 'basic' | 'lines' | 'categories' | 'entries' | 'expiresAt'>>) {
   const existing = (await ctx.store.find<ShareDoc>('shares', { party: partyId, mode: 'live' }))[0];

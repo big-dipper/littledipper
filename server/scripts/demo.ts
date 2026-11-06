@@ -2,10 +2,11 @@
  * A local Little Dipper with sample data, to try the app without touching a real node. Starts a fresh node in a
  * throwaway folder, claims it, fills in a life's worth of sample entries and prints how to sign in.
  *
- *   npm run demo -w server             (http://localhost:4300, stop with Ctrl-C; the folder is deleted)
- *   npm run demo -w server -- code     (a sign-in code for a demo that's already running)
+ *   npm run demo -w server              (Maya at http://localhost:4300, Theo at :4301; stop with Ctrl-C, the data is deleted)
+ *   npm run demo -w server -- code      (a sign-in code for Maya's node)
+ *   npm run demo -w server -- code theo (a sign-in code for Theo's node)
  *
- * Sign in with the password it prints and a code from `-- code`. Built web files are served, so run
+ * Two nodes, already connected, so sharing can be tried from both sides. Sign in with the password it prints and a code. Built web files are served, so run
  * `npm run build -w web` first after changing the web app.
  */
 import { spawn } from 'node:child_process';
@@ -15,60 +16,74 @@ import path from 'node:path';
 import { authenticator } from 'otplib';
 import { SoftKey } from './softkey.js';
 
-const PORT = 4300;
-const base = `http://localhost:${PORT}`;
 const PASSWORD = 'little-dipper-demo';
-const secretFile = path.join(os.tmpdir(), 'little-dipper-demo.totp');
+const secretFile = (who: string) => path.join(os.tmpdir(), `little-dipper-demo${who === 'maya' ? '' : `-${who}`}.totp`);
 
 if (process.argv.includes('code')) {
-  console.log(authenticator.generate(readFileSync(secretFile, 'utf8').trim()));
+  const who = process.argv.includes('theo') ? 'theo' : 'maya';
+  console.log(authenticator.generate(readFileSync(secretFile(who), 'utf8').trim()));
   process.exit(0);
 }
 
-const jar = new Map<string, string>();
-async function call<T = any>(method: string, p: string, body?: unknown): Promise<T> {
-  const res = await fetch(base + p, {
-    method,
-    headers: { origin: base, ...(body !== undefined ? { 'content-type': 'application/json' } : {}), cookie: [...jar].map(([k, v]) => `${k}=${v}`).join('; ') },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  for (const c of res.headers.getSetCookie()) { const [kv] = c.split(';'); const [k, v] = kv.split('='); if (v) jar.set(k, v); else jar.delete(k); }
-  const text = await res.text();
-  if (res.status >= 400) throw new Error(`${method} ${p} → ${res.status} ${text}`);
-  return text ? JSON.parse(text) : null;
+/** A tiny client with its own cookie jar: one per node. */
+function client(base: string) {
+  const jar = new Map<string, string>();
+  return async function call<T = any>(method: string, p: string, body?: unknown): Promise<T> {
+    const res = await fetch(base + p, {
+      method,
+      headers: { origin: base, ...(body !== undefined ? { 'content-type': 'application/json' } : {}), cookie: [...jar].map(([k, v]) => `${k}=${v}`).join('; ') },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    for (const c of res.headers.getSetCookie()) { const [kv] = c.split(';'); const [k, v] = kv.split('='); if (v) jar.set(k, v); else jar.delete(k); }
+    const text = await res.text();
+    if (res.status >= 400) throw new Error(`${method} ${p} → ${res.status} ${text}`);
+    return text ? JSON.parse(text) : null;
+  };
 }
 
-const dir = mkdtempSync(path.join(os.tmpdir(), 'ld-demo-'));
-const proc = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], {
-  cwd: path.resolve(import.meta.dirname, '..'),
-  env: { ...process.env, PORT: String(PORT), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: base },
-  stdio: ['ignore', 'pipe', 'inherit'],
-});
-const stop = () => { proc.kill(); rmSync(dir, { recursive: true, force: true }); process.exit(0); };
+const dirs: string[] = [];
+const procs: ReturnType<typeof spawn>[] = [];
+const stop = () => { for (const p of procs) p.kill(); for (const d of dirs) rmSync(d, { recursive: true, force: true }); process.exit(0); };
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
-const claimUrl: string = await new Promise((resolve) => {
-  let out = '';
-  proc.stdout!.on('data', (d: Buffer) => {
-    out += d.toString();
-    const m = out.match(/https?:\/\/\S+\/claim\?token=\S+/);
-    if (m && out.includes('Answering at')) resolve(m[0]);
+/** Start a fresh node, claim it as `name` with a software passkey, and set a password and authenticator. */
+async function node(port: number, name: string, who: string) {
+  const base = `http://localhost:${port}`;
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'ld-demo-'));
+  dirs.push(dir);
+  const proc = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], {
+    cwd: path.resolve(import.meta.dirname, '..'),
+    env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: base },
+    stdio: ['ignore', 'pipe', 'inherit'],
   });
-});
+  procs.push(proc);
+  const claimUrl: string = await new Promise((resolve) => {
+    let out = '';
+    proc.stdout!.on('data', (d: Buffer) => {
+      out += d.toString();
+      const m = out.match(/https?:\/\/\S+\/claim\?token=\S+/);
+      if (m && out.includes('Answering at')) resolve(m[0]);
+    });
+  });
+  const call = client(base);
+  const key = new SoftKey();
+  await call('POST', '/api/node/claim', { token: new URL(claimUrl).searchParams.get('token') });
+  await call('POST', '/api/owner', { displayName: name, email: `${name.split(' ')[0].toLowerCase()}@example.com` });
+  const reg = await call('POST', '/api/auth/passkeys/register/options', {});
+  await call('POST', '/api/auth/passkeys/register', { challengeId: reg.challengeId, response: key.register(reg.options, base), label: 'Demo key' });
+  await call('POST', '/api/auth/recovery-codes', {});
+  await call('POST', '/api/node/claim/complete', {});
+  await call('PUT', '/api/auth/password', { password: PASSWORD });
+  const { secret } = await call('POST', '/api/auth/totp/setup', {});
+  await call('POST', '/api/auth/totp/enable', { code: authenticator.generate(secret) });
+  writeFileSync(secretFile(who), secret);
+  return { base, call };
+}
 
-// Claim with a software passkey, then a password and authenticator for signing in from a browser.
-const key = new SoftKey();
-await call('POST', '/api/node/claim', { token: new URL(claimUrl).searchParams.get('token') });
-await call('POST', '/api/owner', { displayName: 'Maya Lindqvist', email: 'maya@example.com' });
-const reg = await call('POST', '/api/auth/passkeys/register/options', {});
-await call('POST', '/api/auth/passkeys/register', { challengeId: reg.challengeId, response: key.register(reg.options, base), label: 'Demo key' });
-await call('POST', '/api/auth/recovery-codes', {});
-await call('POST', '/api/node/claim/complete', {});
-await call('PUT', '/api/auth/password', { password: PASSWORD });
-const { secret } = await call('POST', '/api/auth/totp/setup', {});
-await call('POST', '/api/auth/totp/enable', { code: authenticator.generate(secret) });
-writeFileSync(secretFile, secret);
+const maya = await node(4300, 'Maya Lindqvist', 'maya');
+const theo = await node(4301, 'Theo Nakamura', 'theo');
+const call = maya.call;
 
 // ── sample data ──────────────────────────────────────────────────────────
 const party = async (name: string, type = 'organisation', more = {}) => (await call('POST', '/api/parties', { type, name, ...more })).id as string;
@@ -104,9 +119,20 @@ await add('receipts', { merchant: await party('Blue Bottle'), purchased: '2026-1
 await add('events', { title: 'Book club', start: { at: '2026-01-12T19:00', tz: 'America/Los_Angeles' }, end: { at: '2026-01-12T21:00', tz: 'America/Los_Angeles' }, repeat: 'FREQ=MONTHLY;BYDAY=2MO', location: 'Powell’s' });
 await add('preferences', { category: 'drink', name: 'Coffee order', value: 'Oat flat white' });
 
+// ── Theo, a friend on his own Little Dipper, connected through an invite ──
+await theo.call('POST', '/api/data/residences', { data: { street1: '88 Rose St', city: 'Seattle', region: 'WA', country: 'US', primary: true }, validFrom: '2020-04' });
+await theo.call('POST', '/api/data/contact_methods', { data: { kind: 'phone', value: '(206) 555-0199', primary: true } });
+const invite = await call('POST', '/api/federation/invites', { expiresIn: '7d' });
+await theo.call('POST', '/api/federation/requests', { address: invite.url, note: 'Hi Maya, it’s Theo' });
+const waiting = (await call('GET', '/api/federation/requests?status=pending&direction=in')).items[0];
+await call('POST', `/api/federation/requests/${waiting._id}/accept`, {});
+const theoParty = (await call('GET', '/api/parties')).items.find((p: { name: string }) => p.name === 'Theo Nakamura');
+await call('PUT', `/api/parties/${theoParty.id}/share`, { categories: { events: true } });
+
 console.log(`
-Little Dipper demo is running: ${base}
-  Sign in with the password:  ${PASSWORD}
-  Authenticator code:         npm run demo -w server -- code
+Little Dipper demo is running, two nodes already connected:
+  Maya:  ${maya.base}   code: npm run demo -w server -- code
+  Theo:  ${theo.base}   code: npm run demo -w server -- code theo
+  Password for both:  ${PASSWORD}
 Stop with Ctrl-C (the demo's data is deleted).
 `);

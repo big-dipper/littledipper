@@ -5,7 +5,7 @@ import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner } from '../auth.js';
 import { ownerName, profileLines, PROFILE_LINES, publicName } from '../profile.js';
 import { entrySens, getDomain, isPartialDate, partyReferences, plainData, recordOut, unlinkParty, type RecordDoc } from '../domains/records.js';
-import { endLiveShare, setLiveShare, whatTheyGet, type WhatTheyGet } from '../shares.js';
+import { describeEntries, endLiveShare, setLiveShare, whatTheyGet, type WhatTheyGet } from '../shares.js';
 import { checkMethods } from '../methods.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import { getOwner } from '../owner.js';
@@ -25,7 +25,7 @@ type ShareInput = {
   entries?: Record<string, boolean | { includeSecret?: boolean }>;
 };
 
-const shareOut = (w: WhatTheyGet) => ({ basic: w.basic, lines: w.lines, categories: w.categories, entries: w.entries });
+const shareOut = async (w: WhatTheyGet) => ({ basic: w.basic, lines: w.lines, categories: w.categories, entries: await describeEntries(w.entries) });
 
 /** Apply changes to a party's live share; returns what changed, in words, for the activity log. */
 async function applyShare(partyId: string, b: ShareInput): Promise<string[]> {
@@ -253,7 +253,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   app.get('/api/parties/:id/share', async (req) => {
     await requireOwner(req, 'parties:read');
     const c = await getContact((req.params as { id: string }).id);
-    return shareOut(await whatTheyGet(c._id));
+    return await shareOut(await whatTheyGet(c._id));
   });
 
   /**
@@ -271,7 +271,7 @@ export default async function contactRoutes(app: FastifyInstance) {
       await audit({ actor: ownerActor(p.key._id), action: 'share.update', resource: `parties/${c._id}/share`, text: `Sharing with ${c.name}: ${changes.join(', ')}`, tone: 'owner' });
       nudgePeers([c._id]);
     }
-    return shareOut(await whatTheyGet(c._id));
+    return await shareOut(await whatTheyGet(c._id));
   });
 
   app.post('/api/parties/:id/invite', async (req) => {
@@ -349,7 +349,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     await pushTimeline(link, 'Approved by you');
     await pushTimeline(link, 'Secure connection set up');
     await ctx.store.update('connectionRequests', r._id, { status: 'accepted' });
-    const g = shareOut(await whatTheyGet(contact._id));
+    const g = await shareOut(await whatTheyGet(contact._id));
     await audit({ actor: ownerActor(p.key._id), action: 'link.accept', resource: `parties/${contact._id}`, text: `You connected with ${contact.name}`, tone: 'peer', meta: { share: g } });
     try { await syncContact((await ctx.store.get<PartyDoc>('parties', contact._id))!); } catch { /* fetched later */ }
     return { status: 'active', share: g, issuedToken: doc.prefix };

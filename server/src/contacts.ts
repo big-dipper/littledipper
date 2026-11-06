@@ -3,7 +3,7 @@ import { ctx } from './ctx.js';
 import { fingerprint, newId } from './crypto.js';
 import { issueKey } from './auth.js';
 import { linesFor } from './profile.js';
-import { partiesSharing, whatTheyGet } from './shares.js';
+import { describeEntries, partiesSharing, whatTheyGet } from './shares.js';
 import type { SharedDomain } from './domains/sharing.js';
 import { displayAddr } from './node.js';
 import type { ContactMethod } from './methods.js';
@@ -38,7 +38,7 @@ export async function partyOut(c: PartyDoc, opts: { detail?: boolean } = {}) {
   const base = {
     id: c._id, type: c.type, name: c.name, status,
     node: c.node && link ? { url: displayAddr(link.peerUrl), nodeId: link.peerNodeId, linkId: link._id } : null,
-    share: { basic: g.basic, lines: g.lines, categories: g.categories, entries: g.entries },
+    share: { basic: g.basic, lines: g.lines, categories: g.categories, entries: await describeEntries(g.entries) },
     lastActivity: await lastActivityOf(c, link), createdAt: c.createdAt,
     methods: c.methods, affiliations: c.affiliations ?? [], ...(c.birthDate ? { birthDate: c.birthDate } : {}),
   };

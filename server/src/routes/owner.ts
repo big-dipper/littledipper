@@ -80,6 +80,8 @@ export default async function ownerRoutes(app: FastifyInstance) {
       })),
       /** Every line the profile can have, for screens that offer them before they have a value. */
       lines: PROFILE_LINES.map(([key, label]) => ({ key, label })),
+      /** The basic profile list, including lines that have no value yet. */
+      basic,
       basicProfileContacts: basicN,
     };
   });
