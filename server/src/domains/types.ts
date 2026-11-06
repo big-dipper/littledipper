@@ -48,6 +48,8 @@ export type PartDef = {
   many?: boolean;
   /** Only applies when another part holds one of these values, e.g. collection details when status is in_collections. */
   when?: { part: string; in: string[] };
+  /** party: what's usually there (an employer is an organisation), so a new one starts as the right type. */
+  expects?: 'person' | 'organisation';
   /** Replaced by another part. It keeps working (old records and clients use it), but new UIs shouldn't offer it. Parts are never removed. */
   deprecated?: boolean;
 };

@@ -26,8 +26,8 @@ export default function MyData() {
         {data.lines.map(({ key, label }) => {
           const l = byKey.get(key);
           const [domain, source] = LINE_SOURCE[key] ?? ['', ''];
-          // Birth name only appears when it differs from today's legal name; no prompt for it.
-          if (!l && key === 'birth_name') return null;
+          // Lines most people never have (a birth name that differs, a non-citizen nationality) aren't prompted for.
+          if (!l && ['birth_name', 'nationality', 'marital_status'].includes(key)) return null;
           return (
             <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}>
               <div style={{ width: 190, flex: 'none' }} className="text-muted">{label}</div>

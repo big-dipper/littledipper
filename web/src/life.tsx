@@ -10,6 +10,7 @@ export type Part = {
   /** money: per what (hour, week, month, year, once). */ periodic?: boolean;
   /** record: the categories it may point to, and whether it holds several. */ to?: string[]; many?: boolean;
   /** Only applies when another part holds one of these values. */ when?: { part: string; in: string[] };
+  /** party: what's usually there, so a new one starts as the right type. */ expects?: 'person' | 'organisation';
 };
 /** Whether a part applies, given the values so far (collection details only once an account is in collections). */
 export const applies = (p: Part, vals: Record<string, unknown>) => !p.when || p.when.in.includes(String(vals[p.when.part] ?? ''));
@@ -225,7 +226,7 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOn
       return <Toggle on={!!value} label={p.label} onChange={() => onChange(!value)} />;
     case 'party':
     case 'contact': {
-      if (!p.many) return <PartyPicker id={id} value={String(value ?? '')} onChange={onChange} contacts={contacts} />;
+      if (!p.many) return <PartyPicker id={id} value={String(value ?? '')} onChange={onChange} contacts={contacts} expects={p.expects} />;
       // Several: each one chosen shows with a remove button; the picker adds the next.
       const chosen = (value as string[] | undefined) ?? [];
       return (
@@ -233,7 +234,7 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOn
           {chosen.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {chosen.map((c) => <span key={c} className="tag tag-neutral">{contacts.find((x) => x.id === c)?.name ?? 'Added'}<button type="button" className="bare" aria-label="Remove" onClick={() => onChange(chosen.filter((x) => x !== c))} style={{ marginLeft: 6 }}>×</button></span>)}
           </div>}
-          <PartyPicker id={id} value="" onChange={(v) => v && !chosen.includes(v) && onChange([...chosen, v])} contacts={contacts.filter((c) => !chosen.includes(c.id))} />
+          <PartyPicker id={id} value="" onChange={(v) => v && !chosen.includes(v) && onChange([...chosen, v])} contacts={contacts.filter((c) => !chosen.includes(c.id))} expects={p.expects} />
         </div>
       );
     }
@@ -333,7 +334,7 @@ function RepeatInput({ id, value, onChange }: { id: string; value: string; onCha
 }
 
 /** Pick a person or organisation, or add a new one right here: a name is never just typed into an entry. */
-function PartyPicker({ id, value, onChange, contacts }: { id: string; value: string; onChange: (v: string) => void; contacts: ContactLite[] }) {
+function PartyPicker({ id, value, onChange, contacts, expects = 'person' }: { id: string; value: string; onChange: (v: string) => void; contacts: ContactLite[]; expects?: 'person' | 'organisation' }) {
   const [added, setAdded] = useState<ContactLite[]>([]);
   const [adding, setAdding] = useState<{ name: string; type: 'person' | 'organisation' } | null>(null);
   const [error, setError] = useState('');
@@ -362,7 +363,7 @@ function PartyPicker({ id, value, onChange, contacts }: { id: string; value: str
   return (
     <Select id={id} value={value} placeholder={all.length ? 'Choose from your contacts' : 'No contacts yet'}
       options={[...all.map((c) => [c.id, c.name] as [string, string]), ['__new', '＋ Someone new…']]}
-      onChange={(v) => (v === '__new' ? setAdding({ name: '', type: 'person' }) : onChange(v))} />
+      onChange={(v) => (v === '__new' ? setAdding({ name: '', type: expects }) : onChange(v))} />
   );
 }
 
@@ -438,7 +439,7 @@ function Companions({ d, saved, vals, onDone }: { d: Domain; saved: Rec; vals: R
   return (
     <div className="dialog-backdrop" style={{ zIndex: 50, placeItems: 'stretch end', padding: 0 }} onClick={onDone}>
       <aside role="dialog" aria-modal="true" aria-label="What goes with it" onClick={(e) => e.stopPropagation()}
-        style={{ width: 'min(540px, 100%)', height: '100%', background: 'var(--color-bg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', borderRadius: '32px 0 0 32px', padding: '28px', gap: 16 }}>
+        style={{ width: 'min(540px, 100%)', height: '100dvh', maxHeight: '100dvh', background: 'var(--color-bg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', borderRadius: '32px 0 0 32px', padding: '28px', gap: 16 }}>
         <div className="card-kicker" style={{ color: groupOf(d.group).ink }}>{d.label} · saved</div>
         <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22 }}>{saved.title}</div>
         <p className="text-muted" style={{ margin: 0 }}>Want to add what goes with it? Each is linked to it, and you can skip any of them.</p>
@@ -710,7 +711,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   return (
     <div className="dialog-backdrop" style={{ zIndex: 50, placeItems: 'stretch end', padding: 0 }} onClick={onClose}>
       <aside role="dialog" aria-modal="true" aria-label={rec ? `Edit ${d.noun}` : `Add ${d.noun}`} onClick={(e) => e.stopPropagation()}
-        style={{ width: 'min(540px, 100%)', height: '100%', background: 'var(--color-bg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', borderRadius: '32px 0 0 32px' }}>
+        style={{ width: 'min(540px, 100%)', height: '100dvh', maxHeight: '100dvh', background: 'var(--color-bg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', borderRadius: '32px 0 0 32px' }}>
         <div style={{ padding: '26px 28px 16px', display: 'flex', gap: 14, alignItems: 'center' }}>
           <Mono d={d} size={44} />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -719,7 +720,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
           </div>
           <button className="btn btn-secondary" onClick={onClose} aria-label="Close" style={{ width: 36, height: 36, padding: 0 }}>×</button>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); save(); }} style={{ flex: 1, overflow: 'auto', padding: '4px 28px 24px', display: 'grid', gap: 14, alignContent: 'start' }}>
+        <form onSubmit={(e) => { e.preventDefault(); save(); }} style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '4px 28px 24px', display: 'grid', gap: 14, alignContent: 'start' }}>
           {essential.map(field)}
           {d.documents && (
             <div className="field">

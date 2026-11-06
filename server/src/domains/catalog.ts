@@ -174,7 +174,7 @@ const DEFS: Def[] = [
     description: 'Current and past employers, roles, supervisors and pay.',
     title: '{title} at {employer}',
     parts: [
-      { key: 'employer', label: 'Employer', type: 'party', required: true },
+      { key: 'employer', label: 'Employer', type: 'party', expects: 'organisation', required: true },
       { key: 'title', label: 'Job title', type: 'text', required: true },
       { key: 'department', label: 'Department', type: 'text' },
       { key: 'type', label: 'Type', type: 'enum', options: o('full_time=Full-time', 'part_time=Part-time', 'contract', 'self_employed=Self-employed', 'internship', 'volunteer', 'seasonal', 'other') },
@@ -196,7 +196,7 @@ const DEFS: Def[] = [
     description: 'Schools, degrees and fields of study.',
     title: '{degree} · {institution}',
     parts: [
-      { key: 'institution', label: 'School', type: 'party', required: true },
+      { key: 'institution', label: 'School', type: 'party', expects: 'organisation', required: true },
       { key: 'level', label: 'Level', type: 'enum', options: o('high_school=High school', 'vocational', 'associate', 'bachelor', 'master', 'doctorate', 'professional', 'certificate=Certificate programme', 'other') },
       { key: 'degree', label: 'Degree / diploma', type: 'text' },
       { key: 'field', label: 'Field of study', type: 'text' },
@@ -217,7 +217,7 @@ const DEFS: Def[] = [
     parts: [
       { key: 'kind', label: 'Kind', type: 'enum', options: o('license', 'certification', 'clearance=Security clearance', 'other') },
       { key: 'name', label: 'Name', type: 'text', required: true },
-      { key: 'issuer', label: 'Issued by', type: 'party', required: true },
+      { key: 'issuer', label: 'Issued by', type: 'party', expects: 'organisation', required: true },
       { key: 'number', label: 'Number', type: 'text', sensitivity: 'sensitive' },
       { key: 'region', label: 'Where it’s valid', type: 'region' },
       { key: 'issued', label: 'Issued', type: 'date' },
@@ -245,7 +245,7 @@ const DEFS: Def[] = [
     title: '{name}',
     parts: [
       { key: 'name', label: 'Award', type: 'text', required: true },
-      { key: 'issuer', label: 'Given by', type: 'party' },
+      { key: 'issuer', label: 'Given by', type: 'party', expects: 'organisation' },
       { key: 'date', label: 'Date', type: 'date' },
       { key: 'description', label: 'What it was for', type: 'longtext' },
       { key: 'url', label: 'Verification link', type: 'url' },
@@ -339,7 +339,7 @@ const DEFS: Def[] = [
     title: '{kind} · {insurer}',
     parts: [
       { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('health', 'dental', 'vision', 'auto', 'home', 'renters', 'life', 'disability', 'travel', 'pet', 'umbrella', 'other') },
-      { key: 'insurer', label: 'Insurer', type: 'party', required: true },
+      { key: 'insurer', label: 'Insurer', type: 'party', expects: 'organisation', required: true },
       { key: 'policyNumber', label: 'Policy number', type: 'text', sensitivity: 'secret' },
       { key: 'memberId', label: 'Your member ID', type: 'text', sensitivity: 'secret' },
       { key: 'groupNumber', label: 'Group number', type: 'text', sensitivity: 'secret' },
@@ -357,7 +357,7 @@ const DEFS: Def[] = [
     title: '{institution} {kind}',
     parts: [
       { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('checking', 'savings', 'credit_card=Credit card', 'debit_card=Debit card', 'brokerage', 'retirement', 'hsa=HSA', 'loan', 'mortgage', 'crypto', 'other') },
-      { key: 'institution', label: 'Institution', type: 'party', required: true },
+      { key: 'institution', label: 'Institution', type: 'party', expects: 'organisation', required: true },
       { key: 'nickname', label: 'Nickname', type: 'text' },
       { key: 'number', label: 'Account or card number', type: 'text', sensitivity: 'secret' },
       { key: 'routingNumber', label: 'Routing number', type: 'text', when: { part: 'kind', in: ['checking', 'savings'] }, hint: 'Identifies the bank; printed on cheques' },
@@ -379,8 +379,8 @@ const DEFS: Def[] = [
     title: '{collector} · {claimed}',
     parts: [
       { key: 'debt', label: 'Original debt', type: 'record', to: ['financial_accounts', 'collections'], required: true },
-      { key: 'collector', label: 'Collector', type: 'party', required: true },
-      { key: 'owner', label: 'Who owns the debt now', type: 'party', hint: 'Often a debt buyer, not the collector' },
+      { key: 'collector', label: 'Collector', type: 'party', expects: 'organisation', required: true },
+      { key: 'owner', label: 'Who owns the debt now', type: 'party', expects: 'organisation', hint: 'Often a debt buyer, not the collector' },
       { key: 'reference', label: 'Their reference number', type: 'text', sensitivity: 'sensitive' },
       { key: 'originalAmount', label: 'Original amount', type: 'money' },
       { key: 'claimed', label: 'Amount they claim', type: 'money' },
@@ -398,7 +398,7 @@ const DEFS: Def[] = [
     parts: [
       { key: 'taxYear', label: 'Tax year', type: 'number', required: true },
       { key: 'kind', label: 'Kind', type: 'enum', options: o('salary', 'self_employment=Self-employment', 'investment', 'rental', 'pension', 'benefits', 'other') },
-      { key: 'payer', label: 'Paid by', type: 'party' },
+      { key: 'payer', label: 'Paid by', type: 'party', expects: 'organisation' },
       { key: 'source', label: 'From', type: 'record', to: ['employment', 'property', 'financial_accounts'], hint: 'The job, rental or account it came from' },
       { key: 'amount', label: 'Amount received', type: 'money', required: true, sensitivity: 'secret' },
     ],
@@ -453,7 +453,7 @@ const DEFS: Def[] = [
     description: 'What you bought, where, when and for how much, with the photo or PDF. For taxes, returns, warranties and buying again.',
     title: '{merchant} · {total}',
     parts: [
-      { key: 'merchant', label: 'Merchant', type: 'party' },
+      { key: 'merchant', label: 'Merchant', type: 'party', expects: 'organisation' },
       { key: 'purchased', label: 'Purchase date', type: 'date' },
       { key: 'total', label: 'Total', type: 'money' },
       { key: 'category', label: 'Category', type: 'enum', options: o('groceries', 'dining', 'household', 'clothing', 'electronics', 'health', 'transport', 'travel', 'home=Home & garden', 'entertainment', 'subscriptions', 'gifts', 'education', 'business', 'charity', 'other') },
@@ -534,7 +534,7 @@ const DEFS: Def[] = [
     title: '{organization}',
     parts: [
       { key: 'kind', label: 'Kind', type: 'enum', options: o('frequent_flyer=Frequent flyer', 'hotel', 'loyalty', 'club', 'association=Professional association', 'union', 'religious=Religious organisation', 'political=Political organisation', 'subscription', 'other') },
-      { key: 'organization', label: 'Organization', type: 'party', required: true },
+      { key: 'organization', label: 'Organization', type: 'party', expects: 'organisation', required: true },
       { key: 'memberNumber', label: 'Member number', type: 'text', sensitivity: 'sensitive' },
       { key: 'tier', label: 'Tier / status', type: 'text' },
       { key: 'cost', label: 'Cost', type: 'money', periodic: true },
@@ -547,7 +547,7 @@ const DEFS: Def[] = [
     description: 'Which services you use, under what username and with which email or phone. Never passwords.',
     title: '{service} · {username}',
     parts: [
-      { key: 'service', label: 'Service', type: 'party', required: true },
+      { key: 'service', label: 'Service', type: 'party', expects: 'organisation', required: true },
       { key: 'username', label: 'Username', type: 'text' },
       { key: 'signsInWith', label: 'Signs in with', type: 'record', to: ['contact_methods'], hint: 'Change your email and Little Dipper lists every account still using the old one' },
       { key: 'twoFactor', label: 'Two-factor on', type: 'boolean' },

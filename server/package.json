@@ -15,6 +15,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke": "tsx scripts/smoke.ts",
     "engine": "tsx scripts/engine.ts",
+    "demo": "tsx scripts/demo.ts",
     "compat": "tsx scripts/compat.ts",
     "dictionary": "tsx scripts/dictionary.ts"
   },

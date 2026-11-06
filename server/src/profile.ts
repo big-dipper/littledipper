@@ -7,7 +7,7 @@
  * a citizenship, and a non-citizen national is never shown as a citizen.
  */
 import { BUILT_IN_DOMAINS } from './domains/catalog.js';
-import { countryName, displayValue, entrySens, isCurrent, maxSens, partSens, plainData, recordsOf, sortRecords, type RecordDoc } from './domains/records.js';
+import { countryName, entrySens, isCurrent, maxSens, partSens, plainData, recordsOf, sortRecords, type RecordDoc } from './domains/records.js';
 import type { DomainDef } from './domains/types.js';
 import type { Sensitivity } from './fields.js';
 import { displayPhone } from './methods.js';
@@ -49,6 +49,10 @@ function line(key: string, value: string, sensitivity: Sensitivity, from: { d: D
   return value ? { key, label: label(key), value, sensitivity, from: from.map(({ d, r }) => ({ domain: d.id, recordId: r._id })) } : null;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** 1984-03-09 → 9 Mar 1984; partial dates as far as they go. */
+const friendlyDate = (v: string) => { const [y, m, d] = v.split('-'); return [d && String(+d), m && MONTHS[+m - 1], y].filter(Boolean).join(' '); };
+
 const current = (d: DomainDef, recs: RecordDoc[]) => sortRecords(d, recs.filter((r) => isCurrent(d, r)));
 
 export async function profileLines(): Promise<ProfileLine[]> {
@@ -72,7 +76,7 @@ export async function profileLines(): Promise<ProfileLine[]> {
   if (b) {
     const v = plainData(b);
     const place = [v.city, v.region, v.country ? countryName(String(v.country)) : ''].filter(Boolean).join(', ');
-    const when = [displayValue(birth.parts[0], v.date), v.time ? String(v.time) : ''].filter(Boolean).join(', ');
+    const when = [friendlyDate(String(v.date)), v.time ? String(v.time) : ''].filter(Boolean).join(', ');
     out.push(line('born', [when, place].filter(Boolean).join(', '), sensOf(birth, b, ['date', 'time', 'city', 'region', 'country']), [{ d: birth, r: b }]));
   }
 
