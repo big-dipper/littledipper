@@ -25,6 +25,9 @@ export type Domain = {
   parts: Part[]; title: string; count: number; currentCount: number; preview: string[]; sharedWith: number;
   /** The profile reads this category (names, birth, where you live…). */
   feedsProfile?: boolean;
+  /** What this category invites once an entry is saved (a car: its title, insurance, loan). Never required. */
+  companions?: { domain?: string; document?: string; label: string; when?: { part: string; in: string[] } }[];
+  single?: boolean;
   /** Entries take linked documents; new ones get this kind. */
   documents?: string;
 };
@@ -405,6 +408,61 @@ function RecordPicker({ id, p, value, onChange }: { id: string; p: Part; value: 
   );
 }
 
+/**
+ * After a new entry is saved: what goes with it, each a nudge you can skip. Adding a related entry links the two,
+ * whichever side holds the link (insurance "covers" the car; a property points to its deed).
+ */
+function Companions({ d, saved, vals, onDone }: { d: Domain; saved: Rec; vals: Record<string, unknown>; onDone: () => void }) {
+  const [catalog, setCatalog] = useState<Domain[]>([]);
+  const [open, setOpen] = useState<Domain | null>(null);
+  const [done, setDone] = useState<Set<string>>(new Set());
+  const contacts = useContactsLite();
+  useEffect(() => { fetchCatalog().then(setCatalog).catch(() => {}); }, []);
+  const invites = (d.companions ?? []).filter((c) => !c.when || c.when.in.includes(String(vals[c.when.part] ?? '')));
+  // The other side's link to this entry, if it has one (insurance → the car it covers).
+  const backLink = (t: Domain) => t.parts.find((p) => p.type === 'record' && p.to?.includes(d.id));
+  const defaultsFor = (t: Domain) => { const p = backLink(t); return p ? { [p.key]: p.many ? [saved.id] : saved.id } : {}; };
+  // This entry's link to the other side, if it holds it (a property → its deed): set once the other is added.
+  const ourLink = (t: Domain) => d.parts.find((p) => p.type === 'record' && p.to?.includes(t.id) && !backLink(t));
+  const added = async (t: Domain, other?: Rec) => {
+    setOpen(null);
+    if (!other) return;
+    setDone((x) => new Set(x).add(t.id));
+    const p = ourLink(t);
+    if (p) await patch(`/api/data/${d.id}/${saved.id}`, { data: { [p.key]: p.many ? [other.id] : other.id } }).catch(() => {});
+  };
+  const upload = async (kind: string, files: FileList | null) => {
+    for (const f of Array.from(files ?? [])) await uploadDocument(f, { link: { domain: d.id, recordId: saved.id }, kind }).catch(() => {});
+    setDone((x) => new Set(x).add(`doc:${kind}`));
+  };
+  return (
+    <div className="dialog-backdrop" style={{ zIndex: 50, placeItems: 'stretch end', padding: 0 }} onClick={onDone}>
+      <aside role="dialog" aria-modal="true" aria-label="What goes with it" onClick={(e) => e.stopPropagation()}
+        style={{ width: 'min(540px, 100%)', height: '100%', background: 'var(--color-bg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', borderRadius: '32px 0 0 32px', padding: '28px', gap: 16 }}>
+        <div className="card-kicker" style={{ color: groupOf(d.group).ink }}>{d.label} · saved</div>
+        <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22 }}>{saved.title}</div>
+        <p className="text-muted" style={{ margin: 0 }}>Want to add what goes with it? Each is linked to it, and you can skip any of them.</p>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {invites.map((c, i) => {
+            const t = c.domain ? catalog.find((x) => x.id === c.domain) : undefined;
+            const isDone = c.domain ? done.has(c.domain) : done.has(`doc:${c.document}`);
+            return (
+              <div key={i} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexDirection: 'row' }}>
+                <span style={{ flex: 1 }}>{c.label}</span>
+                {isDone ? <span className="tag tag-neutral">Added</span>
+                  : c.document ? <label className="btn btn-secondary" style={{ fontSize: 13, cursor: 'pointer' }}>Add a file<input type="file" hidden accept={FILE_ACCEPT} onChange={(e) => upload(c.document!, e.target.files)} /></label>
+                    : t ? <button type="button" className="btn btn-secondary" style={{ fontSize: 13 }} onClick={() => setOpen(t)}>Add</button> : null}
+              </div>
+            );
+          })}
+        </div>
+        <button type="button" className="btn btn-primary" style={{ justifySelf: 'start' }} onClick={onDone}>Done</button>
+      </aside>
+      {open && <RecordEditor d={open} rec={null} contacts={contacts} defaults={defaultsFor(open)} onClose={() => setOpen(null)} onSaved={(other) => added(open, other)} />}
+    </div>
+  );
+}
+
 // ── changes: who changed what, and going back ─────────────────────────
 const ACTION: Record<Version['action'], string> = { create: 'Added', update: 'Changed', delete: 'Deleted', restore: 'Restored' };
 
@@ -535,6 +593,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   const [docs, setDocs] = useState<DocRef[]>(rec?.documents ?? []);
   const [pending, setPending] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [after, setAfter] = useState<Rec | null>(null);
 
   /** Existing entries upload at once; new ones wait until saved. */
   const addDocs = async (files: File[]) => {
@@ -623,7 +682,9 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
       const saved = rec ? await patch<Rec>(`/api/data/${d.id}/${rec.id}`, body) : await post<Rec>(`/api/data/${d.id}`, body);
       // Documents picked before the entry existed go up now, filed on it.
       for (const f of pending) await uploadDocument(f, { link: { domain: d.id, recordId: saved.id } }).catch((e) => setError(`${f.name}: ${(e as Error).message}`));
-      onSaved(saved);
+      // A new entry invites what goes with it (a car: its title, insurance, loan) before the panel closes.
+      const invites = rec ? [] : (d.companions ?? []).filter((c) => !c.when || c.when.in.includes(String(vals[c.when.part] ?? '')));
+      if (invites.length) setAfter(saved); else onSaved(saved);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -643,6 +704,8 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
       <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} currency={currency} dateOnly={p.type === 'datetime' && vals.allDay === true} />
     </div>
   );
+
+  if (after) return <Companions d={d} saved={after} vals={vals} onDone={() => onSaved(after)} />;
 
   return (
     <div className="dialog-backdrop" style={{ zIndex: 50, placeItems: 'stretch end', padding: 0 }} onClick={onClose}>

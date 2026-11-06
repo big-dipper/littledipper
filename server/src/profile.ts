@@ -22,13 +22,13 @@ export type ProfileLine = {
 };
 
 /** The categories the profile reads. A change in one of them changes what connections see in the basic profile. */
-export const PROFILE_DOMAINS = new Set(['names', 'birth', 'citizenship', 'residences', 'contact_methods']);
+export const PROFILE_DOMAINS = new Set(['names', 'birth', 'citizenship', 'residences', 'contact_methods', 'relationships']);
 
 /** Every line the profile can have, in order, with its label: what other screens offer before a value exists. */
 export const PROFILE_LINES: [string, string][] = [
   ['preferred_name', 'Preferred name'], ['legal_name', 'Legal name'], ['birth_name', 'Birth name'], ['born', 'Born'],
   ['citizenship', 'Citizenship'], ['nationality', 'Non-citizen nationality'], ['residency', 'Residency status'],
-  ['lives_in', 'Lives in'], ['address', 'Home address'], ['email', 'Email'], ['phone', 'Phone'],
+  ['marital_status', 'Marital status'], ['lives_in', 'Lives in'], ['address', 'Home address'], ['email', 'Email'], ['phone', 'Phone'],
 ];
 
 const dom = (id: string) => BUILT_IN_DOMAINS.find((d) => d.id === id)!;
@@ -92,6 +92,25 @@ export async function profileLines(): Promise<ProfileLine[]> {
     const g = group(keep, show);
     out.push(line(key, g.value, g.sens, g.from));
   }
+
+  // Marital status, worked out from Relationships: only what the entries say. No partner entries means no line
+  // (unknown is not "single"); an annulled marriage leaves nothing to report.
+  const rel = dom('relationships');
+  const partners = (await recordsOf('relationships')).filter((r) => ['spouse', 'civil_union', 'domestic_partner'].includes(String(plainData(r).relation)));
+  const now = current(rel, partners)[0];
+  const lastEnded = sortRecords(rel, partners.filter((r) => !isCurrent(rel, r)))[0];
+  let marital = '', from: RecordDoc | undefined;
+  if (now) {
+    const v = plainData(now);
+    marital = { spouse: 'Married', civil_union: 'In a civil union', domestic_partner: 'In a domestic partnership' }[String(v.relation)] ?? '';
+    if (v.legallySeparated === true) marital += ', legally separated';
+    from = now;
+  } else if (lastEnded) {
+    const v = plainData(lastEnded);
+    marital = v.endedBy === 'death' ? 'Widowed' : v.endedBy === 'divorce' ? (v.relation === 'spouse' ? 'Divorced' : 'Partnership dissolved') : '';
+    from = lastEnded;
+  }
+  if (marital && from) out.push(line('marital_status', marital, sensOf(rel, from, ['relation', 'endedBy']), [{ d: rel, r: from }]));
 
   // Where you live: the primary current home (or the most recent current one).
   const res = dom('residences');

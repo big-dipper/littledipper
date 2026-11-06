@@ -4,7 +4,7 @@ import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, p
 import { Confirm, Dialog, ErrorNote, Loading, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
-import { fetchCatalog, fmtRange, Select } from '../../life';
+import { fetchCatalog, fmtRange, PartialDate, Select } from '../../life';
 import { CopyList, SendCopy } from './Copies';
 
 export default function ContactDetail() {
@@ -118,7 +118,7 @@ export default function ContactDetail() {
           <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="card-kicker">Contact info</div>
-              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, notes: c.notes, methods: c.methods.length ? c.methods : [{ kind: 'email', value: '' }] })}>Edit</button>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, birthDate: c.birthDate ?? '', notes: c.notes, methods: c.methods.length ? c.methods : [{ kind: 'email', value: '' }] })}>Edit</button>
             </div>
             {c.methods.map((m, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}><span className="text-muted" style={{ fontSize: 13 }}>{m.label || KIND_LABEL[m.kind]}{m.primary ? ' · main' : ''}</span><span style={{ fontSize: 14, overflowWrap: 'anywhere' }}>{displayMethod(m)}</span></div>
@@ -203,6 +203,7 @@ export default function ContactDetail() {
         </>}>
           <div className="field"><label htmlFor="pname">Name</label><input id="pname" className="input" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
           <div className="field"><label>Type</label><Select value={edit.type} onChange={(v) => setEdit({ ...edit, type: (v || 'person') as Edit['type'] })} options={[['person', 'Person'], ['organisation', 'Organisation']]} /></div>
+          {edit.type === 'person' && <div className="field"><label htmlFor="pbd">Date of birth</label><PartialDate id="pbd" value={edit.birthDate} onChange={(v) => setEdit({ ...edit, birthDate: v })} /><div className="text-muted" style={{ fontSize: 12 }}>With the full date, their birthday shows on your calendar.</div></div>}
           {edit.methods.map((m, i) => (typeof m.value === 'object' ? (
             <div key={i} className="text-muted" style={{ fontSize: 13 }}>{m.label || 'Postal address'}: {displayMethod(m)}</div>
           ) : (
@@ -222,10 +223,10 @@ export default function ContactDetail() {
   );
 }
 
-type Edit = { name: string; type: 'person' | 'organisation'; notes: string; methods: ContactMethod[] };
+type Edit = { name: string; type: 'person' | 'organisation'; birthDate: string; notes: string; methods: ContactMethod[] };
 const KIND_LABEL: Record<ContactMethod['kind'], string> = { email: 'Email', phone: 'Phone', postal: 'Postal address', website: 'Website', social: 'Social', messaging: 'Messaging' };
 const STRING_KINDS: ContactMethod['kind'][] = ['email', 'phone', 'website', 'social', 'messaging'];
 function saveContact(id: string, e: Edit) {
   const methods = e.methods.filter((m) => typeof m.value === 'object' || m.value.trim());
-  return patch(`/api/parties/${id}`, { name: e.name, type: e.type, notes: e.notes, methods });
+  return patch(`/api/parties/${id}`, { name: e.name, type: e.type, notes: e.notes, methods, ...(e.type === 'person' ? { birthDate: e.birthDate || null } : {}) });
 }

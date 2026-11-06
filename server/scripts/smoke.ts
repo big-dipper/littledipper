@@ -545,6 +545,16 @@ async function main() {
     await a.call('POST', '/api/data/events', { data: { title: 'Design conference', start: { at: '2026-11-18T00:00', tz: 'America/Los_Angeles' }, end: { at: '2026-11-20T00:00', tz: 'America/Los_Angeles' }, allDay: true } });
     const ada = await a.call('POST', '/api/parties', { type: 'person', name: 'Ada', birthDate: '1990-11-12' });
     await a.call('POST', '/api/data/relationships', { data: { party: ada.id, relation: 'sibling' } });
+    const marital = async () => (await a.call('GET', '/api/profile')).items.find((l: any) => l.key === 'marital_status')?.value;
+    ok(await marital() === undefined, 'no partner entries: no marital status line (unknown isn’t "single")');
+    const ex = await a.call('POST', '/api/parties', { type: 'person', name: 'Sam Ex' });
+    const wed = await a.call('POST', '/api/data/relationships', { data: { party: ex.id, relation: 'spouse', endedBy: 'divorce' }, validFrom: '2010-06', validTo: '2015-02' });
+    ok(await marital() === 'Divorced', 'a marriage that ended in divorce: Divorced');
+    const now = await a.call('POST', '/api/parties', { type: 'person', name: 'Robin Now' });
+    await a.call('POST', '/api/data/relationships', { data: { party: now.id, relation: 'spouse', legallySeparated: true }, validFrom: '2019-08' });
+    ok(await marital() === 'Married, legally separated', 'a current marriage: Married, and legal separation said as it is');
+    await a.call('POST', '/api/data/relationships', { data: { party: ada.id, relation: 'sibling', legallySeparated: true } }, [400]);
+    ok(wed.title === 'Sam Ex (Spouse)', 'legal separation only applies to a spouse or civil union; titles show names');
     await a.call('POST', '/api/data/travel', { data: { country: 'JP', city: 'Kyoto', purpose: 'leisure' }, validFrom: '2026-11-24', validTo: '2026-11-27' });
     const cal = (await a.call('GET', '/api/calendar?from=2026-11-01&to=2026-11-30')).items;
     const yoga = cal.filter((i: any) => i.title === 'Yoga');

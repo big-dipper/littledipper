@@ -41,7 +41,7 @@ export type ContactStatus = 'plain' | 'pending_in' | 'pending_out' | 'active';
 export type Party = {
   id: string; type: 'person' | 'organisation'; name: string; status: ContactStatus;
   node: { url: string; nodeId: string; linkId: string } | null; grants: { profile: boolean; fields: string[]; domains?: Record<string, { scope: 'all' | 'current'; includeSecret: boolean }> };
-  lastActivity: { text: string; at: string }; createdAt: string; methods: ContactMethod[]; affiliations: { party: string; role: string }[];
+  lastActivity: { text: string; at: string }; createdAt: string; methods: ContactMethod[]; affiliations: { party: string; role: string }[]; birthDate?: string;
 };
 export type Reference = { domain: string; domainLabel: string; recordId: string; title: string; part: string; partLabel: string };
 export type PartyDetail = Party & {
@@ -128,7 +128,7 @@ export const bytes = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n
 export const LINE_SOURCE: Record<string, [string, string]> = {
   preferred_name: ['names', 'Names'], legal_name: ['names', 'Names'], birth_name: ['names', 'Names'], born: ['birth', 'Birth'],
   citizenship: ['citizenship', 'Citizenship & residency'], nationality: ['citizenship', 'Citizenship & residency'], residency: ['citizenship', 'Citizenship & residency'],
-  lives_in: ['residences', 'Residences'], address: ['residences', 'Residences'], email: ['contact_methods', 'Contact methods'], phone: ['contact_methods', 'Contact methods'],
+  marital_status: ['relationships', 'Relationships'], lives_in: ['residences', 'Residences'], address: ['residences', 'Residences'], email: ['contact_methods', 'Contact methods'], phone: ['contact_methods', 'Contact methods'],
 };
 
 export const SENS: Record<Sensitivity, [string, string]> = { standard: ['Standard', 'tag-neutral'], sensitive: ['Sensitive', 'tag-accent-2'], secret: ['Secret', 'tag-accent'] };
