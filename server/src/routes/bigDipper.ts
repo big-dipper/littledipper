@@ -184,7 +184,7 @@ export default async function bigDipperRoutes(app: FastifyInstance) {
     if (!choice.services.length) throw bad('invalid_value', 'Choose at least one service');
     if (!config.bigDipperUrl) throw new HttpError(409, 'big_dipper_unavailable', 'Big Dipper isn’t open yet. Your choices are saved.');
     await saveChoices(p.key._id, choice);
-    const out = await requestConnection(p.key._id, config.bigDipperUrl, [], `Services: ${summary(choice).join('; ')}`.slice(0, 500), false);
+    const out = await requestConnection(p.key._id, config.bigDipperUrl, { basic: false }, `Services: ${summary(choice).join('; ')}`.slice(0, 500));
     reply.code(202);
     return out;
   });

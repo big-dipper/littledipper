@@ -2,7 +2,7 @@
 import { ctx } from './ctx.js';
 import { fingerprint, newId } from './crypto.js';
 import { issueKey } from './auth.js';
-import { linesFor } from './profile.js';
+import { linesFor, PROFILE_LINES } from './profile.js';
 import { describeEntries, partiesSharing, whatTheyGet } from './shares.js';
 import type { SharedDomain } from './domains/sharing.js';
 import { displayAddr } from './node.js';
@@ -31,6 +31,13 @@ export async function lastActivityOf(c: PartyDoc, link: LinkDoc | null) {
   return items.sort((a, b) => b.at.localeCompare(a.at))[0];
 }
 
+async function askedOf(c: PartyDoc, link: LinkDoc | null) {
+  if (!link) return [];
+  const out = (await ctx.store.find<RequestDoc>('connectionRequests', { linkId: link._id })).filter((r) => r.direction === 'out').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const have = new Set((c.sharedIn ?? []).map((f) => f.key));
+  return (out?.requestedFields ?? []).map((key) => ({ key, label: PROFILE_LINES.find(([k]) => k === key)?.[1] ?? key, shared: have.has(key) }));
+}
+
 export async function partyOut(c: PartyDoc, opts: { detail?: boolean } = {}) {
   const link = await linkFor(c);
   const status: ContactStatus = c.node && link && link.status !== 'revoked' ? link.status : 'plain';
@@ -56,6 +63,8 @@ export async function partyOut(c: PartyDoc, opts: { detail?: boolean } = {}) {
       id: req._id, direction: req.direction, note: req.note, quiet: req.quiet, viaInvite: !!req.inviteId, expiresAt: req.expiresAt,
       requestedFields: req.requestedFields, offeredLabels: req.offeredLabels,
     } : null,
+    // What you asked them for when you connected, and whether they shared it ("Not shared" is never "declined").
+    asked: await askedOf(c, link),
     timeline: link?.timeline || [],
     keys: link ? {
       peerSigningKey: fingerprint(link.peerSigningKey),

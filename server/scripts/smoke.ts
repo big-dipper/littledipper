@@ -204,6 +204,12 @@ async function main() {
     const audit = (await a.call('GET', '/api/audit?limit=50')).items;
     ok(audit.some((e: any) => e.action === 'field.read'), "A's audit log records B's reads");
 
+    // Suggestions per relationship: what "Who is Theo to you?" pre-ticks. Editable; never applied on their own.
+    const sugg = await a.call('GET', '/api/profile/suggestions');
+    ok(sugg.suggestions.friend.includes('phone') && sugg.suggestions.business.includes('legal_name') && sugg.relations.includes('business'), 'each relationship suggests a few extras (friends: your mobile; a business: your legal name)');
+    await a.call('PUT', '/api/profile/suggestions', { relation: 'friend', items: ['phone', 'category:residences:current'] });
+    ok((await a.call('GET', '/api/profile/suggestions')).suggestions.friend.join() === 'phone,category:residences:current', 'and you edit them');
+    await a.call('PUT', '/api/profile/suggestions', { relation: 'friend', items: ['nope'] }, [400]);
     // The basic profile is a list you edit; your Little Dipper is always on it.
     const basicNow = await a.call('GET', '/api/profile/basic');
     ok(basicNow.lines.join() === 'little_dipper,preferred_name,lives_in,email', 'the basic profile starts as your Little Dipper, preferred name, where you live and email');

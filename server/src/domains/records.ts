@@ -6,7 +6,7 @@ import { mask, type Sensitivity } from '../fields.js';
 import type { Store } from '../store/index.js';
 import { BUILT_IN_DOMAINS, RESERVED } from './catalog.js';
 import { dateTimeSortKey, displayDateTime, isDateTime, isTimeZone, normalizeDateTime, type DateTimeValue } from './datetime.js';
-import { checkMethod } from '../methods.js';
+import { checkMethod, displayPhone } from '../methods.js';
 import type { Actor, DomainDef, PartDef, PartType, RecordDoc, VersionDoc } from './types.js';
 
 export type { DomainDef, PartDef, RecordDoc };
@@ -371,7 +371,9 @@ export function describeRepeat(rule: string): string {
   return out;
 }
 
-export function renderTitle(d: DomainDef, values: Record<string, unknown>, hidden: Set<string> = new Set()): string {
+export function renderTitle(d: DomainDef, raw: Record<string, unknown>, hidden: Set<string> = new Set()): string {
+  // A phone reads as people write it, not as stored (+12065550199 → (206) 555-0199).
+  const values = d.id === 'contact_methods' && raw.kind === 'phone' && typeof raw.value === 'string' ? { ...raw, value: displayPhone(raw.value) } : raw;
   const out = d.title.replace(/\{(\w+)\}/g, (_, k) => {
     if (hidden.has(k)) return '••••';
     const p = d.parts.find((x) => x.key === k);

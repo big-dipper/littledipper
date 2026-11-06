@@ -5,7 +5,8 @@ import { mask } from '../fields.js';
 import { getOwner } from '../owner.js';
 import { ownerEmail, ownerName, profileLines, PROFILE_LINES } from '../profile.js';
 import { type LinkDoc, type PublicProfileDoc } from '../federation.js';
-import { ALWAYS_SHARED, basicLines, whatTheyGet } from '../shares.js';
+import { ALWAYS_SHARED, basicLines, RELATIONS, suggestions, whatTheyGet, type Relation } from '../shares.js';
+import { getDomain } from '../domains/records.js';
 import { nudgePeers } from '../contacts.js';
 
 export default async function ownerRoutes(app: FastifyInstance) {
@@ -59,6 +60,29 @@ export default async function ownerRoutes(app: FastifyInstance) {
     await ctx.store.update('owners', o._id, { basicProfile: keys });
     nudgePeers(null);
     return { lines: await basicLines(), always: [ALWAYS_SHARED] };
+  });
+
+  /** What each relationship (friend, colleague…) pre-ticks when you connect. Suggestions only, never applied silently. */
+  app.get('/api/profile/suggestions', async (req) => {
+    await requireOwner(req, 'owner:read');
+    return { suggestions: await suggestions(), relations: RELATIONS };
+  });
+
+  app.put('/api/profile/suggestions', async (req) => {
+    const p = await requireOwner(req, 'owner:write');
+    if (p.key.assistant) throw new HttpError(403, 'owner_only', 'What you suggest sharing is the owner’s call.');
+    const b = (req.body || {}) as { relation?: string; items?: unknown };
+    if (!RELATIONS.includes(b.relation as Relation)) throw bad('invalid_value', `relation: ${RELATIONS.join(', ')}`);
+    if (!Array.isArray(b.items)) throw bad('invalid_value', 'items: a list');
+    const items = [...new Set(b.items.map(String))];
+    for (const it of items) {
+      const cat = it.match(/^category:([a-z0-9_]+):(all|current)$/);
+      if (cat ? !(await getDomain(cat[1])) : !PROFILE_LINES.some(([k]) => k === it)) throw bad('invalid_value', `Unknown suggestion ${it}`);
+    }
+    const o = (await getOwner())!;
+    const all = await suggestions();
+    await ctx.store.update('owners', o._id, { suggestions: { ...all, [b.relation as Relation]: items } });
+    return { suggestions: await suggestions(), relations: RELATIONS };
   });
 
   app.get('/api/profile', async (req) => {

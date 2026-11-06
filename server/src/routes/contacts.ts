@@ -4,6 +4,7 @@ import { fingerprint, newId, randomToken } from '../crypto.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner } from '../auth.js';
 import { ownerName, profileLines, PROFILE_LINES, publicName } from '../profile.js';
+import { ALWAYS_SHARED, basicLines } from '../shares.js';
 import { entrySens, getDomain, isPartialDate, partyReferences, plainData, recordOut, unlinkParty, type RecordDoc } from '../domains/records.js';
 import { describeEntries, endLiveShare, setLiveShare, whatTheyGet, type WhatTheyGet } from '../shares.js';
 import { checkMethods } from '../methods.js';
@@ -114,16 +115,28 @@ async function offerable(keys: string[]) {
 }
 const labelsFor = (keys: string[]) => keys.map((k) => PROFILE_LINES.find(([x]) => x === k)?.[1]).filter(Boolean) as string[];
 
-async function sendRequest(link: LinkDoc, offeredFields: string[], note: string, invite: string | null) {
-  const offeredLabels = [...(await profileLines()).filter((l) => l.sensitivity === 'standard').map((l) => l.label), ...labelsFor(offeredFields)];
+/** What a request tells them we'll share: the basic profile's lines (if shared) and the extras, by label. */
+async function offerLabels(basic: boolean, extra: string[]) {
+  const have = new Set((await profileLines()).filter((l) => l.sensitivity !== 'secret').map((l) => l.key));
+  const keys = [...(basic ? await basicLines() : []), ...extra].filter((k, i, all) => have.has(k) && all.indexOf(k) === i);
+  return labelsFor(keys);
+}
+
+async function sendRequest(link: LinkDoc, offeredFields: string[], offeredLabels: string[], requestedFields: string[], note: string, invite: string | null) {
   await sendSigned(link.peerUrl, '/peer/requests', {
     type: 'connect.request', requestId: link.requestId, to: link.peerNodeId, fromNode: await selfIntro(),
-    offeredFields, offeredLabels, requestedFields: [], note, invite, mutualHints: await mutualHints(link.peerNodeId),
+    offeredFields, offeredLabels, requestedFields, note, invite, mutualHints: await mutualHints(link.peerNodeId),
   });
 }
 
-/** Look up a node and send it a signed connection request. shareProfile: grant the basic profile once they approve. */
-export async function requestConnection(keyId: string, address: string, offeredFields: string[], note: string, shareProfile: boolean) {
+/** What you choose to share when you connect: the basic profile, extra lines, whole categories. */
+export type ConnectChoice = { basic?: boolean; lines?: string[]; categories?: Record<string, { scope?: 'all' | 'current' }>; confirm?: boolean };
+
+/**
+ * Look up a node and send it a signed connection request. `choice`: what we'll share once they approve (basic profile
+ * unless told otherwise, plus extras). `asks`: things on their card we'd like (profile lines only; no reasons between people).
+ */
+export async function requestConnection(keyId: string, address: string, choice: ConnectChoice, note: string, asks: string[] = []) {
   const { origin, invite } = parsePeerInput(address);
   const d = await lookupDescriptor(origin);
   const n = await getNode();
@@ -132,23 +145,25 @@ export async function requestConnection(keyId: string, address: string, offeredF
   if (existing && existing.link.status === 'active') throw new HttpError(409, 'already_connected', `You're already connected with ${existing.contact.name}`);
   if (existing && existing.link.status === 'pending_in') throw new HttpError(409, 'request_waiting', `${existing.contact.name} already asked to connect. Review their request instead.`);
   if (existing) throw new HttpError(409, 'request_pending', `You already asked ${existing.contact.name}. Use Resend on their contact page.`);
-  const offered = await offerable(offeredFields);
+  const offered = (choice.lines ?? []).filter((k) => PROFILE_LINES.some(([x]) => x === k));
+  const requested = asks.filter((k) => PROFILE_LINES.some(([x]) => x === k) && k !== ALWAYS_SHARED).slice(0, 20);
+  const shareProfile = choice.basic !== false;
   const requestId = newId('req');
   const name = d.displayName || displayAddr(d.address);
   const { contact, link } = await newNodeParty({ name, address: d.address, nodeId: d.nodeId, signingKey: d.signingKey, version: d.version, status: 'pending_out', requestId });
   try {
-    await sendRequest(link, offered, note.slice(0, 500), invite);
+    await sendRequest(link, offered, await offerLabels(shareProfile, offered), requested, note.slice(0, 500), invite);
   } catch (e) {
     await ctx.store.remove('parties', contact._id);
     await ctx.store.remove('nodeLinks', link._id);
     throw e;
   }
   // What we'll share once they approve: basic profile (unless told not to; no grant at all means shared) + the extras we offered.
-  await setLiveShare(contact._id, { basic: shareProfile, lines: offered });
+  await applyShare(contact._id, { basic: shareProfile, lines: Object.fromEntries(offered.map((k) => [k, true])), categories: Object.fromEntries(Object.entries(choice.categories ?? {}).map(([d, c]) => [d, { scope: c.scope ?? 'all' }])), confirm: choice.confirm });
   const t = now();
   await ctx.store.insert<RequestDoc>('connectionRequests', {
     _id: newId('req'), direction: 'out', requestId, fromNodeId: n._id, peerName: name, fromNode: displayAddr(canonicalUrl(n)), toNode: displayAddr(d.address),
-    offeredFields: offered, offeredLabels: [], requestedFields: [], note, nonce: randomToken(8), signature: '', inviteId: null,
+    offeredFields: offered, offeredLabels: [], requestedFields: requested, note, nonce: randomToken(8), signature: '', inviteId: null,
     quiet: false, status: 'pending', contactId: contact._id, linkId: link._id, createdAt: t, expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString(),
   });
   await audit({ actor: ownerActor(keyId), action: 'link.request.out', resource: `parties/${contact._id}`, text: `You sent ${name} a connection request`, tone: 'request' });
@@ -303,8 +318,9 @@ export default async function contactRoutes(app: FastifyInstance) {
 
   app.post('/api/federation/requests', async (req, reply) => {
     const p = await requireOwner(req, 'parties:write');
-    const b = (req.body || {}) as { address?: string; offeredFields?: string[]; note?: string };
-    const out = await requestConnection(p.key._id, String(b.address || ''), b.offeredFields || [], String(b.note || ''), true);
+    const b = (req.body || {}) as { address?: string; share?: ConnectChoice; asks?: string[]; note?: string; offeredFields?: string[] };
+    const choice: ConnectChoice = b.share ?? { basic: true, lines: b.offeredFields ?? [] };
+    const out = await requestConnection(p.key._id, String(b.address || ''), choice, String(b.note || ''), (b.asks ?? []).map(String));
     reply.code(202);
     return out;
   });
@@ -324,7 +340,8 @@ export default async function contactRoutes(app: FastifyInstance) {
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'out' || r.status !== 'pending') throw notFound('request_not_found');
     const link = (await ctx.store.get<LinkDoc>('nodeLinks', r.linkId))!;
-    await sendRequest(link, r.offeredFields, r.note, null);
+    const share = await whatTheyGet(r.contactId);
+    await sendRequest(link, r.offeredFields, await offerLabels(share.basic, r.offeredFields), r.requestedFields, r.note, null);
     await ctx.store.update('connectionRequests', r._id, { expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString() });
     return { delivered: true };
   });
@@ -335,6 +352,16 @@ export default async function contactRoutes(app: FastifyInstance) {
     if (!r || r.direction !== 'in' || r.status !== 'pending') throw notFound('request_not_found');
     const link = (await ctx.store.get<LinkDoc>('nodeLinks', r.linkId))!;
     const contact = (await ctx.store.get<PartyDoc>('parties', r.contactId))!;
+    // What you chose on the connect screen: the basic profile and any extras (suggested ones you kept, requests you ticked).
+    const choice = ((req.body || {}) as { share?: ConnectChoice }).share;
+    if (choice) {
+      await applyShare(contact._id, {
+        basic: choice.basic !== false,
+        lines: Object.fromEntries((choice.lines ?? []).map((k) => [k, true])),
+        categories: Object.fromEntries(Object.entries(choice.categories ?? {}).map(([d, c]) => [d, { scope: c.scope ?? 'all' }])),
+        confirm: choice.confirm,
+      });
+    }
     const { secret, doc } = await issuePeerToken(contact);
     let theirs: { token?: string };
     try {

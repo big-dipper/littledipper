@@ -30,7 +30,7 @@ export const PROFILE_DOMAINS = new Set(['names', 'birth', 'citizenship', 'reside
 export const PROFILE_LINES: [string, string][] = [
   ['little_dipper', 'Little Dipper'], ['preferred_name', 'Preferred name'], ['legal_name', 'Legal name'], ['birth_name', 'Birth name'], ['born', 'Born'],
   ['citizenship', 'Citizenship'], ['nationality', 'Non-citizen nationality'], ['residency', 'Residency status'],
-  ['marital_status', 'Marital status'], ['lives_in', 'Lives in'], ['address', 'Home address'], ['email', 'Email'], ['phone', 'Phone'],
+  ['marital_status', 'Marital status'], ['lives_in', 'Lives in'], ['address', 'Home address'], ['mailing_address', 'Mailing address'], ['email', 'Email'], ['phone', 'Phone'],
 ];
 
 const dom = (id: string) => BUILT_IN_DOMAINS.find((d) => d.id === id)!;
@@ -131,6 +131,23 @@ export async function profileLines(): Promise<ProfileLine[]> {
     const country = v.country ? countryName(String(v.country)) : '';
     out.push(line('lives_in', [v.city, v.region, country].filter(Boolean).join(', '), sensOf(res, home, ['city', 'region', 'country']), [{ d: res, r: home }]));
     out.push(line('address', [v.street1, v.street2, v.city, [v.region, v.postalCode].filter(Boolean).join(' '), country].filter(Boolean).join(', '), sensOf(res, home, ['street1', 'street2', 'city', 'region', 'postalCode', 'country']), [{ d: res, r: home }]));
+  }
+
+  // Mailing address: the main postal contact method, which either points to a home or holds its own address (a PO box).
+  const cmAll = dom('contact_methods');
+  const postal = current(cmAll, await recordsOf('contact_methods')).filter((r) => plainData(r).kind === 'postal');
+  const mainPostal = postal.find((r) => plainData(r).primary === true) ?? postal[0];
+  if (mainPostal) {
+    const v = plainData(mainPostal);
+    let text = '';
+    if (v.residence) {
+      const h = (await recordsOf('residences')).find((r) => r._id === v.residence);
+      if (h) { const a = plainData(h); text = [a.street1, a.street2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country ? countryName(String(a.country)) : ''].filter(Boolean).join(', '); }
+    } else if (v.address && typeof v.address === 'object') {
+      const a = v.address as Record<string, string>;
+      text = [a.street1, a.street2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country ? countryName(a.country) : ''].filter(Boolean).join(', ');
+    }
+    out.push(line('mailing_address', text, sensOf(cmAll, mainPostal, ['address', 'residence']), [{ d: cmAll, r: mainPostal }]));
   }
 
   // Main email and phone.

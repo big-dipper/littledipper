@@ -18,6 +18,8 @@ export type OwnerDoc = Doc & {
   prefs: { showTechnical: boolean };
   /** The profile lines every connection gets by default; unset means the default list (shares.ts). */
   basicProfile?: string[];
+  /** What each relationship pre-ticks at connect time; unset means the defaults (shares.ts). */
+  suggestions?: Partial<Record<string, string[]>>;
   createdAt: string;
 };
 

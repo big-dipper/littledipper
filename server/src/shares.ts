@@ -97,6 +97,24 @@ export async function partiesSharing(domain: string, recordIds: string[] = []) {
   return out;
 }
 
+/** Who someone is to you, asked (optionally) when you connect. Each only suggests extras; nothing is stored as a card. */
+export const RELATIONS = ['friend', 'colleague', 'family', 'business', 'other'] as const;
+export type Relation = (typeof RELATIONS)[number];
+/** A suggestion item: a profile line key, or a category in words: `category:<domain>:<all|current>`. */
+export const DEFAULT_SUGGESTIONS: Record<Relation, string[]> = {
+  friend: ['phone', 'address'],
+  colleague: ['phone', 'category:employment:current'],
+  family: ['phone', 'address', 'born'],
+  business: ['legal_name', 'mailing_address'],
+  other: [],
+};
+
+/** What each relationship pre-ticks when you connect: the owner's own choices, or the defaults. */
+export async function suggestions(): Promise<Record<Relation, string[]>> {
+  const o = await ctx.store.findOne<{ _id: string; suggestions?: Partial<Record<Relation, string[]>> }>('owners', { pending: { $ne: true } });
+  return Object.fromEntries(RELATIONS.map((r) => [r, o?.suggestions?.[r] ?? DEFAULT_SUGGESTIONS[r]])) as Record<Relation, string[]>;
+}
+
 /** The owner's basic profile: the lines every connection gets by default. */
 export async function basicLines(): Promise<string[]> {
   const o = await ctx.store.findOne<{ _id: string; basicProfile?: string[]; pending?: boolean }>('owners', { pending: { $ne: true } });
