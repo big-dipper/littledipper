@@ -15,8 +15,13 @@ export type PartType =
   | 'number'
   | 'boolean'
   | 'enum'      // one of options
-  | 'last4'     // exactly four digits. Full card/account numbers are never stored.
-  | 'contact'   // id of a record in contacts (supervisor, landlord, doctor…)
+  | 'last4'     // exactly four digits, e.g. a card on a receipt
+  | 'region'    // ISO 3166-1 country or ISO 3166-2 subdivision, e.g. US or US-OR
+  | 'address'   // { street1?, street2?, city?, region?, postalCode?, country }: one shape everywhere
+  | 'repeat'    // iCalendar repeat rule (RFC 5545 RRULE), e.g. FREQ=WEEKLY;BYDAY=TU
+  | 'party'     // id of a party: a person or organisation (employer, landlord, doctor…). Never a typed name.
+  | 'record'    // id of another entry (`to` lists the categories it may point to); `many` for a list of them
+  | 'contact'   // old name for party, kept until every caller says party
   | 'list';     // rows of sub-parts (`of`), e.g. a receipt's line items
 
 export type PartDef = {
@@ -32,6 +37,14 @@ export type PartDef = {
   of?: PartDef[];
   /** A date worth a heads-up before it passes (return by, warranty until). Shown on Home, then dropped two weeks after. */
   remind?: boolean;
+  /** money: the value also says per what (hour, week, month, year, once), e.g. pay or a premium. */
+  periodic?: boolean;
+  /** record: the categories this link may point to, e.g. ['ids'] for "Proven by". */
+  to?: string[];
+  /** record: a list of links rather than one. */
+  many?: boolean;
+  /** Only applies when another part holds one of these values, e.g. collection details when status is in_collections. */
+  when?: { part: string; in: string[] };
   /** Replaced by another part. It keeps working (old records and clients use it), but new UIs shouldn't offer it. Parts are never removed. */
   deprecated?: boolean;
 };
@@ -44,8 +57,17 @@ export type DomainDef = {
   noun: string;
   group: 'identity' | 'life' | 'work' | 'health' | 'money' | 'things' | 'personal' | 'custom';
   description: string;
-  /** Classification for sharing: secret domains need confirmation to share and are never public. */
+  /**
+   * How sensitive an entry is unless the owner says otherwise. Each entry can be set on its own;
+   * parts that declare a sensitivity (a passport number is always secret) keep it whatever the entry says.
+   */
   sensitivity: Sensitivity;
+  /** A default per kind of entry, e.g. names: preferred is standard, legal is sensitive. */
+  sensitivityBy?: { part: string; values: Record<string, Sensitivity> };
+  /** At most one entry (Birth, Health basics). */
+  single?: boolean;
+  /** Related entries and documents this category invites, e.g. a vehicle invites its title, insurance and loan. Never required. */
+  companions?: { domain?: string; document?: string; label: string; when?: { part: string; in: string[] } }[];
   parts: PartDef[];
   /** Records carry validFrom/validTo; "current" = no validTo. */
   dated: boolean;
@@ -77,6 +99,8 @@ export type RecordDoc = {
   data: Record<string, unknown>;
   validFrom: string | null;
   validTo: string | null;
+  /** The owner's choice for this entry; unset means the category's default for its kind. */
+  sensitivity?: Sensitivity;
   notes: string;
   /** Who created it. Owner, an app key, an import… */
   source: Actor;

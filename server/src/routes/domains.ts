@@ -13,7 +13,7 @@ import { contactsSharing, nudgePeers } from '../contacts.js';
 import { documentsByRecord, recordRemoved } from '../documents.js';
 import { isDateTime } from '../domains/datetime.js';
 import {
-  actorLabels, buildRecord, checkCustomDomain, deletedRecords, KEEP_DELETED_DAYS, recordVersion, versionRecord, versionsOf, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, plainData,
+  actorLabels, buildRecord, checkCustomDomain, deletedRecords, KEEP_DELETED_DAYS, recordVersion, versionRecord, versionsOf, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, entrySens, plainData,
   recordOut, recordsOf, sortRecords, syncDerived, DERIVED, type DomainDef, type RecordDoc, type RecordInput,
 } from '../domains/records.js';
 import type { Actor, VersionDoc } from '../domains/types.js';
@@ -74,9 +74,12 @@ function catalogEntry(d: DomainDef, sum: Summary) {
 /** Who made a change, for the activity feed: "You", or the app or assistant's name. */
 const actorName = (p: { isSession: boolean; key: { name: string } }) => (p.isSession ? 'You' : p.key.name);
 
-/** Secret parts an input sets (a value, not a removal). */
-const secretKeys = (d: DomainDef, input: RecordInput) =>
-  Object.entries(input.data ?? {}).filter(([k, v]) => v !== null && v !== undefined && v !== '' && d.parts.some((x) => x.key === k && partSens(d, x) === 'secret')).map(([k]) => k);
+/** Secret parts an input sets (a value, not a removal), judged by how sensitive the entry will be. */
+function secretKeys(d: DomainDef, input: RecordInput, existing: RecordDoc | null = null) {
+  const plain = { ...(existing ? plainData(existing) : {}), ...(input.data ?? {}) };
+  const entry = entrySens(d, { sensitivity: input.sensitivity === undefined ? existing?.sensitivity : input.sensitivity ?? undefined }, plain);
+  return Object.entries(input.data ?? {}).filter(([k, v]) => v !== null && v !== undefined && v !== '' && d.parts.some((x) => x.key === k && partSens(d, x, entry) === 'secret')).map(([k]) => k);
+}
 
 async function proposeChange(p: { key: ApiKeyDoc }, d: DomainDef, recordId: string | null, input: RecordInput, reason: ReviewDoc['reason']) {
   const r = await propose(p.key, d.id, recordId, input, reason);
@@ -225,7 +228,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     if (a) {
       // Check it now, so the assistant hears about a mistake straight away rather than at approval.
       await buildRecord(d, input, null, by);
-      const reason = a.mode === 'suggest' ? 'suggest' : isIdentityChange(d, input, null) ? 'identity' : secretKeys(d, input).length ? 'secret' : null;
+      const reason = a.mode === 'suggest' ? 'suggest' : isIdentityChange(d, input, null) ? 'identity' : input.sensitivity !== undefined ? 'protection' : secretKeys(d, input).length ? 'secret' : null;
       if (reason) { reply.code(202); return pendingReply(await proposeChange(p, d, null, input, reason)); }
     }
     reply.code(201);
@@ -249,8 +252,10 @@ export default async function domainRoutes(app: FastifyInstance) {
       await buildRecord(d, input, existing, by);
       if (a.mode === 'suggest') { reply.code(202); return pendingReply(await proposeChange(p, d, existing._id, input, 'suggest')); }
       if (isIdentityChange(d, input, existing)) { reply.code(202); return pendingReply(await proposeChange(p, d, existing._id, input, 'identity')); }
+      // How an entry is protected is the owner's call.
+      if (input.sensitivity !== undefined) { reply.code(202); return pendingReply(await proposeChange(p, d, existing._id, input, 'protection')); }
       // Make changes: everything else goes in except secret values, which wait in Review.
-      const secrets = secretKeys(d, input);
+      const secrets = secretKeys(d, input, existing);
       if (secrets.length) {
         const review = await proposeChange(p, d, existing._id, { data: Object.fromEntries(secrets.map((k) => [k, input.data![k]])) }, 'secret');
         const rest: RecordInput = { ...input, data: Object.fromEntries(Object.entries(input.data!).filter(([k]) => !secrets.includes(k))) };

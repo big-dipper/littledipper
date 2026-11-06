@@ -14,7 +14,9 @@
     "cli": "tsx src/cli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke": "tsx scripts/smoke.ts",
-    "compat": "tsx scripts/compat.ts"
+    "engine": "tsx scripts/engine.ts",
+    "compat": "tsx scripts/compat.ts",
+    "dictionary": "tsx scripts/dictionary.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.3",

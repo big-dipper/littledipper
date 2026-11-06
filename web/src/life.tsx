@@ -84,12 +84,14 @@ const timeZones = () => {
 
 /** In the viewer's own time, plus the local time there when the event's zone is different. */
 export function fmtDateTime(v: DateTime) {
-  const opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
+  const when = new Date(v.at);
+  // Seconds only when they were given (a birth time, say).
+  const sec = when.getSeconds() ? { second: '2-digit' as const } : {};
+  const opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...sec, timeZoneName: 'short' };
   try {
-    const when = new Date(v.at);
     const mine = new Intl.DateTimeFormat(undefined, opts).format(when);
     if (v.tz === localZone()) return mine;
-    return `${mine} (${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone: v.tz }).format(when)} there)`;
+    return `${mine} (${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', ...sec, timeZoneName: 'short', timeZone: v.tz }).format(when)} there)`;
   } catch { return v.at; }
 }
 export function fmtRange(from: string | null, to: string | null) {
@@ -181,12 +183,12 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOn
     case 'datetime': {
       // The wall-clock time in the chosen zone; the server works out the offset.
       const dt = (value as Partial<DateTime> | null) || {};
-      const tz = dt.tz || localZone(), at = (dt.at ?? '').slice(0, 16);
+      const tz = dt.tz || localZone(), at = (dt.at ?? '').slice(0, 19);
       // All-day events: just the day (midnight in the zone); the zone stays as it was.
       if (dateOnly) return <input id={id} className="input" type="date" value={at.slice(0, 10)} onChange={(e) => onChange(e.target.value ? { at: `${e.target.value}T00:00`, tz } : '')} style={{ maxWidth: 220 }} />;
       return (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          <input id={id} className="input" type="datetime-local" value={at} onChange={(e) => onChange(e.target.value ? { at: e.target.value, tz } : '')} />
+          <input id={id} className="input" type="datetime-local" step={1} value={at} onChange={(e) => onChange(e.target.value ? { at: e.target.value, tz } : '')} />
           <Select value={tz} onChange={(z) => onChange({ at, tz: z || localZone() })} options={timeZones()} placeholder="Time zone" />
         </div>
       );

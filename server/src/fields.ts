@@ -42,6 +42,10 @@ export async function seedFields(initial: Record<string, string>) {
   }
 }
 
+/** A date-type field: a partial date (YYYY, YYYY-MM, YYYY-MM-DD) or a moment to the second (a birth time), with an optional UTC offset. */
+const DATE_VALUE = /^\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01])(T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?(Z|[+-]\d{2}:\d{2})?)?)?)?$/;
+export const isFieldDate = (v: string) => !v || DATE_VALUE.test(v);
+
 export const plainValue = (f: FieldDoc) => (isEncrypted(f.value) ? decrypt(ctx.keys.masterKey, f.value) : f.value);
 export const storeValue = (value: string, s: Sensitivity) => (s === 'secret' && value ? encrypt(ctx.keys.masterKey, value) : value);
 

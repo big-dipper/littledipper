@@ -22,8 +22,8 @@ export type ReviewDoc = Doc & {
   action: 'create' | 'update';
   /** RecordInput, encrypted. */
   input: string;
-  /** Why it's here rather than saved: the assistant's mode, a secret value, or core identity. */
-  reason: 'suggest' | 'secret' | 'identity';
+  /** Why it's here rather than saved: the assistant's mode, a secret value, core identity, or how an entry is protected. */
+  reason: 'suggest' | 'secret' | 'identity' | 'protection';
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   decidedAt: string | null;
@@ -52,6 +52,7 @@ export function pendingReply(r: ReviewDoc) {
       secret: 'Saved for review: secret values always wait for the owner to check and approve them.',
       identity: 'Saved for review: changes to core identity (legal names, citizenship, IDs, current address, email and phone) always wait for the owner to approve them.',
       suggest: 'Saved for review: the owner approves changes from you before they are saved.',
+      protection: 'Saved for review: how sensitive an entry is (who can see it) is the owner’s call, so it waits for them to approve.',
     }[r.reason],
   };
 }

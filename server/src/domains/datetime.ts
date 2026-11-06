@@ -68,7 +68,8 @@ export function isDateTime(v: unknown): v is DateTimeValue {
 /** "Nov 4, 2026, 9:30 AM EST", in the value's own zone. */
 export function displayDateTime(v: DateTimeValue) {
   try {
-    return new Intl.DateTimeFormat('en', { timeZone: v.tz, year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(new Date(v.at));
+    const sec = /:\d{2}:(?!00)\d{2}/.test(v.at) ? { second: '2-digit' as const } : {};
+    return new Intl.DateTimeFormat('en', { timeZone: v.tz, year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...sec, timeZoneName: 'short' }).format(new Date(v.at));
   } catch { return v.at; }
 }
 

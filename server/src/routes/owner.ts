@@ -3,7 +3,7 @@ import { ctx } from '../ctx.js';
 import { newId } from '../crypto.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner, requireSession } from '../auth.js';
-import { allFields, fieldOut, plainValue, SECTIONS, SENSITIVITIES, slugKey, storeValue, type FieldDoc, type Sensitivity } from '../fields.js';
+import { allFields, fieldOut, isFieldDate, plainValue, SECTIONS, SENSITIVITIES, slugKey, storeValue, type FieldDoc, type Sensitivity } from '../fields.js';
 import { getOwner } from '../owner.js';
 import { nudgePeers } from '../contacts.js';
 import { grantsFor, type LinkDoc, type PublicProfileDoc } from '../federation.js';
@@ -99,8 +99,9 @@ export default async function ownerRoutes(app: FastifyInstance) {
     if (f.derivedFrom && body.value !== undefined && body.value !== plainValue(f)) {
       throw new HttpError(409, 'derived_field', `${f.label} comes from ${f.derivedFrom === 'residences' ? 'Residences' : 'Contact methods'}. Change it there.`);
     }
+    if (f.type === 'date' && body.value !== undefined && !isFieldDate(String(body.value).trim())) throw bad('invalid_value', `${f.label}: use YYYY-MM-DD, or YYYY-MM-DDTHH:MM:SS for a time`);
     const sens = body.sensitivity && SENSITIVITIES.includes(body.sensitivity) ? body.sensitivity : f.sensitivity;
-    const value = body.value !== undefined ? String(body.value) : plainValue(f);
+    const value = body.value !== undefined ? (f.type === 'date' ? String(body.value).trim() : String(body.value)) : plainValue(f);
     await ctx.store.update('fields', f._id, { value: storeValue(value, sens), sensitivity: sens, label: body.label?.trim() || f.label, updatedAt: new Date().toISOString() });
     if (sens === 'secret') {
       // Secret fields are never public.

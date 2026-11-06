@@ -154,6 +154,9 @@ async function main() {
     const fields = (await a.call('GET', '/api/owner/fields')).items;
     ok(fields.find((f: any) => f.key === ssn.key).value.startsWith('••••'), 'secret value is masked');
     ok((await a.call('POST', `/api/owner/fields/${ssn.key}/reveal`, {})).value === 'X1234567', 'reveal returns value');
+    ok((await a.call('PUT', '/api/owner/fields/dob', { value: '1984-03-09T06:42:17-08:00' })).value === '1984-03-09T06:42:17-08:00', 'date of birth keeps a birth time to the second');
+    await a.call('PUT', '/api/owner/fields/dob', { value: 'March 9th' }, [400]);
+    ok((await a.call('PUT', '/api/owner/fields/dob', { value: '1984-03-09' })).value === '1984-03-09', 'date of birth can be just the date');
     await a.call('PUT', '/api/public-profile', { fieldKeys: [ssn.key] }, [400]);
     ok(true, 'secret field cannot be public');
     await a.call('PUT', '/api/public-profile', { headline: 'Ceramicist in Portland', fieldKeys: ['preferred_name', 'email'] });
