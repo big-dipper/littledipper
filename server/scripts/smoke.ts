@@ -141,7 +141,7 @@ async function main() {
     await a.call('GET', '/api/owner', undefined, [401]);
     const lo = await a.call('POST', '/api/auth/passkeys/options', {});
     await a.call('POST', '/api/auth/passkeys/verify', { challengeId: lo.challengeId, response: ka.assert(lo.options, a.base) });
-    ok((await a.call('GET', '/api/owner')).displayName === 'Maya Lindqvist', 'passkey sign-in works');
+    ok((await a.call('GET', '/api/owner')).name === 'Maya Lindqvist', 'passkey sign-in works');
     const r = new Client(a.base);
     ok((await r.call('POST', '/api/auth/recovery', { code: codesA[0].toLowerCase() })).codesLeft === 7, 'recovery code sign-in works');
     await new Client(a.base).call('POST', '/api/auth/recovery', { code: codesA[0] }, [401]);
@@ -150,15 +150,31 @@ async function main() {
     console.log('my data');
     await a.call('POST', '/api/data/contact_methods', { data: { kind: 'phone', label: 'Mobile', value: '+1 (503) 555-0148', primary: true } });
     await a.call('POST', '/api/data/residences', { data: { street1: '2214 SE Ankeny St', city: 'Portland', region: 'OR', postalCode: '97214', country: 'us', ownership: 'rent' }, validFrom: '2019-06' });
-    const ssn = await a.call('POST', '/api/owner/fields', { label: 'Passport number', value: 'X1234567', sensitivity: 'secret', section: 'gov' });
-    const fields = (await a.call('GET', '/api/owner/fields')).items;
-    ok(fields.find((f: any) => f.key === ssn.key).value.startsWith('••••'), 'secret value is masked');
-    ok((await a.call('POST', `/api/owner/fields/${ssn.key}/reveal`, {})).value === 'X1234567', 'reveal returns value');
-    ok((await a.call('PUT', '/api/owner/fields/dob', { value: '1984-03-09T06:42:17-08:00' })).value === '1984-03-09T06:42:17-08:00', 'date of birth keeps a birth time to the second');
-    await a.call('PUT', '/api/owner/fields/dob', { value: 'March 9th' }, [400]);
-    ok((await a.call('PUT', '/api/owner/fields/dob', { value: '1984-03-09' })).value === '1984-03-09', 'date of birth can be just the date');
-    await a.call('PUT', '/api/public-profile', { fieldKeys: [ssn.key] }, [400]);
-    ok(true, 'secret field cannot be public');
+    // The profile is worked out from categories; nothing is stored on it.
+    const line = async (key: string) => (await a.call('GET', '/api/profile')).items.find((l: any) => l.key === key);
+    ok((await line('preferred_name'))?.value === 'Maya Lindqvist' && (await line('email'))?.value === 'maya@example.com', 'the name and email from setup become your first entries, and your profile shows them');
+    ok((await line('phone'))?.value === '(503) 555-0148', 'a phone is stored in E.164 and shown in a friendly form');
+    const acct = await a.call('GET', '/api/owner');
+    ok(acct.name === 'Maya Lindqvist' && acct.email === 'maya@example.com', 'the account name and email are worked out from Names and Contact methods');
+    await a.call('PATCH', '/api/owner', { name: 'Someone' }, [400]);
+    ok(true, 'the account name can’t be set directly: it comes from Names');
+    const legalName = await a.call('POST', '/api/data/names', { data: { kind: 'legal', full: 'Maya Elin Lindqvist', reason: 'birth' }, validFrom: '1984' });
+    ok((await line('legal_name'))?.value === 'Maya Elin Lindqvist' && (await line('legal_name'))?.sensitivity === 'sensitive' && (await line('preferred_name'))?.sensitivity === 'standard', 'legal and preferred names are lines of their own, each as sensitive as its entry');
+    ok(!(await line('birth_name')), 'no birth-name line while it’s still your legal name');
+    await a.call('POST', '/api/data/birth', { data: { date: '1984-03-09', time: '06:42:17', timeZone: 'America/Chicago', city: 'Peoria', region: 'Illinois', country: 'US', coordinates: { lat: 40.6936, lon: -89.589 } } });
+    ok((await line('born'))?.value.includes('06:42:17') && (await line('born'))?.value.includes('Peoria, Illinois, United States'), 'birth keeps the time to the second and the place');
+    await a.call('POST', '/api/data/birth', { data: { date: '1990-01-01' } }, [400]);
+    await a.call('POST', '/api/data/birth', { data: { date: '1984-03-09', time: '6:42pm' } }, [400]);
+    ok(true, 'there is one birth entry, and the time is checked');
+    await a.call('POST', '/api/data/citizenship', { data: { country: 'US', status: 'citizen', acquiredBy: 'birth' }, validFrom: '1984' });
+    await a.call('POST', '/api/data/citizenship', { data: { country: 'CA', status: 'permanent_resident' }, validFrom: '2020' });
+    ok((await line('citizenship'))?.value === 'United States' && (await line('residency'))?.value === 'Canada: permanent resident' && !(await line('nationality')), 'citizenship and residency are separate lines, never merged');
+    ok((await line('lives_in'))?.value === 'Portland, OR, United States' && (await line('lives_in'))?.sensitivity === 'standard' && (await line('address'))?.sensitivity === 'sensitive', 'where you live is standard; the street address is sensitive');
+    await a.call('PATCH', `/api/data/names/${legalName.id}`, { sensitivity: 'secret' });
+    ok((await line('legal_name'))?.sensitivity === 'secret', 'making an entry secret makes its profile line secret');
+    await a.call('PUT', '/api/public-profile', { fieldKeys: ['legal_name'] }, [400]);
+    ok(true, 'a secret line can never be public');
+    await a.call('PATCH', `/api/data/names/${legalName.id}`, { sensitivity: null });
     await a.call('PUT', '/api/public-profile', { headline: 'Ceramicist in Portland', fieldKeys: ['preferred_name', 'email'] });
     const pub = await new Client(a.base).call('GET', '/public/profile');
     ok(pub.fields.length === 2 && pub.headline.startsWith('Ceramicist'), 'public profile shows chosen fields');
@@ -205,18 +221,22 @@ async function main() {
     const cA = (await a.call('GET', '/api/parties')).items[0];
     ok(cA.status === 'active', 'A sees the connection as active');
     const detA = await a.call('GET', `/api/parties/${cA.id}?sync=1`);
-    ok(detA.sharedIn.some((f: any) => f.key === 'preferred_name' && f.value === 'Theo'), "A reads Theo's basic profile");
+    ok(detA.sharedIn.some((f: any) => f.key === 'preferred_name' && f.value === 'Theo Nakamura'), "A reads Theo's basic profile");
     const cB = (await b.call('GET', '/api/parties')).items[0];
     let detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(detB.sharedIn.some((f: any) => f.key === 'address'), 'B reads the sensitive field A offered');
-    ok(!detB.sharedIn.some((f: any) => f.key === ssn.key), "B can't read A's secret field");
+    ok(!detB.sharedIn.some((f: any) => f.key === 'legal_name'), "B doesn't get A's legal name: it's sensitive, not in the basic profile");
 
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { fields: { [ssn.key]: true } }, [409]);
-    ok(true, 'secret grant needs confirm');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { fields: { [ssn.key]: true }, confirm: true });
+    await a.call('PUT', `/api/parties/${cA.id}/grants`, { fields: { legal_name: true } });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
-    ok(detB.sharedIn.some((f: any) => f.key === ssn.key && f.value === 'X1234567'), 'B reads the secret after confirmed grant');
-    await a.call('PUT', `/api/parties/${cA.id}/grants`, { profile: false, fields: { [ssn.key]: false, address: false } });
+    ok(detB.sharedIn.some((f: any) => f.key === 'legal_name' && f.value === 'Maya Elin Lindqvist'), 'B reads the legal name once it’s shared with them');
+    await a.call('PATCH', `/api/data/names/${legalName.id}`, { sensitivity: 'secret' });
+    detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
+    ok(!detB.sharedIn.some((f: any) => f.key === 'legal_name'), 'once the entry is secret, the line stops leaving');
+    await a.call('PUT', `/api/parties/${cA.id}/grants`, { fields: { legal_name: true } }, [400]);
+    ok(true, 'and a secret line can’t be granted');
+    await a.call('PATCH', `/api/data/names/${legalName.id}`, { sensitivity: null });
+    await a.call('PUT', `/api/parties/${cA.id}/grants`, { profile: false, fields: { legal_name: false, address: false } });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(detB.sharedIn.length === 0, 'turning sharing off removes it on the next read');
     const audit = (await a.call('GET', '/api/audit?limit=50')).items;
@@ -236,10 +256,8 @@ async function main() {
     // Residences feed the derived profile fields
     const res = (await a.call('GET', '/api/data/residences')).items[0];
     await a.call('POST', '/api/data/residences', { data: { street1: '12 Kungsgatan', city: 'Stockholm', country: 'SE' }, validFrom: '2012-01', validTo: '2019-05' });
-    let prof = (await a.call('GET', '/api/owner/fields')).items;
-    ok(prof.find((f: any) => f.key === 'address').value.startsWith('2214 SE Ankeny St, Portland, OR 97214') && prof.find((f: any) => f.key === 'country_res').value === 'United States', 'current residence feeds Current address + Country of residence');
-    await a.call('PUT', '/api/owner/fields/address', { value: 'elsewhere' }, [409]);
-    ok(true, 'derived field refuses direct edits');
+    const prof = (await a.call('GET', '/api/profile')).items;
+    ok(prof.find((f: any) => f.key === 'address').value.startsWith('2214 SE Ankeny St, Portland, OR 97214') && prof.find((f: any) => f.key === 'lives_in').value === 'Portland, OR, United States', 'the current residence, not the past one, is where you live');
     const cur = (await a.call('GET', '/api/data/residences?current=true')).items;
     ok(cur.length === 1 && cur[0].id === res.id && cur[0].title === '2214 SE Ankeny St, Portland', 'current=true returns the current residence');
     await a.call('POST', '/api/data/residences', { data: { street1: 'x' } }, [400]);
@@ -406,7 +424,7 @@ async function main() {
     const readOnly = rest(await wideKey('answer'));
     const readerWrites = [
       await readOnly('POST', '/api/documents?name=r.png', pixel, 'image/png'),
-      await readOnly('PUT', '/api/owner/fields/preferred_name', { value: 'Mo' }),
+      await readOnly('PATCH', '/api/owner', { prefs: { showTechnical: true } }),
       await readOnly('POST', '/api/parties', { type: 'person', name: 'Someone' }),
     ];
     ok(readerWrites.every((r) => r.status === 403 && r.body.code === 'read_only'), 'an answer-only assistant changes nothing anywhere: documents, profile or contacts');
@@ -415,7 +433,7 @@ async function main() {
     ok(sDoc.status === 201 && sDoc.body.status === 'inbox' && !sDoc.body.links.length && sDoc.body.message, 'in suggest mode an uploaded document waits unfiled in the inbox, and the assistant is told');
     const sBlocked = [
       await suggester2('PATCH', `/api/documents/${sDoc.body.id}`, { title: 'Renamed' }),
-      await suggester2('PUT', '/api/owner/fields/preferred_name', { value: 'Mo' }),
+      await suggester2('PATCH', '/api/owner', { prefs: { showTechnical: true } }),
       await suggester2('POST', '/api/parties', { type: 'person', name: 'Someone' }),
     ];
     ok(sBlocked.every((r) => r.status === 403 && r.body.code === 'needs_review'), "in suggest mode, changes that can't wait in Review yet are refused with a clear reason");
@@ -433,10 +451,10 @@ async function main() {
     ok((await maker2('POST', '/api/data/residences', { data: { street1: '9 Old Rd', city: 'Boise', country: 'US' }, validFrom: '2001-01', validTo: '2003-01' })).status === 201, 'a past address follows the mode');
     const homeNow = (await a.call('GET', '/api/data/residences?current=true')).items[0];
     ok(await pending(await maker2('PATCH', `/api/data/residences/${homeNow.id}`, { validTo: '2026-02' })), 'ending the current address waits for the owner');
-    ok((await maker2('PUT', '/api/owner/fields/legal_name', { value: 'Someone Else' })).body.code === 'needs_owner', "an assistant can't change a core identity detail on the profile");
-    ok((await maker2('PUT', '/api/owner/fields/preferred_name', { value: 'Mo', sensitivity: 'secret' })).body.code === 'needs_owner', "an assistant can't change how a profile detail is protected");
-    ok((await maker2('PUT', '/api/owner/fields/preferred_name', { value: 'Mo' })).status === 200, 'an everyday profile detail follows the mode');
-    ok((await maker2('PATCH', '/api/owner', { displayName: 'Someone Else' })).body.code === 'owner_only', 'only the owner changes the account name and email');
+    const lex = (await a.call('GET', '/api/data/names')).items.find((n: any) => n.data.full === 'Lex');
+    const prot = await maker2('PATCH', `/api/data/names/${lex.id}`, { sensitivity: 'secret' });
+    ok(prot.status === 202 && prot.body.message.includes('owner’s call'), 'who can see an entry is the owner’s call: an assistant’s change waits in Review');
+    ok((await maker2('PATCH', '/api/owner', { prefs: { showTechnical: true } })).body.code === 'owner_only', 'only the owner changes their account settings');
     for (const r of (await a.call('GET', '/api/reviews')).items) await a.call('POST', `/api/reviews/${r.id}/reject`);
     // OAuth: an assistant platform connects without anyone copying a key
     const prm = await (await fetch(`${a.base}/.well-known/oauth-protected-resource`)).json();
@@ -766,7 +784,7 @@ async function main() {
     ok(bk.documents > 0, `backup created (${bk.documents} documents)`);
     const exp = await fetch(a.base + '/api/export', { headers: { cookie: [...a.jar].map(([k, v]) => `${k}=${v}`).join('; ') } });
     const lines = (await exp.text()).trim().split('\n').map((l) => JSON.parse(l));
-    ok(lines.some((l) => l.collection === 'fields' && l.value === 'X1234567'), 'export includes decrypted secret values');
+    ok(lines.some((l) => l.collection === 'records' && l.data?.number === 'P1234567'), 'export includes decrypted secret values');
     ok(!lines.some((l) => l.collection === 'apiKeys'), 'export excludes credential hashes');
     ok(lines.some((l) => l.collection === 'recordVersions') && !lines.some((l) => (l.collection === 'records' || l.collection === 'recordVersions') && JSON.stringify(l.data).includes('enc:v1:')), 'export includes history, with secret record parts readable');
     const before = (await a.call('GET', '/api/data/education')).items.length;
@@ -836,7 +854,7 @@ async function main() {
     ok(true, 'restoring needs the claim link, like claiming');
     const restoredF = await f.call('POST', '/api/node/claim/restore', { token: fToken, kit, passphrase: 'correct horse battery', backup: bundleR });
     ok(restoredF.restored && restoredF.nodeId === kit.nodeId && restoredF.address === 'http://localhost:4205' && restoredF.files > 0, `the fresh node becomes Maya's Little Dipper at its new address (${restoredF.files} files)`);
-    ok((await f.call('GET', '/api/owner')).displayName === 'Maya Lindqvist' && countRecords(path.join(tmp, 'f')) === recordsOnA, 'the owner is signed in, with every record back');
+    ok((await f.call('GET', '/api/owner')).name === 'Maya Lindqvist' && countRecords(path.join(tmp, 'f')) === recordsOnA, 'the owner is signed in, with every record back');
     ok((await f.call('GET', '/api/node')).recoveryKit.due === false, 'the restored node remembers its kit was saved');
     await f.call('POST', '/api/node/claim/restore', { token: fToken, kit, passphrase: 'correct horse battery', backup: bundleR }, [401, 409]);
     ok(true, 'a node that was restored can’t be restored over again');

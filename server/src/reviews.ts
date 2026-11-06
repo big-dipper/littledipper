@@ -50,7 +50,7 @@ export function pendingReply(r: ReviewDoc) {
     status: 'pending_review', reviewId: r._id, domain: r.domain, recordId: r.recordId, action: r.action,
     message: {
       secret: 'Saved for review: secret values always wait for the owner to check and approve them.',
-      identity: 'Saved for review: changes to core identity (legal names, citizenship, IDs, current address, email and phone) always wait for the owner to approve them.',
+      identity: 'Saved for review: changes to core identity (legal names, birth, citizenship, IDs, current address, email and phone) always wait for the owner to approve them.',
       suggest: 'Saved for review: the owner approves changes from you before they are saved.',
       protection: 'Saved for review: how sensitive an entry is (who can see it) is the owner’s call, so it waits for them to approve.',
     }[r.reason],
@@ -58,14 +58,14 @@ export function pendingReply(r: ReviewDoc) {
 }
 
 /** Names that are legal identity, as opposed to nicknames and aliases. */
-const IDENTITY_NAMES = new Set(['legal', 'birth', 'previous_legal']);
+const IDENTITY_NAMES = new Set(['legal']);
 
 /**
  * Core identity: what forms, sharing and identity verification check against. An assistant's change to it always
  * waits for the owner, even in make mode. For residences, that's any change touching the current address.
  */
 export function isIdentityChange(d: DomainDef, input: RecordInput, existing: RecordDoc | null) {
-  if (['ids', 'citizenship', 'contact_methods'].includes(d.id)) return true;
+  if (['ids', 'citizenship', 'contact_methods', 'birth'].includes(d.id)) return true;
   if (d.id === 'names') return [input.data?.kind, existing && plainData(existing).kind].some((k) => IDENTITY_NAMES.has(String(k)));
   if (d.id === 'residences') {
     const validTo = input.validTo !== undefined ? input.validTo : existing?.validTo ?? null;

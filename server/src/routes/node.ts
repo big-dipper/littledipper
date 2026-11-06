@@ -7,7 +7,9 @@ import { audit, ownerActor, systemActor } from '../audit.js';
 import { bad, COOKIE, cookieOpts, HttpError, issueKey, rateLimit, requireOwner, requireSession, requireSetup, startSession, deviceLabel } from '../auth.js';
 import { canonicalUrl, checkClaimToken, descriptor, displayAddr, getNode, issueClaimLink, type NodeDoc } from '../node.js';
 import { backupBundle, createBackup, deviceCopyStatus, listBackups, markDeviceCopy, recoveryKitStatus, restoreBackup, restoreOnFreshNode, RestoreError } from '../backups.js';
-import { seedFields } from '../fields.js';
+import { publicName } from '../profile.js';
+import { BUILT_IN_DOMAINS } from '../domains/catalog.js';
+import { buildRecord, recordVersion } from '../domains/records.js';
 import { runMigrations } from '../migrate.js';
 import { getOwner, getPendingOwner, type OwnerDoc } from '../owner.js';
 import { now, sendSigned, type LinkDoc, type PublicProfileDoc } from '../federation.js';
@@ -98,12 +100,12 @@ export default async function nodeRoutes(app: FastifyInstance) {
     reply.header('access-control-allow-origin', '*');
     const n = await getNode();
     const pp = await publicProfileDoc();
-    return descriptor(n, n.claimed ? pp?.displayName || (await getOwner())?.displayName || null : null, pp?.connectRequests || 'off');
+    return descriptor(n, n.claimed ? (await publicName(pp ?? null)) || null : null, pp?.connectRequests || 'off');
   });
 
   app.get('/api/node/status', async () => {
     const n = await getNode();
-    const docs = await ctx.store.count('fields');
+    const docs = await ctx.store.count('records');
     return {
       claimed: n.claimed, version: n.version, address: canonicalUrl(n),
       hosting: { label: config.hosting.label, region: n.hosting.region },
@@ -175,20 +177,26 @@ export default async function nodeRoutes(app: FastifyInstance) {
       for (const o of await ctx.store.find<OwnerDoc>('owners', { pending: { $ne: true } })) await ctx.store.remove('owners', o._id);
       await ctx.store.removeMany('apiKeys', { kind: 'session' });
     }
-    await ctx.store.update('owners', pending._id, { pending: undefined });
+    await ctx.store.update('owners', pending._id, { pending: undefined, setup: undefined });
     await ctx.store.update('nodes', n._id, { claimed: true, ownerId: pending._id, claimTokenHash: null, claimTokenExpiresAt: null, claimMode: undefined, claimedAt: now() });
     await ctx.store.update('apiKeys', setupKey._id, { revokedAt: now() });
     reply.clearCookie(COOKIE.setup, { path: '/' });
     if (!transfer) {
-      const first = pending.displayName.split(' ')[0];
-      await seedFields({ legal_name: pending.displayName, preferred_name: first, email: pending.email });
+      // What they typed during setup becomes their first entries: the name they go by, and their main email.
+      const by = { type: 'owner' as const, id: pending._id };
+      const domain = (id: string) => BUILT_IN_DOMAINS.find((d) => d.id === id)!;
+      for (const [id, data] of [['names', { kind: 'preferred', full: pending.setup!.name }], ['contact_methods', { kind: 'email', value: pending.setup!.email, primary: true }]] as const) {
+        const rec = await buildRecord(domain(id), { data }, null, by);
+        await ctx.store.insert('records', rec);
+        await recordVersion(rec, 'create', by);
+      }
       await runMigrations();
       if (!(await publicProfileDoc())) {
-        await ctx.store.insert<PublicProfileDoc>('publicProfile', { _id: 'public', displayName: pending.displayName, headline: '', avatarFileId: null, fieldKeys: ['preferred_name'], connectRequests: 'off' });
+        await ctx.store.insert<PublicProfileDoc>('publicProfile', { _id: 'public', nameId: null, headline: '', avatarFileId: null, fieldKeys: ['preferred_name'], connectRequests: 'off' });
       }
     }
     await startSession(reply, deviceLabel(req));
-    await audit({ actor: systemActor, action: 'node.claim', resource: `nodes/${n._id}`, text: transfer ? `Ownership transferred to ${pending.displayName}` : `${pending.displayName} claimed this Little Dipper`, tone: 'system' });
+    await audit({ actor: systemActor, action: 'node.claim', resource: `nodes/${n._id}`, text: transfer ? `Ownership transferred to ${pending.setup?.name ?? 'a new owner'}` : `${pending.setup?.name ?? 'The owner'} claimed this Little Dipper`, tone: 'system' });
     return { claimed: true, address: canonicalUrl(n), nodeId: n._id };
   });
 
@@ -310,7 +318,6 @@ export default async function nodeRoutes(app: FastifyInstance) {
         if (coll === 'apiKeys') continue; // credential hashes stay home
         const out = { ...d };
         // Owner export: Secret values are decrypted so the file is usable on its own.
-        if (coll === 'fields' && isEncrypted(out.value)) out.value = decrypt(ctx.keys.masterKey, out.value);
         if ((coll === 'records' || coll === 'recordVersions') && out.data) out.data = plainData(out as RecordDoc);
         if (coll === 'owners') { delete out.passwordHash; delete out.totp; delete out.recoveryCodeHashes; }
         if (coll === 'nodeLinks') delete out.tokenFromPeerEnc;

@@ -2,9 +2,10 @@
 import { ctx } from '../ctx.js';
 import { decrypt, encrypt, isEncrypted, newId } from '../crypto.js';
 import { bad } from '../auth.js';
-import { mask, storeValue, type FieldDoc, type Sensitivity } from '../fields.js';
+import { mask, type Sensitivity } from '../fields.js';
 import { BUILT_IN_DOMAINS, RESERVED } from './catalog.js';
-import { dateTimeSortKey, displayDateTime, isDateTime, normalizeDateTime, type DateTimeValue } from './datetime.js';
+import { dateTimeSortKey, displayDateTime, isDateTime, isTimeZone, normalizeDateTime, type DateTimeValue } from './datetime.js';
+import { checkMethod } from '../methods.js';
 import type { Actor, DomainDef, PartDef, PartType, RecordDoc, VersionDoc } from './types.js';
 
 export type { DomainDef, PartDef, RecordDoc };
@@ -23,8 +24,11 @@ export function defaultSens(d: DomainDef, plain: Record<string, unknown> = {}): 
 export const entrySens = (d: DomainDef, r?: Pick<RecordDoc, 'sensitivity'> | null, plain: Record<string, unknown> = {}): Sensitivity =>
   r?.sensitivity ?? defaultSens(d, plain);
 
-/** A part declared with a sensitivity keeps it (a passport number is always secret); the rest follow the entry. */
-export const partSens = (d: DomainDef, p: PartDef, entry: Sensitivity = d.sensitivity): Sensitivity => p.sensitivity ?? entry;
+/**
+ * A part's declared sensitivity is a floor: a passport number is always at least secret. Otherwise a part follows its
+ * entry, so marking an entry more sensitive protects every part of it.
+ */
+export const partSens = (d: DomainDef, p: PartDef, entry: Sensitivity = d.sensitivity): Sensitivity => (p.sensitivity ? maxSens(p.sensitivity, entry) : entry);
 
 // ── registry ───────────────────────────────────────────────────────────
 
@@ -37,7 +41,7 @@ export async function getDomain(id: string): Promise<DomainDef | null> {
   return BUILT_IN_DOMAINS.find((d) => d.id === id) ?? (await ctx.store.findOne<DomainDef & { _id: string }>('domainDefs', { id })) ?? null;
 }
 
-const PART_TYPES: PartType[] = ['text', 'longtext', 'date', 'datetime', 'email', 'phone', 'url', 'country', 'region', 'address', 'currency', 'money', 'number', 'boolean', 'enum', 'last4', 'party', 'contact'];
+const PART_TYPES: PartType[] = ['text', 'longtext', 'date', 'datetime', 'time', 'email', 'phone', 'url', 'country', 'region', 'address', 'currency', 'money', 'number', 'boolean', 'enum', 'last4', 'party', 'contact'];
 
 /** Validate an owner-defined domain. Ids are x_ + slug so they never collide with built-ins or routes. */
 export function checkCustomDomain(input: Partial<DomainDef>): DomainDef {
@@ -127,6 +131,14 @@ async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> 
       return out;
     }
     case 'repeat': return checkRepeat(v) ?? fail('use an iCalendar repeat rule, e.g. FREQ=WEEKLY;BYDAY=TU');
+    case 'time': { const s = String(v).trim(); return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(s) ? s : fail('use HH:MM or HH:MM:SS, e.g. 06:42:17'); }
+    case 'timezone': return isTimeZone(v) ? v : fail('use a time zone name, e.g. America/Chicago');
+    case 'geo': {
+      const g = v as { lat?: unknown; lon?: unknown };
+      const lat = Number(g?.lat), lon = Number(g?.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) fail('use { lat, lon } in decimal degrees');
+      return { lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6 };
+    }
     case 'party': case 'contact': return (await partyExists(String(v))) ? String(v) : fail('no such person or organisation');
     case 'record': {
       const ids = p.many ? (Array.isArray(v) ? v.map(String) : fail('expected a list of entries')) : [String(v)];
@@ -181,6 +193,12 @@ const empty = (v: unknown) => v === undefined || v === null || v === '';
 
 /** Rules across the parts of one built-in domain, checked once each part has passed on its own. */
 const CHECKS: Record<string, (data: Record<string, unknown>) => void> = {
+  // The one contact-method shape: the value is checked and normalised by kind (phones in E.164).
+  contact_methods: (x) => {
+    if (x.kind === 'postal' || x.value === undefined) return;
+    const m = checkMethod({ kind: x.kind, value: x.value, service: x.service });
+    x.value = m.value;
+  },
   events: (x) => {
     const start = x.start as DateTimeValue | undefined, end = x.end as DateTimeValue | undefined;
     if (start && end) {
@@ -248,7 +266,7 @@ export async function buildRecord(d: DomainDef, input: RecordInput, existing: Re
   const t = new Date().toISOString();
   return {
     _id: existing?._id ?? newId('rec'), domain: d.id, data, validFrom, validTo,
-    ...(sensitivity ? { sensitivity } : {}),
+    sensitivity, // undefined = the default for its kind; an update removes a stored choice
     notes: input.notes !== undefined ? String(input.notes).slice(0, 10000) : existing?.notes ?? '',
     source: existing?.source ?? by, updatedBy: by, schemaVersion: d.schemaVersion, createdAt: existing?.createdAt ?? t, updatedAt: t,
   };
@@ -287,6 +305,7 @@ export function displayValue(p: PartDef, v: unknown): string {
     case 'region': { const [c, r] = String(v).split('-'); return r ? `${r}, ${countryName(c)}` : countryName(c); }
     case 'address': { const a = v as Record<string, string>; return [a.street1, a.street2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country ? countryName(a.country) : ''].filter(Boolean).join(', '); }
     case 'repeat': return describeRepeat(String(v));
+    case 'geo': { const g = v as { lat: number; lon: number }; return `${Math.abs(g.lat)}° ${g.lat >= 0 ? 'N' : 'S'}, ${Math.abs(g.lon)}° ${g.lon >= 0 ? 'E' : 'W'}`; }
     case 'record': { const n = Array.isArray(v) ? v.length : 1; return `${n} linked ${n === 1 ? 'entry' : 'entries'}`; }
     default: return String(v);
   }
@@ -466,47 +485,11 @@ async function unlink(refs: Reference[], id: string, by: Actor) {
 export async function unlinkParty(partyId: string, byId: string) { await unlink(await partyReferences(partyId), partyId, { type: 'owner', id: byId }); }
 export async function unlinkRecord(recordId: string, by: Actor) { await unlink(await recordReferences(recordId), recordId, by); }
 
-// ── derived profile fields ─────────────────────────────────────────────
-// A few core profile fields mirror domain records so there is one source of truth:
-// edit your residence and "Current address" follows.
-
-export const DERIVED: Record<string, { domain: string; compute: (recs: RecordDoc[]) => string }> = {
-  address: { domain: 'residences', compute: (r) => { const c = currentOf('residences', r); if (!c) return ''; const v = plainData(c); return [v.street1, v.street2, v.city, [v.region, v.postalCode].filter(Boolean).join(' '), v.country && v.country !== 'US' ? countryName(String(v.country)) : ''].filter(Boolean).join(', '); } },
-  country_res: { domain: 'residences', compute: (r) => { const c = currentOf('residences', r); return c?.data.country ? countryName(String(plainData(c).country)) : ''; } },
-  // City only, so the owner can go public with where they live without the street: "Portland, OR" or "Lyon, France".
-  city: { domain: 'residences', compute: (r) => { const c = currentOf('residences', r); if (!c) return ''; const v = plainData(c); return [v.city, v.region, v.country && v.country !== 'US' ? countryName(String(v.country)) : ''].filter(Boolean).join(', '); } },
-  email: { domain: 'contact_methods', compute: (r) => primaryOf(r, 'email') },
-  phone: { domain: 'contact_methods', compute: (r) => primaryOf(r, 'phone') },
-};
-
-function currentOf(domain: string, recs: RecordDoc[]) {
-  const d = BUILT_IN_DOMAINS.find((x) => x.id === domain)!;
-  return sortRecords(d, recs.filter((r) => isCurrent(d, r)))[0];
-}
-function primaryOf(recs: RecordDoc[], kind: string) {
-  const mine = recs.filter((r) => r.data.kind === kind);
-  const pick = mine.find((r) => r.data.primary === true) ?? mine.sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
-  return pick ? String(pick.data.value) : '';
-}
-
-/** Recompute derived fields fed by this domain. Cheap: a handful of records. */
-export async function syncDerived(domainId: string) {
-  const keys = Object.entries(DERIVED).filter(([, v]) => v.domain === domainId).map(([k]) => k);
-  if (!keys.length) return;
-  const recs = await recordsOf(domainId);
-  for (const key of keys) {
-    const f = await ctx.store.findOne<FieldDoc>('fields', { key });
-    // Only fields that were switched over (see migrate.ts); a plain field is the owner's to edit.
-    if (!f || f.derivedFrom !== domainId) continue;
-    const value = DERIVED[key].compute(recs);
-    await ctx.store.update('fields', f._id, { value: storeValue(value, f.sensitivity), updatedAt: new Date().toISOString() });
-  }
-}
-
-/** Only one primary per kind of contact method. */
+/** Only one main contact method per kind, and one primary home. */
 export async function demoteOtherPrimaries(rec: RecordDoc) {
-  if (rec.domain !== 'contact_methods' || rec.data.primary !== true) return;
-  for (const r of await recordsOf('contact_methods')) {
-    if (r._id !== rec._id && r.data.kind === rec.data.kind && r.data.primary === true) await ctx.store.update('records', r._id, { data: { ...r.data, primary: false } });
+  if (!['contact_methods', 'residences'].includes(rec.domain) || rec.data.primary !== true) return;
+  for (const r of await recordsOf(rec.domain)) {
+    const same = rec.domain === 'residences' || r.data.kind === rec.data.kind;
+    if (r._id !== rec._id && same && r.data.primary === true) await ctx.store.update('records', r._id, { data: { ...r.data, primary: false } });
   }
 }

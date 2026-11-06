@@ -46,7 +46,7 @@ export default function Home() {
 
   return (
     <div data-screen-label="Dashboard" style={{ maxWidth: 1040 }}>
-      <h1>{greeting()}, {firstName(owner.displayName)}.</h1>
+      <h1>{greeting()}, {firstName(owner.name)}.</h1>
       <p className="text-muted" style={{ marginBottom: 28 }}>Everything here belongs to you, and only you decide who sees it.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,290px),1fr))', gap: 18 }}>
         <div className="card" style={{ padding: '22px 24px', gap: 12 }}>

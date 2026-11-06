@@ -3,12 +3,12 @@
  * a file to attach (PDF, JSON, text) or text in the email. Sending to an email adds them as a contact.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { ownerName } from '../profile.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, rateLimit, requireSession } from '../auth.js';
 import { ctx } from '../ctx.js';
 import { newId, randomToken, safeEqual, sha256 } from '../crypto.js';
 import { canonicalUrl, getNode } from '../node.js';
-import { getOwner } from '../owner.js';
 import {
   asText, copyOut, DELIVERIES, emailFor, fileName, FORMATS, LINK_HOURS, linkActive, longDate, recipient, render, snapshotOf, takeSnapshot, titleFor,
   type CopyDoc, type Delivery, type Format,
@@ -19,7 +19,6 @@ type CreateBody = {
   to?: { contactId?: string; email?: string; name?: string };
 };
 
-const ownerName = async () => (await getOwner())?.displayName ?? '';
 const meta = async (c: CopyDoc) => ({ title: c.title, sharedBy: await ownerName(), createdAt: c.createdAt, note: c.note });
 
 function formatOf(req: FastifyRequest): Format {

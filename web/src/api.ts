@@ -27,7 +27,9 @@ export const del = <T = any>(p: string) => api<T>('DELETE', p);
 
 // ── shared shapes ──────────────────────────────────────────────────────
 export type Sensitivity = 'standard' | 'sensitive' | 'secret';
-export type Field = { key: string; label: string; section: string; sensitivity: Sensitivity; value: string; masked: boolean; hasValue: boolean; derivedFrom?: string | null; public?: boolean; sharedWith?: number; updatedAt: string };
+/** One line of the owner's profile, worked out from their categories. `from` is where to edit it. */
+export type ProfileLine = { key: string; label: string; value: string; sensitivity: Sensitivity; from: { domain: string; recordId: string }[]; public?: boolean; sharedWith?: number };
+export type ProfileResp = { items: ProfileLine[]; lines: { key: string; label: string }[]; basicProfileContacts: number };
 export type PostalAddress = { street1?: string; street2?: string; city?: string; region?: string; postalCode?: string; country: string };
 /** One shape for every contact method, yours and every party's. Phones are E.164 (+15035550148). */
 export type ContactMethod = {
@@ -90,7 +92,7 @@ export type Conversation = {
   last: { id: string; direction: 'in' | 'out'; kind: string; preview: string; status: MessageStatus; at: string };
   unread: number; canMessage: boolean;
 };
-export type Owner = { id: string; displayName: string; email: string; prefs: { showTechnical: boolean }; role: string };
+export type Owner = { id: string; name: string; email: string; prefs: { showTechnical: boolean }; role: string };
 export type AuditEvent = { _id: string; at: string; action: string; text: string; tone: 'peer' | 'request' | 'owner' | 'system' };
 
 // ── formatting ─────────────────────────────────────────────────────────
@@ -122,7 +124,12 @@ export function whenLabel(iso: string) {
 export const bytes = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 ** 2).toFixed(1)} MB`);
 
 /** Where a derived profile field gets its value. */
-export const DERIVED_LABEL: Record<string, string> = { residences: 'Residences', contact_methods: 'Contact methods' };
+/** Where each profile line comes from, for "Add it in…" when it has no value yet. */
+export const LINE_SOURCE: Record<string, [string, string]> = {
+  preferred_name: ['names', 'Names'], legal_name: ['names', 'Names'], birth_name: ['names', 'Names'], born: ['birth', 'Birth'],
+  citizenship: ['citizenship', 'Citizenship & residency'], nationality: ['citizenship', 'Citizenship & residency'], residency: ['citizenship', 'Citizenship & residency'],
+  lives_in: ['residences', 'Residences'], address: ['residences', 'Residences'], email: ['contact_methods', 'Contact methods'], phone: ['contact_methods', 'Contact methods'],
+};
 
 export const SENS: Record<Sensitivity, [string, string]> = { standard: ['Standard', 'tag-neutral'], sensitive: ['Sensitive', 'tag-accent-2'], secret: ['Secret', 'tag-accent'] };
 export const STATUS: Record<ContactStatus, [string, string]> = { active: ['Connected', 'tag-accent-2'], pending_in: ['Wants to connect', 'tag-accent'], pending_out: ['Awaiting approval', 'tag-neutral'], plain: ['Contact only', 'tag-neutral'] };

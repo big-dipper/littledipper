@@ -12,11 +12,11 @@ const o = (...pairs: string[]): [string, string][] => pairs.map((p) => {
 
 // Reusable part groups
 const ADDRESS: PartDef[] = [
-  { key: 'street1', label: 'Street', type: 'text', required: true },
-  { key: 'street2', label: 'Apartment, suite, unit', type: 'text' },
+  { key: 'street1', label: 'Street', type: 'text', required: true, sensitivity: 'sensitive' },
+  { key: 'street2', label: 'Apartment, suite, unit', type: 'text', sensitivity: 'sensitive' },
   { key: 'city', label: 'City', type: 'text', required: true },
   { key: 'region', label: 'State / region', type: 'text' },
-  { key: 'postalCode', label: 'Postal code', type: 'text' },
+  { key: 'postalCode', label: 'Postal code', type: 'text', sensitivity: 'sensitive' },
   { key: 'country', label: 'Country', type: 'country', required: true },
 ];
 
@@ -25,65 +25,95 @@ type Def = Omit<DomainDef, 'builtIn' | 'schemaVersion'> & { schemaVersion?: numb
 const DEFS: Def[] = [
   // ── identity ─────────────────────────────────────────────────────────
   {
+    // The single source for every name. The profile's legal and preferred names, the account name and the public
+    // name all come from here. Kind says what a name is for, dates say when it applied, reason says why it changed:
+    // a birth name is the legal name whose reason is birth.
     id: 'names', label: 'Names', noun: 'name', group: 'identity', sensitivity: 'sensitive', dated: true, publicable: false,
-    description: 'Every name you have used: legal, birth, married, aliases and nicknames, with when each applied.',
+    sensitivityBy: { part: 'kind', values: { preferred: 'standard', professional: 'standard', nickname: 'standard' } },
+    description: 'Every name you have used: legal, preferred, professional, aliases and nicknames, with when each applied and why it changed.',
     title: '{full} ({kind})',
     parts: [
-      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('legal', 'birth', 'married', 'previous_legal=Previous legal', 'alias', 'nickname', 'professional', 'religious') },
-      { key: 'full', label: 'Full name', type: 'text', required: true },
+      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('legal', 'preferred', 'professional', 'religious', 'alias', 'nickname') },
+      { key: 'full', label: 'Full name', type: 'text', required: true, hint: 'As you write it. The parts below are optional, for forms that split names.' },
       { key: 'given', label: 'Given name', type: 'text' },
       { key: 'middle', label: 'Middle name(s)', type: 'text' },
       { key: 'family', label: 'Family name', type: 'text' },
       { key: 'suffix', label: 'Suffix', type: 'text' },
-      { key: 'reason', label: 'Reason for change', type: 'enum', options: o('birth', 'marriage', 'divorce', 'court_order=Court order', 'naturalization', 'other') },
+      { key: 'reason', label: 'Reason', type: 'enum', hint: 'Why this name began: birth, marriage…', options: o('birth', 'marriage', 'divorce', 'adoption', 'court_order=Court order', 'naturalization', 'other') },
     ],
   },
   {
-    id: 'ids', label: 'Government IDs', noun: 'ID', group: 'identity', sensitivity: 'secret', dated: false, publicable: false, documents: 'id',
+    // One entry. Time and coordinates are optional (astrology charts and maps use them); the zone makes the time exact.
+    id: 'birth', label: 'Birth', noun: 'birth', group: 'identity', sensitivity: 'sensitive', dated: false, publicable: false, single: true, documents: 'certificate',
+    description: 'When and where you were born. Your birthday shows in Calendar.',
+    title: '{date}',
+    parts: [
+      { key: 'date', label: 'Date of birth', type: 'date', required: true },
+      { key: 'time', label: 'Time of birth', type: 'time', hint: 'Local time, to the second if you know it' },
+      { key: 'timeZone', label: 'Time zone at birth', type: 'timezone', hint: 'e.g. America/Chicago. Daylight saving on that date is worked out from it.' },
+      { key: 'city', label: 'City', type: 'text' },
+      { key: 'region', label: 'State / region', type: 'text' },
+      { key: 'country', label: 'Country', type: 'country', hint: 'Today’s country' },
+      { key: 'coordinates', label: 'Coordinates', type: 'geo' },
+      { key: 'asWritten', label: 'As written on the birth certificate', type: 'text', hint: 'e.g. Leningrad, USSR, for a country that no longer exists' },
+    ],
+  },
+  {
+    id: 'ids', label: 'Government IDs', noun: 'ID', group: 'identity', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, documents: 'id',
     description: 'Passport, driver’s license, SSN and every other government-issued number. Numbers are encrypted.',
     title: '{kind} · {issuer}',
     parts: [
-      { key: 'kind', label: 'Kind', type: 'enum', required: true, sensitivity: 'sensitive', options: o('passport', 'drivers_license=Driver’s license', 'state_id=State ID', 'national_id=National ID', 'ssn=Social Security number', 'tax_id=Tax ID', 'visa', 'residence_permit=Residence permit / green card', 'work_permit=Work permit', 'known_traveler=Known traveler number', 'military_id=Military ID', 'birth_certificate=Birth certificate', 'voter_registration=Voter registration', 'other') },
-      { key: 'number', label: 'Number', type: 'text', required: true },
-      { key: 'issuer', label: 'Issuing country', type: 'country', sensitivity: 'sensitive' },
-      { key: 'authority', label: 'Issuing state / authority', type: 'text', sensitivity: 'sensitive' },
-      { key: 'nameOnDocument', label: 'Name on document', type: 'text', sensitivity: 'sensitive' },
-      { key: 'class', label: 'Class / category', type: 'text', sensitivity: 'sensitive', hint: 'License class, visa category…' },
-      { key: 'issued', label: 'Issued', type: 'date', sensitivity: 'sensitive' },
-      { key: 'expires', label: 'Expires', type: 'date', sensitivity: 'sensitive' },
+      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('passport', 'drivers_license=Driver’s license', 'state_id=State ID', 'national_id=National ID', 'ssn=Social Security number', 'tax_id=Tax ID', 'visa', 'residence_permit=Residence permit / green card', 'work_permit=Work permit', 'known_traveler=Known traveler number', 'military_id=Military ID', 'birth_certificate=Birth certificate', 'naturalization_certificate=Naturalization certificate', 'citizenship_certificate=Certificate of citizenship', 'consular_birth_report=Consular report of birth abroad', 'voter_registration=Voter registration', 'other') },
+      { key: 'number', label: 'Number', type: 'text', required: true, sensitivity: 'secret' },
+      { key: 'issuer', label: 'Issuing country', type: 'country' },
+      { key: 'authority', label: 'Issuing state / authority', type: 'text' },
+      { key: 'nameOnDocument', label: 'Name on document', type: 'text', hint: 'As printed, which can differ from your legal name' },
+      { key: 'class', label: 'Class / category', type: 'text', hint: 'License class, visa category (work, student…)' },
+      { key: 'issued', label: 'Issued', type: 'date' },
+      { key: 'expires', label: 'Expires', type: 'date' },
     ],
   },
   {
+    // Citizen, non-citizen national and residency statuses are different legal facts and are never shown as one.
     id: 'citizenship', label: 'Citizenship & residency status', noun: 'status', group: 'identity', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'certificate',
-    description: 'Citizenships and immigration statuses you hold or held.',
+    description: 'Citizenships, nationalities and immigration statuses you hold or held, each pointing to the document that proves it.',
     title: '{status} · {country}',
     parts: [
       { key: 'country', label: 'Country', type: 'country', required: true },
-      { key: 'status', label: 'Status', type: 'enum', required: true, options: o('citizen', 'national', 'permanent_resident=Permanent resident', 'temporary_resident=Temporary resident', 'visa_holder=Visa holder', 'refugee', 'asylee', 'other') },
+      { key: 'status', label: 'Status', type: 'enum', required: true, options: o('citizen', 'noncitizen_national=Non-citizen national', 'permanent_resident=Permanent resident', 'temporary_resident=Temporary resident', 'visa_holder=Visa holder', 'visitor=Visitor (visa-exempt)', 'refugee', 'asylee', 'other') },
       { key: 'acquiredBy', label: 'Acquired by', type: 'enum', options: o('birth', 'descent', 'naturalization', 'marriage', 'investment', 'other') },
+      { key: 'provenBy', label: 'Proven by', type: 'record', to: ['ids'], many: true, hint: 'The passport, certificate or permit' },
+      { key: 'endedBy', label: 'Ended by', type: 'enum', options: o('renounced', 'revoked', 'expired', 'superseded=Replaced by another status') },
     ],
+    companions: [{ domain: 'ids', label: 'The passport, certificate or permit that proves it' }],
   },
   {
-    id: 'contact_methods', label: 'Contact methods', noun: 'contact method', group: 'identity', sensitivity: 'standard', dated: false, publicable: true,
-    description: 'Emails, phones, social profiles and websites. The primary email and phone appear in your profile.',
-    title: '{label}: {value}',
+    // The one contact-method shape, shared with every party (methods.ts checks and normalises the value).
+    id: 'contact_methods', label: 'Contact methods', noun: 'contact method', group: 'identity', sensitivity: 'standard', dated: true, publicable: true,
+    sensitivityBy: { part: 'kind', values: { phone: 'sensitive', postal: 'sensitive', messaging: 'sensitive' } },
+    description: 'Emails, phones, mailing addresses, websites, social and messaging. Your main email and phone appear in your profile.',
+    title: '{label} {kind}: {value}',
     parts: [
-      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('email', 'phone', 'social', 'website', 'messaging', 'other') },
-      { key: 'label', label: 'Label', type: 'text', hint: 'Personal, Work, Instagram…' },
-      { key: 'value', label: 'Value', type: 'text', required: true },
-      { key: 'primary', label: 'Primary', type: 'boolean' },
+      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('email', 'phone', 'postal=Mailing address', 'website', 'social', 'messaging') },
+      { key: 'value', label: 'Value', type: 'text', required: true, when: { part: 'kind', in: ['email', 'phone', 'website', 'social', 'messaging'] } },
+      { key: 'address', label: 'Address', type: 'address', required: true, when: { part: 'kind', in: ['postal'] } },
+      { key: 'residence', label: 'Same as', type: 'record', to: ['residences'], when: { part: 'kind', in: ['postal'] }, hint: 'Point to where you live instead of typing it again' },
+      { key: 'service', label: 'Service', type: 'text', required: true, when: { part: 'kind', in: ['social', 'messaging'] }, hint: 'Instagram, Signal…' },
+      { key: 'label', label: 'Label', type: 'text', hint: 'Personal, Work…' },
+      { key: 'primary', label: 'Main one', type: 'boolean' },
     ],
   },
   // ── life ─────────────────────────────────────────────────────────────
   {
-    id: 'residences', label: 'Residences', noun: 'residence', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'lease',
-    description: 'Where you live and have lived. Your current one feeds “Current address”, “Current city” and “Country of residence”.',
+    // City and country are standard (your profile's "Lives in"); the street address is sensitive.
+    id: 'residences', label: 'Residences', noun: 'residence', group: 'life', sensitivity: 'standard', dated: true, publicable: false, documents: 'lease',
+    description: 'Where you live and have lived. Your primary current one is "Lives in" on your profile.',
     title: '{street1}, {city}',
     parts: [
       ...ADDRESS,
-      { key: 'ownership', label: 'Ownership', type: 'enum', options: o('own', 'rent', 'family=With family', 'employer=Employer-provided', 'military', 'other') },
-      { key: 'landlord', label: 'Landlord / property manager', type: 'contact' },
-      { key: 'mailing', label: 'Also the mailing address', type: 'boolean' },
+      { key: 'primary', label: 'Primary home', type: 'boolean', hint: 'When you have more than one home at a time' },
+      { key: 'ownership', label: 'Ownership', type: 'enum', sensitivity: 'sensitive', options: o('own', 'rent', 'family=With family', 'employer=Employer-provided', 'military', 'other') },
+      { key: 'landlord', label: 'Landlord / property manager', type: 'party', sensitivity: 'sensitive' },
     ],
   },
   {
@@ -220,13 +250,13 @@ const DEFS: Def[] = [
   },
   // ── health ───────────────────────────────────────────────────────────
   {
-    id: 'health', label: 'Health', noun: 'health entry', group: 'health', sensitivity: 'secret', dated: true, publicable: false, documents: 'medical',
+    id: 'health', label: 'Health', noun: 'health entry', group: 'health', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'medical',
     description: 'Allergies, conditions, medications, immunizations, procedures, blood type and directives.',
     title: '{name} ({kind})',
     parts: [
       { key: 'kind', label: 'Kind', type: 'enum', required: true, sensitivity: 'sensitive', options: o('allergy', 'condition', 'medication', 'immunization', 'procedure', 'blood_type=Blood type', 'measurement', 'directive=Advance directive', 'organ_donor=Organ donor', 'other') },
       { key: 'name', label: 'Name', type: 'text', required: true, sensitivity: 'sensitive' },
-      { key: 'detail', label: 'Detail', type: 'longtext', hint: 'Severity, dosage, reaction…' },
+      { key: 'detail', label: 'Detail', type: 'longtext', sensitivity: 'secret', hint: 'Severity, dosage, reaction…' },
       { key: 'provider', label: 'Provider', type: 'contact', sensitivity: 'sensitive' },
     ],
   },
@@ -248,7 +278,7 @@ const DEFS: Def[] = [
   },
   // ── money ────────────────────────────────────────────────────────────
   {
-    id: 'financial_accounts', label: 'Financial accounts', noun: 'account', group: 'money', sensitivity: 'secret', dated: true, publicable: false, documents: 'statement',
+    id: 'financial_accounts', label: 'Financial accounts', noun: 'account', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'statement',
     description: 'Banks, cards, investments, retirement and loans. Only the last four digits are ever stored.',
     title: '{institution} {kind} ••{last4}',
     parts: [
@@ -256,31 +286,31 @@ const DEFS: Def[] = [
       { key: 'institution', label: 'Institution', type: 'text', required: true, sensitivity: 'sensitive' },
       { key: 'nickname', label: 'Nickname', type: 'text', sensitivity: 'sensitive' },
       { key: 'last4', label: 'Last four digits', type: 'last4', sensitivity: 'sensitive' },
-      { key: 'balance', label: 'Balance', type: 'money' },
-      { key: 'jointWith', label: 'Joint with', type: 'text' },
+      { key: 'balance', label: 'Balance', type: 'money', sensitivity: 'secret' },
+      { key: 'jointWith', label: 'Joint with', type: 'text', sensitivity: 'secret' },
     ],
   },
   {
-    id: 'income', label: 'Income', noun: 'income entry', group: 'money', sensitivity: 'secret', dated: true, publicable: false, documents: 'statement',
+    id: 'income', label: 'Income', noun: 'income entry', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'statement',
     description: 'Income by source and year.',
     title: '{source}',
     parts: [
       { key: 'source', label: 'Source', type: 'text', required: true, sensitivity: 'sensitive' },
       { key: 'kind', label: 'Kind', type: 'enum', sensitivity: 'sensitive', options: o('salary', 'self_employment=Self-employment', 'investment', 'rental', 'pension', 'benefits', 'other') },
-      { key: 'amount', label: 'Amount (yearly)', type: 'money', required: true },
+      { key: 'amount', label: 'Amount (yearly)', type: 'money', sensitivity: 'secret', required: true },
     ],
   },
   {
-    id: 'tax_returns', label: 'Tax returns', noun: 'return', group: 'money', sensitivity: 'secret', dated: false, publicable: false, documents: 'tax_form',
+    id: 'tax_returns', label: 'Tax returns', noun: 'return', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, documents: 'tax_form',
     description: 'One entry per filing: year, status and the numbers forms ask for.',
     title: '{year} {jurisdiction} return',
     parts: [
       { key: 'year', label: 'Tax year', type: 'number', required: true, sensitivity: 'sensitive' },
       { key: 'jurisdiction', label: 'Jurisdiction', type: 'text', required: true, sensitivity: 'sensitive', hint: 'US federal, Oregon…' },
       { key: 'filingStatus', label: 'Filing status', type: 'enum', sensitivity: 'sensitive', options: o('single', 'married_joint=Married filing jointly', 'married_separate=Married filing separately', 'head_of_household=Head of household', 'widow=Qualifying surviving spouse', 'other') },
-      { key: 'agi', label: 'Adjusted gross income', type: 'money' },
-      { key: 'taxPaid', label: 'Total tax', type: 'money' },
-      { key: 'refund', label: 'Refund (or amount owed, negative)', type: 'money' },
+      { key: 'agi', label: 'Adjusted gross income', type: 'money', sensitivity: 'secret' },
+      { key: 'taxPaid', label: 'Total tax', type: 'money', sensitivity: 'secret' },
+      { key: 'refund', label: 'Refund (or amount owed, negative)', type: 'money', sensitivity: 'secret' },
       { key: 'preparer', label: 'Preparer', type: 'contact', sensitivity: 'sensitive' },
     ],
   },
@@ -339,15 +369,15 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'legal', label: 'Legal documents', noun: 'document', group: 'money', sensitivity: 'secret', dated: true, publicable: false, documents: 'contract',
+    id: 'legal', label: 'Legal documents', noun: 'document', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'contract',
     description: 'Will, powers of attorney, trusts, beneficiary designations and where the originals are.',
     title: '{title}',
     parts: [
       { key: 'kind', label: 'Kind', type: 'enum', required: true, sensitivity: 'sensitive', options: o('will', 'power_of_attorney=Power of attorney', 'healthcare_proxy=Healthcare proxy', 'trust', 'beneficiary=Beneficiary designation', 'prenup=Prenuptial agreement', 'court_order=Court order', 'deed', 'other') },
       { key: 'title', label: 'Title', type: 'text', required: true, sensitivity: 'sensitive' },
       { key: 'attorney', label: 'Attorney', type: 'contact', sensitivity: 'sensitive' },
-      { key: 'originalLocation', label: 'Where the original is', type: 'text' },
-      { key: 'parties', label: 'People named', type: 'longtext' },
+      { key: 'originalLocation', label: 'Where the original is', type: 'text', sensitivity: 'secret' },
+      { key: 'parties', label: 'People named', type: 'longtext', sensitivity: 'secret' },
     ],
   },
   {

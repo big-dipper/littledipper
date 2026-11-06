@@ -3,7 +3,7 @@
  * Profile first (basic profile + extra fields), then every life category with Off / Current / All.
  */
 import { useState } from 'react';
-import { put, SENS, type PartyDetail as ContactDetail, type Field } from '../../api';
+import { put, SENS, type PartyDetail as ContactDetail, type ProfileLine as Field } from '../../api';
 import { Confirm, Pills, Toggle, useAction, useAsync, type ConfirmCfg } from '../../ui';
 import { fetchCatalog, GROUPS, Lock, Mono, type Domain } from '../../life';
 

@@ -128,8 +128,8 @@ export default function AdminLayout() {
       <div className="shell">
         <aside ref={asideRef} className="sidebar" aria-label="Main" data-rail={rail ? '1' : '0'}>
           <div className="side-head">
-            <span className="side-avatar" title={rail ? owner.displayName : undefined}>{initials(owner.displayName)}</span>
-            <span className="side-name">{owner.displayName}</span>
+            <span className="side-avatar" title={rail ? owner.name : undefined}>{initials(owner.name)}</span>
+            <span className="side-name">{owner.name}</span>
             <button type="button" className="bare side-toggle" onClick={toggleRail} aria-expanded={!rail} aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title={rail ? 'Expand sidebar' : 'Collapse sidebar'}>
               <Icon name="collapse" size={18} />
             </button>

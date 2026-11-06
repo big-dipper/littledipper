@@ -2,7 +2,7 @@
 import { ctx } from './ctx.js';
 import { fingerprint, newId } from './crypto.js';
 import { issueKey } from './auth.js';
-import { allFields, plainValue } from './fields.js';
+import { linesFor } from './profile.js';
 import type { SharedDomain } from './domains/sharing.js';
 import { displayAddr } from './node.js';
 import type { ContactMethod } from './methods.js';
@@ -95,17 +95,13 @@ export async function endLink(link: LinkDoc, reason: string) {
   await pushTimeline(link, reason);
 }
 
-/** Fields this contact's token may read right now. */
+/** Profile lines this party's token may read right now: the basic profile (standard lines), or the extra lines granted one by one. */
 export async function sharedOut(contactId: string, which: 'profile' | 'fields'): Promise<{ key: string; label: string; value: string }[]> {
   const g = await grantsFor(contactId);
-  const fields = await allFields();
-  if (which === 'profile') {
-    if (!g.profile) return [];
-    return fields.filter((f) => f.sensitivity === 'standard' && plainValue(f)).map((f) => ({ key: f.key, label: f.label, value: plainValue(f) }));
-  }
-  return fields
-    .filter((f) => g.fields.includes(f.key) && (f.sensitivity !== 'standard' || !g.profile) && plainValue(f))
-    .map((f) => ({ key: f.key, label: f.label, value: plainValue(f) }));
+  const lines = which === 'profile'
+    ? (g.profile ? await linesFor({ basic: true, extra: [] }) : [])
+    : (await linesFor({ basic: false, extra: g.fields })).filter((l) => l.sensitivity !== 'standard' || !g.profile);
+  return lines.map((l) => ({ key: l.key, label: l.label, value: l.value }));
 }
 
 /** Pull what a connected contact shares with us and cache it locally. */

@@ -3,7 +3,7 @@ import { ctx } from '../ctx.js';
 import { fingerprint, newId, randomToken } from '../crypto.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner } from '../auth.js';
-import { allFields, type FieldDoc } from '../fields.js';
+import { ownerName, profileLines, PROFILE_LINES, publicName } from '../profile.js';
 import { getDomain, partyReferences, unlinkParty } from '../domains/records.js';
 import { checkMethods } from '../methods.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
@@ -44,18 +44,19 @@ async function checkAffiliations(list: PartyInput['affiliations'], self: string 
 /** What we tell a peer about ourselves in a request. */
 async function selfIntro() {
   const n = await getNode();
-  const o = await getOwner();
   const pp = await ctx.store.get<PublicProfileDoc>('publicProfile', 'public');
-  return { nodeId: n._id, address: canonicalUrl(n), signingKey: n.signingKey.publicKey, displayName: pp?.displayName || o?.displayName || 'Little Dipper owner', version: n.version };
+  return { nodeId: n._id, address: canonicalUrl(n), signingKey: n.signingKey.publicKey, displayName: (await publicName(pp ?? null)) || 'Little Dipper owner', version: n.version };
 }
 
-async function labelsFor(keys: string[]) {
-  const fields = await allFields();
-  return keys.map((k) => fields.find((f) => f.key === k)?.label).filter(Boolean) as string[];
+/** Extra profile lines that can be offered one by one: the sensitive ones you have (standard ones come with the basic profile). */
+async function offerable(keys: string[]) {
+  const lines = await profileLines();
+  return keys.filter((k) => lines.some((l) => l.key === k && l.sensitivity === 'sensitive'));
 }
+const labelsFor = (keys: string[]) => keys.map((k) => PROFILE_LINES.find(([x]) => x === k)?.[1]).filter(Boolean) as string[];
 
 async function sendRequest(link: LinkDoc, offeredFields: string[], note: string, invite: string | null) {
-  const offeredLabels = [...(await allFields()).filter((f) => f.sensitivity === 'standard' && f.value).map((f) => f.label), ...(await labelsFor(offeredFields))];
+  const offeredLabels = [...(await profileLines()).filter((l) => l.sensitivity === 'standard').map((l) => l.label), ...labelsFor(offeredFields)];
   await sendSigned(link.peerUrl, '/peer/requests', {
     type: 'connect.request', requestId: link.requestId, to: link.peerNodeId, fromNode: await selfIntro(),
     offeredFields, offeredLabels, requestedFields: [], note, invite, mutualHints: await mutualHints(link.peerNodeId),
@@ -72,8 +73,7 @@ export async function requestConnection(keyId: string, address: string, offeredF
   if (existing && existing.link.status === 'active') throw new HttpError(409, 'already_connected', `You're already connected with ${existing.contact.name}`);
   if (existing && existing.link.status === 'pending_in') throw new HttpError(409, 'request_waiting', `${existing.contact.name} already asked to connect. Review their request instead.`);
   if (existing) throw new HttpError(409, 'request_pending', `You already asked ${existing.contact.name}. Use Resend on their contact page.`);
-  const fields = await allFields();
-  const offered = offeredFields.filter((k) => fields.some((f) => f.key === k && f.sensitivity === 'sensitive'));
+  const offered = await offerable(offeredFields);
   const requestId = newId('req');
   const name = d.displayName || displayAddr(d.address);
   const { contact, link } = await newNodeParty({ name, address: d.address, nodeId: d.nodeId, signingKey: d.signingKey, version: d.version, status: 'pending_out', requestId });
@@ -204,18 +204,18 @@ export default async function contactRoutes(app: FastifyInstance) {
     const c = await getContact((req.params as { id: string }).id);
     if (!c.node) throw bad('not_connected', 'Only people and organisations on Little Dipper can be granted access');
     const b = (req.body || {}) as { profile?: boolean; fields?: Record<string, boolean>; domains?: Record<string, boolean | { scope?: 'all' | 'current'; includeSecret?: boolean }>; confirm?: boolean };
-    const fields = await allFields();
+    const lines = await profileLines();
     const changes: string[] = [];
     if (typeof b.profile === 'boolean') {
       await setProfileGrant(c._id, b.profile);
       changes.push(`basic profile ${b.profile ? 'on' : 'off'}`);
     }
     for (const [key, on] of Object.entries(b.fields || {})) {
-      const f = fields.find((x) => x.key === key) as FieldDoc | undefined;
-      if (!f) throw bad('unknown_field', key);
-      if (on && f.sensitivity === 'secret' && b.confirm !== true) throw new HttpError(409, 'confirm_required', `Sharing ${f.label} needs confirmation`);
-      await setFieldGrant(c._id, key, !!on, f.sensitivity === 'secret');
-      changes.push(`${f.label} ${on ? 'shared' : 'unshared'}`);
+      const label = PROFILE_LINES.find(([k]) => k === key)?.[1];
+      if (!label) throw bad('unknown_field', `Your profile has no ${key}`);
+      if (on && lines.find((l) => l.key === key)?.sensitivity === 'secret') throw bad('secret_line', `${label} is secret, so it never leaves your profile. Share its category instead.`);
+      await setFieldGrant(c._id, key, !!on, false);
+      changes.push(`${label} ${on ? 'shared' : 'unshared'}`);
     }
     for (const [id, v] of Object.entries(b.domains || {})) {
       const d = await getDomain(id);
@@ -228,7 +228,7 @@ export default async function contactRoutes(app: FastifyInstance) {
       const g = v === true ? {} : v;
       const scope = g.scope === 'current' ? 'current' : 'all';
       const includeSecret = !!g.includeSecret;
-      if ((d.sensitivity === 'secret' || includeSecret) && b.confirm !== true) throw new HttpError(409, 'confirm_required', `Sharing ${d.label} needs confirmation`);
+      if ((d.confirmShare || includeSecret) && b.confirm !== true) throw new HttpError(409, 'confirm_required', `Sharing ${d.label} needs confirmation`);
       await setDomainGrant(c._id, id, { scope, includeSecret });
       changes.push(`${d.label} shared (${scope === 'current' ? 'current only' : 'all'}${includeSecret ? ', with secret details' : ''})`);
     }
@@ -246,8 +246,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     const inv = await createInvite('7d', []);
     const n = await getNode();
     const email = String(c.methods.find((m) => m.kind === 'email' && m.primary)?.value ?? c.methods.find((m) => m.kind === 'email')?.value ?? '');
-    const o = await getOwner();
-    const body = `Hi ${firstName(c.name)},\n\nI keep my contact details on Little Dipper, a personal data store I run myself. If you set one up too, open this link in it and we'll be connected:\n\n${inv.url}\n\nDon't have one yet? It's free and open source.\n\n${o?.displayName || ''}`;
+    const body = `Hi ${firstName(c.name)},\n\nI keep my contact details on Little Dipper, a personal data store I run myself. If you set one up too, open this link in it and we'll be connected:\n\n${inv.url}\n\nDon't have one yet? It's free and open source.\n\n${await ownerName()}`;
     return { ...inv, to: email, subject: 'Connect with me on Little Dipper', body, address: displayAddr(canonicalUrl(n)) };
   });
 
@@ -359,8 +358,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   app.post('/api/federation/invites', async (req, reply) => {
     const p = await requireOwner(req, 'parties:write');
     const b = (req.body || {}) as { expiresIn?: string; offeredFields?: string[] };
-    const fields = await allFields();
-    const offered = (b.offeredFields || []).filter((k) => fields.some((f) => f.key === k && f.sensitivity === 'sensitive'));
+    const offered = await offerable(b.offeredFields || []);
     const inv = await createInvite(String(b.expiresIn || '7d'), offered);
     await audit({ actor: ownerActor(p.key._id), action: 'invite.create', resource: `invites/${inv.id}`, text: 'You created an invite link', tone: 'owner' });
     reply.code(201);

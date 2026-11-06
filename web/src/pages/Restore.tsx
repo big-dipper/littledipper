@@ -57,8 +57,8 @@ export default function RestoreFromBackup({ token, nodeAddr, onBack }: { token: 
     setError('');
     try {
       const r = await post<Restored>('/api/node/claim/restore', { token, kit: JSON.parse(kit.raw), passphrase, backup: backup.raw });
-      const owner = await get<{ displayName: string }>('/api/owner').catch(() => ({ displayName: '' }));
-      setDone({ ...r, name: owner.displayName });
+      const owner = await get<{ name: string }>('/api/owner').catch(() => ({ name: '' }));
+      setDone({ ...r, name: owner.name });
     } catch (e) {
       setError((e as Error).message);
     } finally {

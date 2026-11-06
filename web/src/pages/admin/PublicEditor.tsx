@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { addr, ApiError, del, get, patch, put, SENS, shrink, uploadDocument, type DocFull, type Field } from '../../api';
+import { addr, ApiError, del, get, patch, put, SENS, shrink, uploadDocument, type DocFull, type ProfileLine as Field } from '../../api';
 import { ErrorNote, Loading, Pills, Toggle, useAction, useAsync, useToast } from '../../ui';
 import { fmtRange, Select } from '../../life';
 import { ProfileView, type ProfileViewData } from '../../profile';
@@ -11,7 +11,7 @@ type Section =
   | { type: 'about'; text: string }
   | { type: 'domain'; domain: string; title?: string; parts: string[]; scope: 'all' | 'current'; hidden: string[] }
   | { type: 'resume'; documentId: string; title?: string };
-type PP = { displayName: string; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'fof' | 'anyone'; sections: Section[]; view: ProfileViewData };
+type PP = { nameId: string | null; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'fof' | 'anyone'; sections: Section[]; view: ProfileViewData };
 type Option = { domain: string; label: string; dated: boolean; parts: { key: string; label: string }[]; defaultParts: string[]; records: { id: string; title: string; current: boolean; validFrom: string | null; validTo: string | null }[] };
 
 const CONNECT: [PP['connectRequests'], string, string][] = [
@@ -28,17 +28,18 @@ export default function PublicEditor() {
   const toast = useToast();
   const { run } = useAction();
   const { data: pp, error, setData } = useAsync(() => get<PP>('/api/public-profile'), []);
-  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/owner/fields'), []);
+  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/profile'), []);
   const { data: opts } = useAsync(() => get<{ domains: Option[] }>('/api/public-profile/options'), []);
   const { data: docs, reload: reloadDocs } = useAsync(() => get<{ items: DocFull[] }>('/api/documents?status=filed'), []);
-  const [header, setHeader] = useState<{ displayName: string; headline: string } | null>(null);
+  const { data: names } = useAsync(() => get<{ items: { id: string; title: string; current: boolean; data: { full?: string } }[] }>('/api/data/names?current=true'), []);
+  const [header, setHeader] = useState<{ headline: string } | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [about, setAbout] = useState<Record<number, string>>({});
   const timer = useRef<number | undefined>(undefined);
   const aboutTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    if (pp && !header) setHeader({ displayName: pp.displayName, headline: pp.headline });
+    if (pp && !header) setHeader({ headline: pp.headline });
   }, [pp, header]);
 
   if (error) return <ErrorNote error={error} />;
@@ -48,7 +49,7 @@ export default function PublicEditor() {
     const r = await run(() => put<PP>('/api/public-profile', body));
     if (r) setData(r);
   };
-  const editHeader = (k: 'displayName' | 'headline', v: string) => {
+  const editHeader = (k: 'headline', v: string) => {
     setHeader({ ...header, [k]: v });
     clearTimeout(timer.current);
     timer.current = window.setTimeout(() => save({ [k]: v }), 500);
@@ -122,7 +123,10 @@ export default function PublicEditor() {
               <label className="btn btn-secondary" style={{ cursor: 'pointer', fontSize: 13 }}>{pp.view.avatarUrl ? 'Change photo' : 'Add a photo'}<input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { photo(e.target.files?.[0]); e.target.value = ''; }} /></label>
               {pp.view.avatarUrl && <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={dropPhoto}>Remove</button>}
             </div>
-            <div className="field"><label htmlFor="dn">Display name</label><input id="dn" className="input" value={header.displayName} onChange={(e) => editHeader('displayName', e.target.value)} /></div>
+            <div className="field"><label htmlFor="dn">Name shown</label>
+              <Select id="dn" value={pp.nameId ?? ''} onChange={(v) => save({ nameId: v || null })} placeholder="Your preferred name" options={(names?.items ?? []).map((n) => [n.id, n.title])} />
+              <div className="text-muted" style={{ fontSize: 12 }}>One of your names, from Names. A professional or pen name is fine.</div>
+            </div>
             <div className="field"><label htmlFor="hl">Headline</label><input id="hl" className="input" value={header.headline} placeholder="What you'd like people to know first" onChange={(e) => editHeader('headline', e.target.value)} /></div>
           </div>
 
@@ -147,7 +151,7 @@ export default function PublicEditor() {
                       const on = pp.fieldKeys.includes(f.key);
                       return (
                         <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0', borderBottom: '1px solid var(--color-divider)' }}>
-                          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14 }}>{f.label}</div><div className="text-muted" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{locked ? 'Secret fields are never public' : !f.hasValue ? 'Not added yet: shows once you add it' : on ? f.value : 'Hidden'}</div></div>
+                          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14 }}>{f.label}</div><div className="text-muted" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{locked ? 'Secret fields are never public' : !!!f.value ? 'Not added yet: shows once you add it' : on ? f.value : 'Hidden'}</div></div>
                           <span className={`tag ${SENS[f.sensitivity][1]}`}>{SENS[f.sensitivity][0]}</span>
                           {locked ? <span className="tag tag-neutral" style={{ width: 64, justifyContent: 'center' }}>Never</span> : <Toggle on={on} label={`Show ${f.label} publicly`} onChange={() => toggleField(f.key)} />}
                         </div>
@@ -229,7 +233,7 @@ export default function PublicEditor() {
           <div style={{ borderRadius: 32, background: 'var(--color-neutral-100)', boxShadow: 'var(--shadow-md)', padding: 28, position: 'relative', overflow: 'hidden', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}>
             <div aria-hidden style={{ position: 'absolute', right: -80, top: -60, width: 220, height: 220, borderRadius: '50%', background: 'var(--color-accent-200)', opacity: 0.6 }} />
             <div style={{ position: 'relative' }}>
-              <ProfileView p={{ ...pp.view, displayName: header.displayName, headline: header.headline }} compact />
+              <ProfileView p={{ ...pp.view, headline: header.headline }} compact />
               <div style={{ display: 'flex', gap: 6, marginTop: 20, flexWrap: 'wrap' }}>
                 <span className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 12px' }}>API docs</span>
                 {pp.connectRequests !== 'off' && <span className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}>Connect with me</span>}

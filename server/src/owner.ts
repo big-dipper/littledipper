@@ -3,9 +3,12 @@ import type { Doc } from './store/index.js';
 
 export type PasskeyRec = { credentialId: string; publicKey: string; counter: number; transports?: string[]; label: string; createdAt: string; lastUsedAt: string | null };
 
+/**
+ * The account: how the owner signs in. Their name and email live in Names and Contact methods (see profile.ts).
+ * `setup` holds the name and email typed during claim until the claim completes and they become entries.
+ */
 export type OwnerDoc = Doc & {
-  displayName: string;
-  email: string;
+  setup?: { name: string; email: string };
   /** True while a claim (or ownership transfer) is in progress. */
   pending?: boolean;
   passkeys: PasskeyRec[];

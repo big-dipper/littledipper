@@ -18,6 +18,9 @@ export type PartType =
   | 'last4'     // exactly four digits, e.g. a card on a receipt
   | 'region'    // ISO 3166-1 country or ISO 3166-2 subdivision, e.g. US or US-OR
   | 'address'   // { street1?, street2?, city?, region?, postalCode?, country }: one shape everywhere
+  | 'time'      // local time of day, HH:MM or HH:MM:SS
+  | 'timezone'  // IANA time zone, e.g. America/Chicago
+  | 'geo'       // { lat, lon } in decimal degrees
   | 'repeat'    // iCalendar repeat rule (RFC 5545 RRULE), e.g. FREQ=WEEKLY;BYDAY=TU
   | 'party'     // id of a party: a person or organisation (employer, landlord, doctor…). Never a typed name.
   | 'record'    // id of another entry (`to` lists the categories it may point to); `many` for a list of them
@@ -64,6 +67,8 @@ export type DomainDef = {
   sensitivity: Sensitivity;
   /** A default per kind of entry, e.g. names: preferred is standard, legal is sensitive. */
   sensitivityBy?: { part: string; values: Record<string, Sensitivity> };
+  /** Sharing or sending the whole category needs an explicit confirm, even without secret details (IDs, health, money). */
+  confirmShare?: boolean;
   /** At most one entry (Birth, Health basics). */
   single?: boolean;
   /** Related entries and documents this category invites, e.g. a vehicle invites its title, insurance and loan. Never required. */

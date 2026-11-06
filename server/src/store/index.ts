@@ -8,7 +8,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 export const COLLECTIONS = [
-  'nodes', 'owners', 'fields', 'parties', 'nodeLinks', 'grants',
+  'nodes', 'owners', 'parties', 'nodeLinks', 'grants',
   'connectionRequests', 'invites', 'apiKeys', 'publicProfile', 'audit', 'challenges', 'backups',
   'records', 'domainDefs', 'messages', 'files', 'documents', 'shares', 'copies', 'recordVersions',
   'reviews', 'oauthClients', 'oauthCodes', 'oauthTokens', 'notices',
@@ -106,7 +106,6 @@ function sqlWhere(filter: Filter = {}, params: unknown[]): string {
 /** The fields each collection is looked up by. */
 const SQLITE_INDEXES: [Collection, string[]][] = [
   ['audit', ['at']],
-  ['fields', ['key']],
   ['apiKeys', ['hash']],
   ['records', ['domain', 'validFrom']],
   ['messages', ['contactId', 'createdAt']],

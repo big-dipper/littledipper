@@ -17,9 +17,11 @@ const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_BATCH = 50;
 
 const INSTRUCTIONS = `This is the owner's Little Dipper: their records (addresses, jobs, IDs, insurance, vehicles and more, each with when it applied), their documents, and the dates that matter.
-- Call whoami first to see which kinds of records your key can read or change, and your mode: answer (read only), suggest (your changes wait for the owner to approve them) or make (your changes are saved, except secret values and core identity, which always wait for approval: legal names, citizenship, IDs, the current address, email and phone). In suggest mode, documents you upload wait unfiled in the owner's inbox.
+- Call whoami first to see which kinds of records your key can read or change, and your mode: answer (read only), suggest (your changes wait for the owner to approve them) or make (your changes are saved, except secret values and core identity, which always wait for approval: legal names, birth, citizenship, IDs, the current address, email and phone). In suggest mode, documents you upload wait unfiled in the owner's inbox.
 - When a change comes back "pending_review", tell the owner it's waiting for them in Review. Don't say it's saved. list_review_items shows what's still waiting.
-- Call list_kinds to learn each kind's fields before adding or updating records. Use the field keys it gives you.
+- Call get_profile for the owner's current facts (names, birth, citizenship, where they live, main email and phone). The profile is worked out from their records: to change a line, change the record it comes from (each line says which).
+- Call list_kinds to learn each kind's fields before adding or updating records. Use the field keys it gives you. A party field takes the id of a person or organisation, never a typed name; a record field takes the id of another record of the kinds it lists.
+- Record only what's true and what the owner said. Don't work out legal conclusions (tax residency, marital or immigration status) from other facts: ask the owner, or suggest it to them.
 - Dated kinds keep history: when something ends (a move, a job change), set validTo on the old record and add a new one, rather than overwriting it.
 - Fields marked secret come back masked unless the owner has let you read that field.
 - There is no delete tool. If something was filed wrong, tell the owner: they can undo or remove it.`;
@@ -67,6 +69,15 @@ const TOOLS: Tool[] = [
     run: async (_a, call) => ok(call('GET', '/api/keys/me')),
   },
   {
+    name: 'get_profile', title: 'The owner’s profile',
+    description: 'The owner’s current facts: preferred and legal name, birth, citizenship, non-citizen nationality and residency status (separate lines, never merged), where they live, home address, main email and phone. Each line has its sensitivity and the records it comes from.',
+    inputSchema: obj({}), annotations: { readOnlyHint: true },
+    run: async (_a, call) => {
+      const r = await ok(call('GET', '/api/profile')) as { items: Json[] };
+      return { lines: r.items.map((l) => ({ key: l.key, label: l.label, value: l.value, sensitivity: l.sensitivity, from: l.from })) };
+    },
+  },
+  {
     name: 'list_kinds', title: 'Kinds of records',
     description: 'The kinds of records you can see (residences, employment, ids, vehicles, insurance…), each with its fields: key, label, type, whether it is required, its options and its sensitivity. Also whether the kind is dated (keeps history with validFrom/validTo) and how many records it has.',
     inputSchema: obj({}), annotations: { readOnlyHint: true },
@@ -79,6 +90,10 @@ const TOOLS: Tool[] = [
             key: p.key, label: p.label, type: p.type, required: !!p.required, sensitivity: p.sensitivity,
             ...(p.options ? { options: (p.options as [string, string][]).map(([k, l]) => ({ value: k, label: l })) } : {}),
             ...(p.of ? { rowFields: (p.of as Json[]).map((x) => ({ key: x.key, label: x.label, type: x.type })) } : {}),
+            ...(p.to ? { pointsTo: p.to, many: !!p.many } : {}),
+            ...(p.when ? { onlyWhen: p.when } : {}),
+            ...(p.periodic ? { withPeriod: true } : {}),
+            ...(p.hint ? { hint: p.hint } : {}),
           })),
         })),
       };

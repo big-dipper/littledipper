@@ -5,7 +5,7 @@
  */
 import { ctx } from './ctx.js';
 import { bad } from './auth.js';
-import { allFields, plainValue } from './fields.js';
+import { profileLines, publicName } from './profile.js';
 import type { PublicProfileDoc } from './federation.js';
 import type { DocumentDoc } from './documents.js';
 import type { FileDoc } from './files.js';
@@ -75,13 +75,13 @@ export async function checkSections(input: unknown): Promise<PublicSection[]> {
 
 export const publicFileUrl = (id: string) => `/public/profile/files/${id}`;
 
-/** Detail fields: Standard and Sensitive the owner switched on, with values. */
+/** Profile lines the owner switched on for the public page, with values. Secret lines are never public. */
 export async function publicFields(pp: PublicProfileDoc) {
-  const fields = await allFields();
+  const lines = await profileLines();
   return pp.fieldKeys
-    .map((k) => fields.find((f) => f.key === k))
-    .filter((f) => f && f.sensitivity !== 'secret' && plainValue(f))
-    .map((f) => ({ key: f!.key, label: f!.label, value: plainValue(f!) }));
+    .map((k) => lines.find((l) => l.key === k))
+    .filter((l) => l && l.sensitivity !== 'secret')
+    .map((l) => ({ key: l!.key, label: l!.label, value: l!.value }));
 }
 
 async function domainItems(s: Extract<PublicSection, { type: 'domain' }>) {
@@ -120,7 +120,7 @@ export async function publicView(pp: PublicProfileDoc) {
     }
   }
   const avatar = await liveFile(pp.avatarFileId);
-  return { displayName: pp.displayName, headline: pp.headline, avatarUrl: avatar ? publicFileUrl(avatar) : null, sections };
+  return { displayName: await publicName(pp), headline: pp.headline, avatarUrl: avatar ? publicFileUrl(avatar) : null, sections };
 }
 
 /** Files a visitor may open: the photo and the pages of résumé sections. */

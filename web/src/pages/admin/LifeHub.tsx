@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { get, post, type Field } from '../../api';
+import { get, post, type ProfileLine as Field } from '../../api';
 import { Dialog, ErrorNote, Loading, Pills, useAction, useAsync } from '../../ui';
 import { fetchCatalog, fmtDate, groupOf, Lock, Mono, Section, Select, useGrouped, type Domain } from '../../life';
 
@@ -9,7 +9,7 @@ type Attention = { domain: string; domainLabel: string; id: string; title: strin
 export default function LifeHub() {
   const nav = useNavigate();
   const { data: domains, error, reload } = useAsync(fetchCatalog, []);
-  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/owner/fields'), []);
+  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/profile'), []);
   const { data: attention } = useAsync(() => get<{ items: Attention[] }>('/api/attention'), []);
   const { data: timeline } = useAsync(() => get<{ items: { validFrom: string }[] }>('/api/timeline'), []);
   const [q, setQ] = useState('');
@@ -21,9 +21,9 @@ export default function LifeHub() {
 
   const started = domains.filter((d) => d.count > 0).length;
   const entries = domains.reduce((n, d) => n + d.count, 0);
-  const filled = fields?.items.filter((f) => f.hasValue).length ?? 0;
+  const filled = fields?.items.filter((f) => !!f.value).length ?? 0;
   const years = timeline?.items.length ? new Date().getFullYear() - +timeline.items[timeline.items.length - 1].validFrom.slice(0, 4) : 0;
-  const core = fields?.items.filter((f) => ['legal_name', 'preferred_name', 'dob'].includes(f.key)) ?? [];
+  const core = fields?.items.filter((f) => ['preferred_name', 'legal_name', 'born', 'lives_in'].includes(f.key)) ?? [];
 
   return (
     <div data-screen-label="My data" style={{ maxWidth: 1100 }}>
@@ -39,10 +39,10 @@ export default function LifeHub() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,300px),1fr))', gap: 18, marginTop: 26 }}>
           <Link to="/admin/life/profile" className="card" style={{ padding: '22px 24px', gap: 10, textDecoration: 'none', color: 'inherit' }}>
             <div className="card-kicker">Profile basics</div>
-            <div className="card-title" style={{ fontSize: 22 }}>{core.find((f) => f.key === 'legal_name')?.value || 'Your name'}</div>
+            <div className="card-title" style={{ fontSize: 22 }}>{core.find((f) => f.key === 'preferred_name')?.value || core.find((f) => f.key === 'legal_name')?.value || 'Your name'}</div>
             <div className="card-body">{filled} core facts · your basic profile and public page are built from these</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {core.filter((f) => f.key !== 'legal_name').map((f) => <span key={f.key} className="tag tag-neutral">{f.label}: {f.value || '—'}</span>)}
+              {core.filter((f) => !['preferred_name', 'legal_name'].includes(f.key)).map((f) => <span key={f.key} className="tag tag-neutral">{f.label}: {f.value || '—'}</span>)}
             </div>
           </Link>
           <Link to="/admin/lifestream" className="card" style={{ padding: '22px 24px', gap: 10, textDecoration: 'none', color: 'inherit', background: 'var(--color-accent-2-100)', position: 'relative', overflow: 'hidden' }}>

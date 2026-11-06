@@ -87,7 +87,10 @@ try {
   const legal = await buildRecord(names, { data: { kind: 'legal', full: 'Bryan Q. Public' } }, null, owner);
   ok(entrySens(names, pref, { kind: 'preferred' }) === 'standard' && entrySens(names, legal, { kind: 'legal' }) === 'sensitive', 'each kind starts at its own default: preferred standard, legal sensitive');
   const hidden = await buildRecord(names, { data: { kind: 'legal', full: 'Bryan Q. Public' }, sensitivity: 'secret' }, null, owner);
-  ok(isEncrypted(hidden.data.full) && hidden.data.kind === 'legal', 'an entry set to secret encrypts its parts, except ones declared otherwise');
+  ok(isEncrypted(hidden.data.full) && isEncrypted(hidden.data.kind), 'an entry set to secret encrypts every part of it');
+  const idsD = domain('ids2', [{ key: 'kind', label: 'Kind', type: 'text' }, { key: 'number', label: 'Number', type: 'text', sensitivity: 'secret' }], { sensitivity: 'standard' });
+  const card = await buildRecord(idsD, { data: { kind: 'library', number: '12345' } }, null, owner);
+  ok(isEncrypted(card.data.number) && card.data.kind === 'library', 'a part declared secret stays secret even in a standard entry: declared sensitivity is a floor');
   const out = recordOut(names, hidden);
   ok(out.sensitivity === 'secret' && !out.sensitivityDefault && out.masked.includes('full') && out.data.full !== 'Bryan Q. Public', 'and its value is masked on the way out');
   const back = await buildRecord(names, { sensitivity: null }, hidden, owner);

@@ -4,7 +4,8 @@ import { audit, ownerActor } from '../audit.js';
 import { bad, bearer, checkAssistant, checkAssistantScopes, COOKIE, findKey, HttpError, issueKey, notFound, requireOwner, requireSession, SCOPES, type ApiKeyDoc, type AssistantMode } from '../auth.js';
 
 const MODE_TEXT: Record<AssistantMode, string> = { answer: 'answer questions only', suggest: 'suggest changes', make: 'make changes' };
-import { allFields, plainValue } from '../fields.js';
+import { ownerName, profileLines, PROFILE_LINES, publicName } from '../profile.js';
+import { getDomain } from '../domains/records.js';
 import { canonicalUrl, getNode } from '../node.js';
 import { sendSigned, tokenHash, type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc } from '../federation.js';
 import { contactsSharing, endLink, nudgePeers } from '../contacts.js';
@@ -31,11 +32,10 @@ export default async function miscRoutes(app: FastifyInstance) {
       const day = new Date().toISOString().slice(0, 10);
       await ctx.store.update('nodes', n._id, { publicViews: { day, count: n.publicViews?.day === day ? n.publicViews.count + 1 : 1 } });
     }
-    const o = await getOwner();
     // `fields` stays for older clients; `sections` is the profile as laid out.
     return {
       ...(await publicView(pp)), fields: await publicFields(pp),
-      connectRequests: pp.connectRequests, address: canonicalUrl(n), ownerFirstName: (o?.displayName || pp.displayName).split(' ')[0],
+      connectRequests: pp.connectRequests, address: canonicalUrl(n), ownerFirstName: ((await publicName(pp)) || (await ownerName())).split(' ')[0],
     };
   });
 
@@ -46,7 +46,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     const n = await getNode();
     const pp = await ctx.store.get<PublicProfileDoc>('publicProfile', 'public');
     const valid = !!inv && inv.tokenHash === tokenHash(secret || '') && !inv.usedByNodeId && new Date(inv.expiresAt).getTime() > Date.now();
-    return { valid, displayName: pp?.displayName || null, address: canonicalUrl(n), expiresAt: valid ? inv!.expiresAt : null };
+    return { valid, displayName: (await publicName(pp ?? null)) || null, address: canonicalUrl(n), expiresAt: valid ? inv!.expiresAt : null };
   });
 
   app.get('/api/public-profile', async (req) => {
@@ -58,16 +58,23 @@ export default async function miscRoutes(app: FastifyInstance) {
   app.put('/api/public-profile', async (req) => {
     const p = await requireOwner(req, 'public:write');
     const pp = await profileDoc();
-    const b = (req.body || {}) as Partial<Pick<PublicProfileDoc, 'displayName' | 'headline' | 'fieldKeys' | 'connectRequests' | 'sections'>>;
+    const b = (req.body || {}) as Partial<Pick<PublicProfileDoc, 'nameId' | 'headline' | 'fieldKeys' | 'connectRequests' | 'sections'>>;
     const patch: Partial<PublicProfileDoc> = {};
-    if (b.displayName !== undefined) patch.displayName = String(b.displayName).slice(0, 120);
+    // The public name points to one of your Names entries (a professional or pen name is fine: it's a name you use).
+    if (b.nameId !== undefined) {
+      if (b.nameId !== null) {
+        const r = await ctx.store.get<{ _id: string; domain: string }>('records', String(b.nameId));
+        if (!r || r.domain !== 'names' || !(await getDomain('names'))) throw bad('invalid_value', 'The public name must be one of your Names entries');
+      }
+      patch.nameId = b.nameId;
+    }
     if (b.headline !== undefined) patch.headline = String(b.headline).slice(0, 280);
     if (b.fieldKeys) {
-      const fields = await allFields();
+      const lines = await profileLines();
       for (const k of b.fieldKeys) {
-        const f = fields.find((x) => x.key === k);
-        if (!f) throw bad('unknown_field', k);
-        if (f.sensitivity === 'secret') throw bad('secret_never_public', `${f.label} is secret and can never be public`);
+        const label = PROFILE_LINES.find(([x]) => x === k)?.[1];
+        if (!label) throw bad('unknown_field', `Your profile has no ${k}`);
+        if (lines.find((l) => l.key === k)?.sensitivity === 'secret') throw bad('secret_never_public', `${label} is secret and can never be public`);
       }
       patch.fieldKeys = [...new Set(b.fieldKeys)];
     }
@@ -78,7 +85,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     }
     await ctx.store.update('publicProfile', 'public', patch);
     const what = [
-      patch.fieldKeys && 'visible fields', patch.sections && 'sections', patch.connectRequests && 'connection requests', (patch.displayName !== undefined || patch.headline !== undefined) && 'header',
+      patch.fieldKeys && 'visible fields', patch.sections && 'sections', patch.connectRequests && 'connection requests', (patch.nameId !== undefined || patch.headline !== undefined) && 'header',
     ].filter(Boolean).join(', ');
     await audit({ actor: ownerActor(p.key._id), action: 'public.update', resource: 'publicProfile', text: `You changed your public profile (${what})`, tone: 'owner' });
     const out = await profileDoc();

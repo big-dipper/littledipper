@@ -7,7 +7,7 @@
  * changed it since. Nothing is rewritten: undoing is a new change in history, by the owner.
  */
 import { ctx } from './ctx.js';
-import { getDomain, recordOut, recordVersion, syncDerived, versionRecord, type RecordDoc } from './domains/records.js';
+import { getDomain, recordOut, recordVersion, versionRecord, type RecordDoc } from './domains/records.js';
 import { recordRemoved } from './documents.js';
 import type { Actor, VersionDoc } from './domains/types.js';
 
@@ -65,7 +65,6 @@ export async function undoOnRecord(recordId: string, changes: VersionDoc[], keyI
     await recordVersion(current, 'delete', owner);
     await ctx.store.remove('records', recordId);
     await recordRemoved(recordId);
-    await syncDerived(d.id);
     return { ...base, outcome: 'removed' };
   }
 
@@ -99,7 +98,6 @@ export async function undoOnRecord(recordId: string, changes: VersionDoc[], keyI
   const { _id, ...rest } = next;
   await ctx.store.update('records', _id, { ...rest });
   await recordVersion(next, 'update', owner);
-  await syncDerived(d.id);
   return { ...base, title: recordOut(d, next).title, reverted, skipped, outcome: 'reverted' };
 }
 

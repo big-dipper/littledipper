@@ -109,7 +109,8 @@ export type InviteDoc = Doc & {
 };
 
 export type PublicProfileDoc = Doc & {
-  displayName: string;
+  /** The Names entry shown as your name; null means your preferred (or legal) name. Points, never copies. */
+  nameId: string | null;
   headline: string;
   avatarFileId: string | null;
   fieldKeys: string[];

@@ -4,6 +4,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ctx } from '../ctx.js';
+import { PROFILE_DOMAINS } from '../profile.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner, requireSession, type ApiKeyDoc } from '../auth.js';
 import { isIdentityChange, pendingReply, propose, reviewInput, type ReviewDoc } from '../reviews.js';
@@ -14,11 +15,12 @@ import { documentsByRecord, recordRemoved } from '../documents.js';
 import { isDateTime } from '../domains/datetime.js';
 import {
   actorLabels, buildRecord, checkCustomDomain, deletedRecords, KEEP_DELETED_DAYS, recordVersion, versionRecord, versionsOf, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, entrySens, plainData, recordReferences, unlinkRecord,
-  recordOut, recordsOf, sortRecords, syncDerived, DERIVED, type DomainDef, type RecordDoc, type RecordInput,
+  recordOut, recordsOf, sortRecords, type DomainDef, type RecordDoc, type RecordInput,
 } from '../domains/records.js';
 import type { Actor, VersionDoc } from '../domains/types.js';
 
-const DERIVED_DOMAINS = new Set(Object.values(DERIVED).map((x) => x.domain));
+/** Domains the profile reads: a change there can change what every connection sees. */
+const DERIVED_DOMAINS = PROFILE_DOMAINS;
 const readScopes = (d: string) => [`${d}:read`, 'records:read'];
 const writeScopes = (d: string) => [`${d}:write`, 'records:write'];
 
@@ -67,7 +69,7 @@ function catalogEntry(d: DomainDef, sum: Summary) {
     ...sum,
     scopes: { read: `${d.id}:read`, write: `${d.id}:write` },
     endpoint: `/api/data/${d.id}`,
-    feeds: Object.entries(DERIVED).filter(([, v]) => v.domain === d.id).map(([k]) => k),
+    feedsProfile: PROFILE_DOMAINS.has(d.id),
   };
 }
 
@@ -92,7 +94,6 @@ export async function createRecord(d: DomainDef, input: RecordInput, by: Actor, 
   await ctx.store.insert('records', rec);
   await recordVersion(rec, 'create', by);
   await demoteOtherPrimaries(rec);
-  await syncDerived(d.id);
   const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
   nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
   await audit({ actor: ownerActor(by.id), action: 'record.create', resource: `${d.id}/${rec._id}`, text: `${who} added ${out.title} to ${d.label}`, tone: 'owner' });
@@ -106,7 +107,6 @@ export async function updateRecord(d: DomainDef, existing: RecordDoc, input: Rec
   await ctx.store.update('records', _id, { ...rest });
   await recordVersion(rec, 'update', by);
   await demoteOtherPrimaries(rec);
-  await syncDerived(d.id);
   const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
   nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
   await audit({ actor: ownerActor(by.id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${who} updated ${out.title} in ${d.label}`, tone: 'owner' });
@@ -280,7 +280,6 @@ export default async function domainRoutes(app: FastifyInstance) {
     await recordVersion(r, 'delete', by);
     await ctx.store.remove('records', r._id);
     const docsDeleted = await recordRemoved(r._id);
-    await syncDerived(d.id);
     nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
     await audit({ actor: ownerActor(p.key._id), action: 'record.delete', resource: `${d.id}/${r._id}`, text: `${actorName(p)} removed ${title} from ${d.label}`, tone: 'owner' });
     return { deleted: true, documentsDeleted: docsDeleted, restorableForDays: KEEP_DELETED_DAYS };
@@ -328,7 +327,6 @@ export default async function domainRoutes(app: FastifyInstance) {
     else await ctx.store.insert('records', rec);
     await recordVersion(rec, 'restore', by);
     await demoteOtherPrimaries(rec);
-    await syncDerived(d.id);
     nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
     const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
     await audit({ actor: ownerActor(p.key._id), action: 'record.restore', resource: `${d.id}/${id}`, text: `${actorName(p)} ${existing ? 'restored an earlier version of' : 'brought back'} ${out.title} in ${d.label}`, tone: 'owner' });

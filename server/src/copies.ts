@@ -7,7 +7,7 @@ import { ctx } from './ctx.js';
 import { decrypt, encrypt, newId } from './crypto.js';
 import { bad, HttpError } from './auth.js';
 import { shapeRecords, type SharedDomain } from './domains/sharing.js';
-import { getDomain, partSens, recordsOf, sortRecords } from './domains/records.js';
+import { entrySens, getDomain, partSens, plainData, recordsOf, sortRecords } from './domains/records.js';
 import { now, type PartyDoc } from './federation.js';
 import { checkMethod } from './methods.js';
 import { firstName } from './contacts.js';
@@ -74,8 +74,9 @@ export async function takeSnapshot(input: unknown, confirm: boolean) {
     }
     if (!recs.length) throw bad('invalid_value', `Nothing chosen from ${d.label}`);
     const includeSecret = raw.includeSecret === true;
-    const hasSecret = d.parts.some((p) => partSens(d, p) === 'secret');
-    if (hasSecret && (includeSecret || d.sensitivity === 'secret') && !confirm) throw new HttpError(409, 'confirm_required', `Sending ${d.label} needs confirmation`);
+    // Secret parts, or entries the owner made secret, among what's chosen.
+    const hasSecret = recs.some((r) => { const e = entrySens(d, r, plainData(r)); return d.parts.some((p) => partSens(d, p, e) === 'secret'); });
+    if (hasSecret && (includeSecret || d.confirmShare) && !confirm) throw new HttpError(409, 'confirm_required', `Sending ${d.label} needs confirmation`);
     items.push({ domain: d.id, recordIds: recs.map((r) => r._id), includeSecret });
     snapshot.push({ domain: d.id, label: d.label, scope: 'all', records: await shapeRecords(d, recs, includeSecret) });
   }

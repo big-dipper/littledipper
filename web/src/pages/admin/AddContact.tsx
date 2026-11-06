@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { copy, firstName, get, initials, post, SENS, type Field } from '../../api';
+import { copy, firstName, get, initials, post, SENS, type ProfileLine as Field } from '../../api';
 import { Dialog, Pills, QR, Striped, Toggle, useAction, useAsync, useToast } from '../../ui';
 import { useAdmin } from './Layout';
 
@@ -19,9 +19,9 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
   const [note, setNote] = useState('');
   const [exp, setExp] = useState<'24h' | '7d' | '30d'>('7d');
   const [invite, setInvite] = useState<{ url: string; expiresAt: string } | null>(null);
-  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/owner/fields'), []);
+  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/profile'), []);
 
-  const sensitive = (fields?.items || []).filter((f) => f.sensitivity === 'sensitive' && f.hasValue);
+  const sensitive = (fields?.items || []).filter((f) => f.sensitivity === 'sensitive' && !!f.value);
   const name = found?.displayName || found?.address || '';
 
   const lookup = async () => {

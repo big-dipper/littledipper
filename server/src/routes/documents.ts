@@ -4,6 +4,7 @@
  *   POST /api/documents?name=license.jpg&link=ids:rec_…    body: the bytes, type in Content-Type
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { ownerName } from '../profile.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, rateLimit, requireOwner, requireSession, type Principal } from '../auth.js';
 import { ctx } from '../ctx.js';
@@ -12,7 +13,7 @@ import {
   addPage, addSuggestion, canSee, checkDate, checkKind, checkLinks, checkSuggestion, checkText, createDocument, deleteDocument, docRef, docScopes,
   documentKinds, documentOr404, documentOut, dropSuggestion, linkDocument, parseLink, removePage, type DocumentDoc,
 } from '../documents.js';
-import { buildRecord, getDomain, listDomains, recordOut, recordVersion, syncDerived, type RecordDoc, type RecordInput } from '../domains/records.js';
+import { buildRecord, getDomain, listDomains, recordOut, recordVersion, type RecordDoc, type RecordInput } from '../domains/records.js';
 import { FILE_TYPES, MAX_FILE_BYTES, readFile, saveFile, type FileDoc, type Source } from '../files.js';
 import { canonicalUrl, getNode } from '../node.js';
 import type { PublicProfileDoc } from '../federation.js';
@@ -195,7 +196,6 @@ export default async function documentRoutes(app: FastifyInstance) {
     if (existing) { const { _id, ...rest } = rec; await ctx.store.update('records', _id, { ...rest }); }
     else await ctx.store.insert('records', rec);
     await recordVersion(rec, existing ? 'update' : 'create', rec.updatedBy);
-    await syncDerived(d.id);
     const linked = await linkDocument(await dropSuggestion(doc, s.id), { domain: d.id, recordId: rec._id });
     const title = recordOut(d, rec).title;
     await audit({ actor: ownerActor(p.key._id), action: 'document.suggestion.accept', resource: `documents/${doc._id}`, text: `You accepted a suggestion from ${doc.title}: ${title} in ${d.label}`, tone: 'owner' });
@@ -252,9 +252,8 @@ export default async function documentRoutes(app: FastifyInstance) {
     const { s, doc } = await openShare(req);
     await ctx.store.update('shares', s._id, { views: s.views + 1, lastViewedAt: new Date().toISOString() });
     await audit({ actor: { type: 'public', id: s._id }, action: 'document.view', resource: `documents/${doc._id}`, text: `Someone opened your share link for ${doc.title}`, tone: 'system', ip: req.ip });
-    const owner = await ctx.store.findOne<{ _id: string; displayName: string }>('owners', {});
     reply.header('x-robots-tag', 'noindex');
-    return { title: doc.title, kind: doc.kind, date: doc.date, pages: doc.pages, expiresAt: s.expiresAt, sharedBy: owner?.displayName ?? null };
+    return { title: doc.title, kind: doc.kind, date: doc.date, pages: doc.pages, expiresAt: s.expiresAt, sharedBy: (await ownerName()) || null };
   });
 
   app.get('/public/shared/:token/files/:fileId', async (req, reply) => {

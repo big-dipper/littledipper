@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, put, SENS, shortDate, STATUS, type ContactMethod, type PartyDetail as CD, type Field } from '../../api';
+import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, put, SENS, shortDate, STATUS, type ContactMethod, type PartyDetail as CD, type ProfileLine as Field } from '../../api';
 import { Confirm, Dialog, ErrorNote, Loading, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
@@ -14,7 +14,7 @@ export default function ContactDetail() {
   const { tech, refresh } = useAdmin();
   const { run, busy } = useAction();
   const { data: c, error, reload, setData } = useAsync(() => get<CD>(`/api/parties/${id}`), [id]);
-  const { data: fieldsResp } = useAsync(() => get<{ items: Field[] }>('/api/owner/fields'), []);
+  const { data: fieldsResp } = useAsync(() => get<{ items: Field[] }>('/api/profile'), []);
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(0);
