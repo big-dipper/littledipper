@@ -29,7 +29,7 @@ const DEFAULT_PARTS: Record<string, string[]> = {
 };
 
 /** Never public: secret parts, links to the owner's contacts, and lists. */
-export const publicParts = (d: DomainDef) => d.parts.filter((p) => partSens(d, p) !== 'secret' && !['contact', 'party', 'record', 'list'].includes(p.type));
+export const publicParts = (d: DomainDef) => d.parts.filter((p) => partSens(d, p) !== 'secret' && !['record', 'list'].includes(p.type)); // a person or organisation shows by name
 export const defaultParts = (d: DomainDef) => (DEFAULT_PARTS[d.id] ?? publicParts(d).map((p) => p.key)).filter((k) => publicParts(d).some((p) => p.key === k));
 export const sectionsOf = (pp: PublicProfileDoc): PublicSection[] => pp.sections ?? [{ type: 'details' }];
 

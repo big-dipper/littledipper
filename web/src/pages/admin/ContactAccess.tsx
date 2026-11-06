@@ -14,7 +14,7 @@ type Level = 'off' | 'current' | 'all';
 const PRESETS: { id: string; label: string; hint: string; domains: Record<string, Level> }[] = [
   { id: 'colleague', label: 'Colleague', hint: 'Current job, education, credentials, contact methods', domains: { employment: 'current', education: 'all', credentials: 'all', contact_methods: 'all' } },
   { id: 'friend', label: 'Friend', hint: 'Contact methods, current home, preferences, pets', domains: { contact_methods: 'all', residences: 'current', preferences: 'all', pets: 'all' } },
-  { id: 'family', label: 'Family', hint: 'Homes, family, pets, preferences, life events, insurance', domains: { contact_methods: 'all', residences: 'all', relationships: 'all', pets: 'all', preferences: 'all', life_events: 'all', insurance: 'current' } },
+  { id: 'family', label: 'Family', hint: 'Homes, relationships, pets, preferences, insurance', domains: { contact_methods: 'all', residences: 'all', relationships: 'all', pets: 'all', preferences: 'all', insurance: 'current' } },
   { id: 'basic', label: 'Just the basics', hint: 'Basic profile only', domains: {} },
 ];
 

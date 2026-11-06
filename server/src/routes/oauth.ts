@@ -32,7 +32,7 @@ export const LENGTHS = { hour: 3600, day: 86400, '60d': 60 * 86400, forever: 0 }
 type Length = keyof typeof LENGTHS;
 
 /** Everyday: the kinds people most often want help with. Not IDs, health, money or legal. */
-export const EVERYDAY = ['names', 'contact_methods', 'residences', 'relationships', 'pets', 'travel', 'events', 'life_events', 'employment', 'education', 'credentials', 'vehicles', 'property', 'memberships', 'insurance', 'receipts', 'preferences'];
+export const EVERYDAY = ['names', 'contact_methods', 'residences', 'relationships', 'pets', 'travel', 'events', 'employment', 'education', 'credentials', 'awards', 'vehicles', 'property', 'memberships', 'insurance', 'receipts', 'preferences'];
 
 type ClientDoc = Doc & { name: string; uri: string | null; redirectUris: string[]; createdAt: string };
 type CodeDoc = Doc & { hash: string; clientId: string; redirectUri: string; challenge: string; scopes: string[]; assistant: AssistantSettings; length: Length; ownerKeyId: string; expiresAt: string; usedAt: string | null };

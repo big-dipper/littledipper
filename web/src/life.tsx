@@ -160,7 +160,7 @@ export function show(p: Part, v: unknown, contacts: ContactLite[]): string {
     case 'boolean': return v ? 'Yes' : 'No';
     case 'date': return fmtDate(String(v));
     case 'datetime': return fmtDateTime(v as DateTime);
-    case 'party': case 'contact': return contacts.find((c) => c.id === v)?.name ?? 'Removed contact';
+    case 'party': case 'contact': return (Array.isArray(v) ? v : [v]).map((x) => contacts.find((c) => c.id === x)?.name ?? 'Removed contact').join(', ');
     case 'last4': return `•••• ${v}`;
     case 'url': return String(v).replace(/^https?:\/\//, '').replace(/\/$/, '');
     default: return String(v);
@@ -221,8 +221,19 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOn
     case 'boolean':
       return <Toggle on={!!value} label={p.label} onChange={() => onChange(!value)} />;
     case 'party':
-    case 'contact':
-      return <PartyPicker id={id} value={String(value ?? '')} onChange={onChange} contacts={contacts} />;
+    case 'contact': {
+      if (!p.many) return <PartyPicker id={id} value={String(value ?? '')} onChange={onChange} contacts={contacts} />;
+      // Several: each one chosen shows with a remove button; the picker adds the next.
+      const chosen = (value as string[] | undefined) ?? [];
+      return (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {chosen.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {chosen.map((c) => <span key={c} className="tag tag-neutral">{contacts.find((x) => x.id === c)?.name ?? 'Added'}<button type="button" className="bare" aria-label="Remove" onClick={() => onChange(chosen.filter((x) => x !== c))} style={{ marginLeft: 6 }}>×</button></span>)}
+          </div>}
+          <PartyPicker id={id} value="" onChange={(v) => v && !chosen.includes(v) && onChange([...chosen, v])} contacts={contacts.filter((c) => !chosen.includes(c.id))} />
+        </div>
+      );
+    }
     case 'record':
       return <RecordPicker id={id} p={p} value={value} onChange={onChange} />;
     case 'money': {

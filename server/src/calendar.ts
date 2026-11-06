@@ -1,6 +1,6 @@
 /**
- * The calendar: the owner's events, the dates their data already holds (birthdays, trips, life
- * events, return-by and warranty deadlines, expiries, any date-and-time part) and the events
+ * The calendar: the owner's events, the dates their data already holds (birthdays, trips,
+ * return-by and warranty deadlines, expiries, any date-and-time part) and the events
  * contacts share with them. A read-only view over records; nothing is stored here.
  */
 import { ctx } from './ctx.js';
@@ -12,7 +12,7 @@ import type { DomainDef } from './domains/types.js';
 export type CalendarItem = {
   /** Unique per occurrence: a repeating event has one item per day it happens. */
   id: string;
-  kind: 'event' | 'birthday' | 'trip' | 'milestone' | 'deadline' | 'expiry' | 'moment';
+  kind: 'event' | 'birthday' | 'trip' | 'deadline' | 'expiry' | 'moment';
   title: string;
   /** A second line: "turns 40", the part a deadline belongs to… */
   detail?: string;
@@ -47,17 +47,47 @@ function lastDay(v: string) {
   return v;
 }
 
-/** The nth repeat of a wall-clock time ("2026-01-31T09:00:00"); month ends and Feb 29 clamp to the last day. */
-function nth(wall: string, repeat: string, n: number) {
-  const y = +wall.slice(0, 4), m = +wall.slice(5, 7) - 1, d = +wall.slice(8, 10), time = wall.slice(10);
-  let date: string;
-  if (repeat === 'daily' || repeat === 'weekly') date = ymd(Date.UTC(y, m, d) + n * (repeat === 'daily' ? 1 : 7) * DAY);
-  else {
-    const months = repeat === 'monthly' ? m + n : m, years = repeat === 'yearly' ? y + n : y;
-    const yy = years + Math.floor(months / 12), mm = ((months % 12) + 12) % 12;
-    date = `${yy}-${pad(mm + 1)}-${pad(Math.min(d, daysInMonth(yy, mm)))}`;
+const WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+const weekday = (d: string) => WEEKDAYS[new Date(dayMs(d)).getUTCDay()];
+type Rule = { freq: string; interval: number; count: number | null; until: string | null; byDay: { n: number | null; day: string }[]; byMonthDay: number[] };
+
+/** An iCalendar RRULE (as stored: checked by records.ts) parsed into what the calendar uses. */
+function parseRule(rule: string): Rule | null {
+  const m = Object.fromEntries(rule.split(';').map((x) => x.split('=')));
+  if (!/^(DAILY|WEEKLY|MONTHLY|YEARLY)$/.test(m.FREQ ?? '')) return null;
+  return {
+    freq: m.FREQ, interval: Number(m.INTERVAL || 1), count: m.COUNT ? Number(m.COUNT) : null,
+    until: m.UNTIL ? `${m.UNTIL.slice(0, 4)}-${m.UNTIL.slice(4, 6)}-${m.UNTIL.slice(6, 8)}` : null,
+    byDay: m.BYDAY ? String(m.BYDAY).split(',').map((x) => { const r = x.match(/^([+-]?\d{1,2})?([A-Z]{2})$/)!; return { n: r[1] ? Number(r[1]) : null, day: r[2] }; }) : [],
+    byMonthDay: m.BYMONTHDAY ? String(m.BYMONTHDAY).split(',').map(Number) : [],
+  };
+}
+
+/** Whether a day is an occurrence of the rule, counting from the first day. RFC 5545: dates that don't exist (Feb 30) are skipped. */
+function onRule(r: Rule, first: string, day: string): boolean {
+  const y0 = +first.slice(0, 4), m0 = +first.slice(5, 7), d0 = +first.slice(8, 10);
+  const y = +day.slice(0, 4), m = +day.slice(5, 7), d = +day.slice(8, 10);
+  const nthOf = (n: number) => { // the nth (or nth from last) of this weekday in its month
+    const dim = daysInMonth(y, m - 1);
+    return n > 0 ? Math.ceil(d / 7) === n : Math.ceil((dim - d + 1) / 7) === -n;
+  };
+  switch (r.freq) {
+    case 'DAILY': return ((dayMs(day) - dayMs(first)) / DAY) % r.interval === 0;
+    case 'WEEKLY': {
+      // Weeks start on Monday (WKST=MO, the default).
+      const monday = (x: string) => dayMs(x) - ((new Date(dayMs(x)).getUTCDay() + 6) % 7) * DAY;
+      if (Math.round((monday(day) - monday(first)) / (7 * DAY)) % r.interval !== 0) return false;
+      return r.byDay.length ? r.byDay.some((b) => b.day === weekday(day)) : weekday(day) === weekday(first);
+    }
+    case 'MONTHLY': {
+      if (((y - y0) * 12 + (m - m0)) % r.interval !== 0) return false;
+      if (r.byDay.length) return r.byDay.some((b) => b.day === weekday(day) && (b.n === null || nthOf(b.n)));
+      if (r.byMonthDay.length) return r.byMonthDay.some((n) => (n > 0 ? d === n : d === daysInMonth(y, m - 1) + n + 1));
+      return d === d0;
+    }
+    case 'YEARLY': return (y - y0) % r.interval === 0 && m === m0 && d === d0;
   }
-  return date + time;
+  return false;
 }
 
 /** Every occurrence of one event (repeating or not) that touches [from, to]. */
@@ -66,22 +96,35 @@ function occurrences(base: Omit<CalendarItem, 'id' | 'startDate' | 'endDate' | '
   if (!start) return [];
   const end = normalizeDateTime(data.end);
   const allDay = data.allDay === true;
-  const repeat = ['daily', 'weekly', 'monthly', 'yearly'].includes(String(data.repeat)) ? String(data.repeat) : '';
-  const until = isPartialDate(data.repeatUntil) ? lastDay(String(data.repeatUntil)) : null;
+  const rule = typeof data.repeat === 'string' ? parseRule(data.repeat) : null;
   // How long one occurrence lasts: whole days when all day, otherwise time (an hour if no end).
   const spanDays = allDay && end ? Math.max(0, (dayMs(end.at.slice(0, 10)) - dayMs(start.at.slice(0, 10))) / DAY) : 0;
   const spanMs = !allDay && end ? Date.parse(end.at) - Date.parse(start.at) : 3600_000;
   const out: CalendarItem[] = [];
-  const wall = start.at.slice(0, 19);
-  for (let n = 0; n < (repeat ? 20000 : 1); n++) {
-    const s = normalizeDateTime({ at: repeat ? nth(wall, repeat, n) : wall, tz: start.tz });
-    if (!s) break;
-    const sDate = s.at.slice(0, 10);
-    if (sDate > to || (until && sDate > until)) break;
+  const first = start.at.slice(0, 10), time = start.at.slice(10, 19);
+  let seen = 0;
+  // Walk day by day from the first occurrence (bounded: 60 years), so COUNT is counted from the start, not the window.
+  for (let day = first, i = 0; i < 366 * 60; day = addDays(day, 1), i++) {
+    if (day > to || (rule?.until && day > rule.until)) break;
+    if (rule ? !onRule(rule, first, day) : day !== first) { if (!rule) break; continue; }
+    if (rule?.count && ++seen > rule.count) break;
+    const s = normalizeDateTime({ at: day + time, tz: start.tz });
+    if (!s) continue;
     const e = allDay ? null : normalizeDateTime({ at: new Date(Date.parse(s.at) + spanMs).toISOString(), tz: start.tz });
-    const eDate = allDay ? addDays(sDate, spanDays) : e!.at.slice(0, 10);
-    if (eDate < from) continue;
-    out.push({ ...base, id: `${base.recordId}:${sDate}`, startDate: sDate, endDate: eDate, allDay, ...(allDay ? {} : { start: s, end: e! }), ...(repeat ? { repeat } : {}) });
+    const eDate = allDay ? addDays(day, spanDays) : e!.at.slice(0, 10);
+    if (eDate >= from) out.push({ ...base, id: `${base.recordId}:${day}`, startDate: day, endDate: eDate, allDay, ...(allDay ? {} : { start: s, end: e! }), ...(rule ? { repeat: data.repeat as string } : {}) });
+    if (!rule) break;
+  }
+  return out;
+}
+
+/** A yearly birthday in [from, to] for someone born on `born` (YYYY-MM-DD). */
+function birthdays(born: string, from: string, to: string) {
+  const out: { day: string; age: number }[] = [];
+  for (let y = +from.slice(0, 4); y <= +to.slice(0, 4); y++) {
+    if (y < +born.slice(0, 4)) continue;
+    const day = `${y}-${born.slice(5, 7)}-${pad(Math.min(+born.slice(8, 10), daysInMonth(y, +born.slice(5, 7) - 1)))}`;
+    if (day >= from && day <= to) out.push({ day, age: y - +born.slice(0, 4) });
   }
   return out;
 }
@@ -103,20 +146,16 @@ export async function calendarItems(from: string, to: string, opts: { contacts: 
         items.push(...occurrences({ ...base(d, r._id), kind: 'event', title, allDay: false, ...(x.location ? { location: String(x.location) } : {}) }, x, from, to));
         continue;
       }
-      // Birthdays, every year, for people and pets with a full birth date.
-      if ((d.id === 'relationships' || d.id === 'pets') && isDay(x.birthDate) && isCurrent(d, r)) {
-        const born = x.birthDate as string;
-        for (let y = +from.slice(0, 4); y <= +to.slice(0, 4); y++) {
-          if (y < +born.slice(0, 4)) continue;
-          const day = `${y}-${born.slice(5, 7)}-${pad(Math.min(+born.slice(8, 10), daysInMonth(y, +born.slice(5, 7) - 1)))}`;
-          const age = y - +born.slice(0, 4);
-          if (inRange(day)) items.push({ ...base(d, r._id), id: `${r._id}:birthday:${y}`, kind: 'birthday', title: `${x.name ?? title}’s birthday`, ...(age ? { detail: `turns ${age}` } : {}), startDate: day, endDate: day, allDay: true });
+      // Birthdays, every year: yours (from Birth) and your pets'. People's come from the parties below.
+      if ((d.id === 'birth' && isDay(x.date)) || (d.id === 'pets' && isDay(x.birthDate) && isCurrent(d, r))) {
+        for (const { day, age } of birthdays(String(d.id === 'birth' ? x.date : x.birthDate), from, to)) {
+          items.push({ ...base(d, r._id), id: `${r._id}:birthday:${day.slice(0, 4)}`, kind: 'birthday', title: d.id === 'birth' ? 'Your birthday' : `${x.name ?? title}’s birthday`, ...(age ? { detail: `turns ${age}` } : {}), startDate: day, endDate: day, allDay: true });
         }
       }
-      // Trips span their days; life events sit on theirs. Only when the record knows the day.
-      if ((d.id === 'travel' || d.id === 'life_events') && isDay(r.validFrom)) {
-        const end = d.id === 'travel' && isDay(r.validTo) && r.validTo >= r.validFrom ? r.validTo : r.validFrom;
-        if (inRange(r.validFrom, end)) items.push({ ...base(d, r._id), id: `${r._id}:${d.id}`, kind: d.id === 'travel' ? 'trip' : 'milestone', title, startDate: r.validFrom, endDate: end, allDay: true });
+      // Trips span their days. Only when the record knows the day.
+      if (d.id === 'travel' && isDay(r.validFrom)) {
+        const end = isDay(r.validTo) && r.validTo >= r.validFrom ? r.validTo : r.validFrom;
+        if (inRange(r.validFrom, end)) items.push({ ...base(d, r._id), id: `${r._id}:trip`, kind: 'trip', title, startDate: r.validFrom, endDate: end, allDay: true });
       }
       for (const p of d.parts) {
         const v = x[p.key];
@@ -131,6 +170,14 @@ export async function calendarItems(from: string, to: string, opts: { contacts: 
           if (inRange(day)) items.push({ ...base(d, r._id), id: `${r._id}:${p.key}`, kind: 'moment', title, detail: p.label, startDate: day, endDate: day, allDay: false, start: v, end: v });
         }
       }
+    }
+  }
+
+  // Birthdays of the people in your life: a party's birthday lives on the party.
+  for (const c of await ctx.store.find<PartyDoc>('parties', {})) {
+    if (c.type !== 'person' || !isDay(c.birthDate)) continue;
+    for (const { day, age } of birthdays(c.birthDate, from, to)) {
+      items.push({ domain: 'parties', domainLabel: 'Contacts', recordId: c._id, id: `${c._id}:birthday:${day.slice(0, 4)}`, kind: 'birthday', title: `${c.name}’s birthday`, ...(age ? { detail: `turns ${age}` } : {}), startDate: day, endDate: day, allDay: true });
     }
   }
 

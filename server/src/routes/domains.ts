@@ -14,7 +14,7 @@ import { contactsSharing, nudgePeers } from '../contacts.js';
 import { documentsByRecord, recordRemoved } from '../documents.js';
 import { isDateTime } from '../domains/datetime.js';
 import {
-  actorLabels, buildRecord, checkCustomDomain, deletedRecords, KEEP_DELETED_DAYS, recordVersion, versionRecord, versionsOf, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, entrySens, plainData, recordReferences, unlinkRecord,
+  actorLabels, buildRecord, displayValue, checkCustomDomain, deletedRecords, KEEP_DELETED_DAYS, recordVersion, versionRecord, versionsOf, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, entrySens, plainData, recordReferences, unlinkRecord,
   recordOut, recordsOf, sortRecords, type DomainDef, type RecordDoc, type RecordInput,
 } from '../domains/records.js';
 import type { Actor, VersionDoc } from '../domains/types.js';
@@ -364,8 +364,11 @@ export default async function domainRoutes(app: FastifyInstance) {
         ...Object.entries(input.data ?? {}).map(([k, v]) => {
           const part = d?.parts.find((x) => x.key === k);
           const secret = !!(d && part && partSens(d, part) === 'secret');
-          return { key: k, label: part?.label ?? k, secret, to: show(k, v), from: r.recordId && owner ? (plainNow[k] ?? null) : undefined };
+          // People and organisations by name, not id.
+          const named = (x: unknown) => (part && ['party', 'contact'].includes(part.type) && x !== null && x !== undefined ? displayValue(part, x) : x);
+          return { key: k, label: part?.label ?? k, secret, to: named(show(k, v)), from: r.recordId && owner ? named(plainNow[k] ?? null) : undefined };
         }),
+        ...(input.sensitivity !== undefined ? [{ key: 'sensitivity', label: 'Who can see this', secret: false, to: input.sensitivity ?? 'default', from: current && owner ? current.sensitivity ?? 'default' : undefined }] : []),
         ...(['validFrom', 'validTo', 'notes'] as const).filter((k) => input[k] !== undefined).map((k) => ({
           key: k, label: { validFrom: 'From', validTo: 'To', notes: 'Notes' }[k], secret: false, to: input[k], from: current && owner ? current[k] ?? null : undefined,
         })),

@@ -3,6 +3,7 @@ import { ctx } from '../ctx.js';
 import { decrypt, encrypt, isEncrypted, newId } from '../crypto.js';
 import { bad } from '../auth.js';
 import { mask, type Sensitivity } from '../fields.js';
+import type { Store } from '../store/index.js';
 import { BUILT_IN_DOMAINS, RESERVED } from './catalog.js';
 import { dateTimeSortKey, displayDateTime, isDateTime, isTimeZone, normalizeDateTime, type DateTimeValue } from './datetime.js';
 import { checkMethod } from '../methods.js';
@@ -73,8 +74,31 @@ export const PERIODS = ['hour', 'week', 'month', 'year', 'once'] as const;
 const ADDRESS_KEYS = ['street1', 'street2', 'city', 'region', 'postalCode', 'country'] as const;
 const RRULE_KEYS = new Set(['FREQ', 'INTERVAL', 'COUNT', 'UNTIL', 'BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYSETPOS', 'BYYEARDAY', 'BYWEEKNO', 'WKST']);
 
-/** A party exists. Parties live in the contacts collection until it's renamed. */
+/** A party exists. */
 export const partyExists = async (id: string) => !!(await ctx.store.get('parties', id));
+
+// ── party names ────────────────────────────────────────────────────────
+// Entries point to parties by id; titles and displays show their names ("Engineer at Acme Corp"). Names are kept in
+// memory and refreshed whenever the parties collection is written, so they're never stale.
+const partyNames = new Map<string, string>();
+export const partyName = (id: string) => partyNames.get(id) ?? 'Someone removed';
+
+export async function loadPartyNames() {
+  partyNames.clear();
+  for (const p of await ctx.store.find<{ _id: string; name: string }>('parties', {})) partyNames.set(p._id, p.name);
+}
+
+/** Wrap a store so every write to parties (or a restore) refreshes the names. Call once at boot. */
+export function trackPartyNames<T extends Store>(store: T): T {
+  const refresh = () => loadPartyNames().catch(() => {});
+  for (const m of ['insert', 'update', 'remove', 'removeMany'] as const) {
+    const orig = (store[m] as (...a: unknown[]) => Promise<unknown>).bind(store);
+    (store as Record<string, unknown>)[m] = async (coll: string, ...rest: unknown[]) => { const r = await orig(coll, ...rest); if (coll === 'parties') await refresh(); return r; };
+  }
+  const restore = store.restore.bind(store);
+  store.restore = async (data) => { await restore(data); await refresh(); };
+  return store;
+}
 
 /** An iCalendar RRULE: KEY=VALUE pairs, FREQ required, COUNT and UNTIL not both. Normalised to upper case without the RRULE: prefix. */
 export function checkRepeat(v: unknown): string | null {
@@ -139,7 +163,12 @@ async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> 
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) fail('use { lat, lon } in decimal degrees');
       return { lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6 };
     }
-    case 'party': case 'contact': return (await partyExists(String(v))) ? String(v) : fail('no such person or organisation');
+    case 'party': case 'contact': {
+      const ids = p.many ? (Array.isArray(v) ? v.map(String) : fail('expected a list of people or organisations')) : [String(v)];
+      if (new Set(ids).size !== ids.length) fail('the same person twice');
+      for (const id of ids) if (!(await partyExists(id))) fail('no such person or organisation');
+      return p.many ? ids : ids[0];
+    }
     case 'record': {
       const ids = p.many ? (Array.isArray(v) ? v.map(String) : fail('expected a list of entries')) : [String(v)];
       if (new Set(ids).size !== ids.length) fail('the same entry twice');
@@ -193,6 +222,13 @@ const empty = (v: unknown) => v === undefined || v === null || v === '';
 
 /** Rules across the parts of one built-in domain, checked once each part has passed on its own. */
 const CHECKS: Record<string, (data: Record<string, unknown>) => void> = {
+  // A car's VIN since 1981 is 17 characters, never I, O or Q. Older cars, boats and bikes: anything goes.
+  vehicles: (x) => {
+    if (x.vin === undefined || !['car', 'truck', 'motorcycle', 'rv'].includes(String(x.kind)) || Number(x.year) < 1981) return;
+    const vin = String(x.vin).toUpperCase().replace(/\s/g, '');
+    if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) throw bad('invalid_value', 'VIN: 17 letters and numbers (never I, O or Q)');
+    x.vin = vin;
+  },
   // The one contact-method shape: the value is checked and normalised by kind (phones in E.164).
   contact_methods: (x) => {
     if (x.kind === 'postal' || x.value === undefined) return;
@@ -206,7 +242,6 @@ const CHECKS: Record<string, (data: Record<string, unknown>) => void> = {
       const ok = x.allDay ? end.at.slice(0, 10) >= start.at.slice(0, 10) : Date.parse(end.at) > Date.parse(start.at);
       if (!ok) throw bad('end_before_start', x.allDay ? 'The last day is before the first' : 'It ends before it starts');
     }
-    if (start && x.repeatUntil && String(x.repeatUntil) < start.at.slice(0, 10)) throw bad('end_before_start', '“Repeats until” is before it starts');
   },
 };
 
@@ -307,6 +342,7 @@ export function displayValue(p: PartDef, v: unknown): string {
     case 'repeat': return describeRepeat(String(v));
     case 'geo': { const g = v as { lat: number; lon: number }; return `${Math.abs(g.lat)}° ${g.lat >= 0 ? 'N' : 'S'}, ${Math.abs(g.lon)}° ${g.lon >= 0 ? 'E' : 'W'}`; }
     case 'record': { const n = Array.isArray(v) ? v.length : 1; return `${n} linked ${n === 1 ? 'entry' : 'entries'}`; }
+    case 'party': case 'contact': return (Array.isArray(v) ? v : [v]).map((x) => partyName(String(x))).join(', ');
     default: return String(v);
   }
 }

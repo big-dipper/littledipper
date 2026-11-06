@@ -190,14 +190,14 @@ async function main() {
     ok(ana.affiliations[0].party === acme.id && ana.methods.filter((m: any) => m.primary).length === 1 && ana.methods[0].value === 'ana@acme.example', 'a person can work at an organisation; one primary per kind; email domains lower-cased');
     await a.call('PATCH', `/api/parties/${acme.id}`, { affiliations: [{ party: ana.id, role: 'x' }] }, [400]);
     ok(true, 'an affiliation points to an organisation, not a person');
-    const boss = await a.call('POST', '/api/data/employment', { data: { employer: 'Acme Corp', title: 'Engineer', supervisorContact: ana.id }, validFrom: '2018-01', validTo: '2019-06' });
+    const boss = await a.call('POST', '/api/data/employment', { data: { employer: acme.id, title: 'Engineer', supervisor: ana.id }, validFrom: '2018-01', validTo: '2019-06' });
     const anaDetail = await a.call('GET', `/api/parties/${ana.id}`);
     ok(anaDetail.usedBy.length === 1 && anaDetail.usedBy[0].recordId === boss.id, 'a party shows the entries that point to it');
     const inUseBody = await a.call('DELETE', `/api/parties/${ana.id}`, undefined, [409]);
     ok(inUseBody.code === 'in_use' && inUseBody.usedBy.length === 1, 'deleting a party that entries point to says so first');
     await a.call('DELETE', `/api/parties/${ana.id}?confirm=true`);
     const bossAfter = await a.call('GET', `/api/data/employment/${boss.id}`);
-    ok(!('supervisorContact' in bossAfter.data) && bossAfter.data.employer === 'Acme Corp', 'confirmed: the entry no longer points to them, nothing dangles');
+    ok(!('supervisor' in bossAfter.data) && bossAfter.data.employer === acme.id && boss.title === 'Engineer at Acme Corp', 'confirmed: the entry no longer points to them, nothing dangles (and titles show party names)');
     await a.call('DELETE', `/api/data/employment/${boss.id}`);
     await a.call('DELETE', `/api/parties/${acme.id}`);
 
@@ -249,6 +249,12 @@ async function main() {
     ok(detB.sharedIn.length > 0 && !detB.syncError, 'reads still work after rotation');
 
     console.log('domains');
+    // Entries point to people and organisations, never typed names: one party per name, made on first use.
+    const orgIds = new Map<string, string>();
+    const org = async (name: string, type = 'organisation') => {
+      if (!orgIds.has(name)) orgIds.set(name, (await a.call('POST', '/api/parties', { type, name })).id);
+      return orgIds.get(name)!;
+    };
     const cat = (await a.call('GET', '/api/catalog')).domains;
     ok(cat.length >= 20 && cat.some((d: any) => d.id === 'employment' && d.endpoint === '/api/data/employment'), `catalog lists ${cat.length} domains`);
     await a.call('GET', '/api/data/messages', undefined, [404]);
@@ -263,11 +269,13 @@ async function main() {
     await a.call('POST', '/api/data/residences', { data: { street1: 'x' } }, [400]);
     await a.call('POST', '/api/data/residences', { data: { street1: 'x', city: 'y', country: 'US', nope: 1 } }, [400]);
     await a.call('POST', '/api/data/residences', { data: { street1: 'x', city: 'y', country: 'US' }, validFrom: '2020-01', validTo: '2019-01' }, [400]);
-    await a.call('POST', '/api/data/financial_accounts', { data: { kind: 'checking', institution: 'Harbor CU', last4: '4111111111111111' } }, [400]);
-    ok(true, 'validation: required parts, unknown parts, date order, last-4 only');
+    await a.call('POST', '/api/data/financial_accounts', { data: { kind: 'checking', institution: 'Harbor CU' } }, [400]);
+    ok(true, 'validation: required parts, unknown parts, date order, and an institution is a party, never a typed name');
     // Employment with secret pay
-    const job = await a.call('POST', '/api/data/employment', { data: { employer: 'Alder Studio', title: 'Product designer', city: 'Portland', country: 'US', currentPay: { amount: 120000, currency: 'usd' }, employeeId: 'AS-0042' }, validFrom: '2021-03' });
-    await a.call('POST', '/api/data/employment', { data: { employer: 'Kiln Co', title: 'Ceramicist' }, validFrom: '2016-01', validTo: '2021-02' });
+    const job = await a.call('POST', '/api/data/employment', { data: { employer: await org('Alder Studio'), title: 'Product designer', location: { city: 'Portland', country: 'US' }, currentPay: { amount: 120000, currency: 'usd', period: 'year' }, employeeId: 'AS-0042' }, validFrom: '2021-03' });
+    await a.call('POST', '/api/data/employment', { data: { employer: await org('Kiln Co'), title: 'Ceramicist' }, validFrom: '2016-01', validTo: '2021-02' });
+    await a.call('POST', '/api/data/employment', { data: { employer: await org('Alder Studio'), title: 'x', currentPay: { amount: 1, currency: 'USD' } } }, [400]);
+    ok(true, 'pay says per what (hour, year…)');
     ok(job.title === 'Product designer at Alder Studio' && job.masked.includes('currentPay') && job.data.employeeId.startsWith('••••'), 'secret parts are masked');
     const rev = await a.call('POST', `/api/data/employment/${job.id}/reveal`, {});
     ok(rev.data.currentPay.amount === 120000 && rev.data.employeeId === 'AS-0042', 'reveal decrypts secret parts');
@@ -308,12 +316,12 @@ async function main() {
     const restored = await a.call('GET', `/api/data/employment/${job.id}`);
     ok(restored.notes === 'Promoted in 2023' && restored.updatedBy.type === 'owner' && (await a.call('GET', `/api/data/employment/${job.id}/history`)).items[0].action === 'restore', 'restoring a version is a new change, and history keeps it');
     await a.call('PATCH', `/api/data/employment/${job.id}`, { notes: '' });
-    const school = await a.call('POST', '/api/data/education', { data: { institution: 'Night school' } });
+    const school = await a.call('POST', '/api/data/education', { data: { institution: await org('Night school') } });
     const gone = await a.call('DELETE', `/api/data/education/${school.id}`);
     const bin = (await a.call('GET', '/api/data/education/deleted')).items;
     ok(gone.restorableForDays === 30 && bin.length === 1 && bin[0].record.id === school.id, 'a deleted record is listed for 30 days');
     await a.call('POST', `/api/data/education/${school.id}/history/${bin[0].version}/restore`);
-    ok((await a.call('GET', `/api/data/education/${school.id}`)).data.institution === 'Night school' && !(await a.call('GET', '/api/data/education/deleted')).items.length, 'and can be brought back');
+    ok((await a.call('GET', `/api/data/education/${school.id}`)).data.institution === await org('Night school') && !(await a.call('GET', '/api/data/education/deleted')).items.length, 'and can be brought back');
     await a.call('DELETE', `/api/data/education/${school.id}`);
     const noHist = await fetch(`${a.base}/api/data/employment/${job.id}/history`, { headers: { authorization: `Bearer ${(await a.call('POST', '/api/keys', { name: 'IDs only', scopes: ['ids:read'] })).secret}` } });
     ok(noHist.status === 403, "history needs the category's read scope");
@@ -337,11 +345,11 @@ async function main() {
     ok((await tool('get_record', { kind: 'ids', id: 'x' })).isError, 'a kind outside the grant is a tool error, not a crash');
     const found = (await tool('search_records', { query: 'alder' })).structuredContent.records;
     ok(found.length === 1 && found[0].masked.includes('employeeId') && found[0].data.employeeId !== 'AS-0042', 'search_records finds the job, with secrets still masked');
-    const batch = (await tool('add_records', { kind: 'employment', records: [{ data: { employer: 'Globex', title: 'Analyst' }, validFrom: '2015-01', validTo: '2016-06' }, { data: { title: 'No employer' } }] })).structuredContent;
+    const batch = (await tool('add_records', { kind: 'employment', records: [{ data: { employer: await org('Globex'), title: 'Analyst' }, validFrom: '2015-01', validTo: '2016-06' }, { data: { title: 'No employer' } }] })).structuredContent;
     ok(batch.added === 1 && batch.failed === 1 && batch.results[1].error, 'add_records adds what it can and says what failed and why');
     const globex = await a.call('GET', `/api/data/employment/${batch.results[0].id}`);
     ok(globex.source.type === 'app' && globex.updatedByLabel === 'Muse', "the assistant's record is credited to it");
-    ok((await tool('add_records', { kind: 'employment', records: Array.from({ length: 51 }, () => ({ data: { employer: 'x' } })) })).isError, 'a batch over 50 is refused');
+    ok((await tool('add_records', { kind: 'employment', records: Array.from({ length: 51 }, () => ({ data: { title: 'x' } })) })).isError, 'a batch over 50 is refused');
     ok((await tool('upload_document', { name: 'x.pdf', mimeType: 'application/pdf', contentBase64: Buffer.from('%PDF-1.4').toString('base64') })).isError, 'uploading needs documents:write');
     await a.call('DELETE', `/api/data/employment/${batch.results[0].id}`);
     // Assistant modes, Review and secrets
@@ -350,12 +358,13 @@ async function main() {
     const as = (secret: string) => async (name: string, args: object = {}) => (await mcp('tools/call', { name, arguments: args }, secret)).body.result;
     const answerer = as(await asKey('answer'));
     ok((await answerer('whoami')).structuredContent.assistant.mode === 'answer', 'whoami tells an assistant its mode');
-    const ro = await answerer('add_record', { kind: 'employment', data: { employer: 'Initech' } });
+    const initechId = await org('Initech');
+    const ro = await answerer('add_record', { kind: 'employment', data: { employer: initechId } });
     ok(ro.isError && ro.content[0].text.startsWith('read_only'), 'an answer-only assistant can read but not change anything');
     const suggesterSecret = await asKey('suggest');
     const suggester = as(suggesterSecret);
     const jobsBefore = (await a.call('GET', '/api/data/employment')).items.length;
-    const proposed = (await suggester('add_record', { kind: 'employment', data: { employer: 'Initech', title: 'Engineer' }, validFrom: '2012' })).structuredContent;
+    const proposed = (await suggester('add_record', { kind: 'employment', data: { employer: initechId, title: 'Engineer' }, validFrom: '2012' })).structuredContent;
     ok(proposed.status === 'pending_review' && (await a.call('GET', '/api/data/employment')).items.length === jobsBefore, 'in suggest mode a new record waits in Review instead of saving');
     ok((await suggester('add_record', { kind: 'employment', data: { title: 'No employer' } })).isError, 'a suggestion is checked straight away, so the assistant hears about mistakes');
     const queue = (await a.call('GET', '/api/reviews')).items;
@@ -382,18 +391,18 @@ async function main() {
     const trusted = as(await asKey('answer', ['employment.employeeId']));
     ok((await trusted('get_record', { kind: 'employment', id: job.id })).structuredContent.data.employeeId === 'AS-0042', 'an assistant reads a secret field only once the owner allows that field');
     const leaving = await a.call('POST', '/api/keys', { name: 'Muse (leaving)', scopes: empScopes, assistant: { mode: 'suggest', secretFields: [] } });
-    await as(leaving.secret)('add_record', { kind: 'employment', data: { employer: 'Hooli', title: 'Engineer' } });
+    await as(leaving.secret)('add_record', { kind: 'employment', data: { employer: await org('Hooli'), title: 'Engineer' } });
     await a.call('DELETE', `/api/keys/${leaving.id}`);
     const orphan = (await a.call('GET', '/api/reviews')).items.find((r: any) => r.by === 'Muse (leaving)');
     ok(orphan && (await a.call('POST', `/api/reviews/${orphan.id}/approve`)).status === 'approved', "a disconnected assistant's suggestions stay, and can still be approved");
-    for (const r of (await a.call('GET', '/api/data/employment')).items.filter((x: any) => ['Initech', 'Hooli'].includes(x.data.employer))) await a.call('DELETE', `/api/data/employment/${r.id}`);
+    for (const r of (await a.call('GET', '/api/data/employment')).items.filter((x: any) => [initechId, orgIds.get('Hooli')].includes(x.data.employer))) await a.call('DELETE', `/api/data/employment/${r.id}`);
     // Provenance and undo
     const undoKey = await a.call('POST', '/api/keys', { name: 'Muse (undo)', scopes: empScopes, assistant: { mode: 'make', secretFields: [] } });
     const muse = as(undoKey.secret);
-    const clerk = await a.call('POST', '/api/data/employment', { data: { employer: 'Initrode', title: 'Clerk', city: 'Austin' }, validFrom: '2010' });
-    await muse('update_record', { kind: 'employment', id: clerk.id, notes: 'Promoted', data: { title: 'Manager', city: 'Dallas' } });
-    await a.call('PATCH', `/api/data/employment/${clerk.id}`, { data: { city: 'Houston' } });
-    const added = (await muse('add_record', { kind: 'employment', data: { employer: 'Vandelay', title: 'Importer' } })).structuredContent;
+    const clerk = await a.call('POST', '/api/data/employment', { data: { employer: await org('Initrode'), title: 'Clerk', department: 'Austin' }, validFrom: '2010' });
+    await muse('update_record', { kind: 'employment', id: clerk.id, notes: 'Promoted', data: { title: 'Manager', department: 'Dallas' } });
+    await a.call('PATCH', `/api/data/employment/${clerk.id}`, { data: { department: 'Houston' } });
+    const added = (await muse('add_record', { kind: 'employment', data: { employer: await org('Vandelay'), title: 'Importer' } })).structuredContent;
     const addedNow = await a.call('GET', `/api/data/employment/${added.id}`);
     ok(addedNow.sourceLabel === 'Muse (undo)' && addedNow.updatedByLabel === 'Muse (undo)', "a record says which assistant added it");
     const sessions = (await a.call('GET', `/api/keys/${undoKey.id}/sessions`)).items;
@@ -401,7 +410,7 @@ async function main() {
     const undone = (await a.call('POST', `/api/keys/${undoKey.id}/sessions/undo`, { start: sessions[0].start })).results;
     const clerkNow = await a.call('GET', `/api/data/employment/${clerk.id}`);
     const clerkResult = undone.find((r: any) => r.recordId === clerk.id);
-    ok(clerkNow.data.title === 'Clerk' && clerkNow.notes === '' && clerkNow.data.city === 'Houston' && clerkResult.skipped.includes('City'), "undoing a session puts back the assistant's changes but keeps the owner's later edit, and says so");
+    ok(clerkNow.data.title === 'Clerk' && clerkNow.notes === '' && clerkNow.data.department === 'Houston' && clerkResult.skipped.includes('Department'), "undoing a session puts back the assistant's changes but keeps the owner's later edit, and says so");
     ok(undone.find((r: any) => r.recordId === added.id).outcome === 'removed' && (await a.call('GET', '/api/data/employment/deleted')).items.some((v: any) => v.record.id === added.id), 'a record the assistant added is removed, and stays recoverable');
     await muse('update_record', { kind: 'employment', id: clerk.id, notes: 'Second try' });
     const lastChange = (await a.call('GET', `/api/data/employment/${clerk.id}/history`)).items[0];
@@ -485,7 +494,7 @@ async function main() {
     const viaOauth = as(oaTok.access_token);
     const who = (await viaOauth('whoami')).structuredContent;
     ok(who.name === 'Muse' && who.assistant.mode === 'suggest' && Date.parse(who.expiresAt) - Date.now() > 59 * 86400_000, 'the connected assistant has its mode and a 60-day connection');
-    ok((await viaOauth('add_record', { kind: 'employment', data: { employer: 'Wayne', title: 'Butler' } })).structuredContent.status === 'pending_review', 'its changes wait in Review like any assistant');
+    ok((await viaOauth('add_record', { kind: 'employment', data: { employer: await org('Wayne Enterprises'), title: 'Butler' } })).structuredContent.status === 'pending_review', 'its changes wait in Review like any assistant');
     const r1 = (await oauthToken({ grant_type: 'refresh_token', refresh_token: oaTok.refresh_token, client_id: oaClient.client_id })).body;
     const rAgain = (await oauthToken({ grant_type: 'refresh_token', refresh_token: oaTok.refresh_token, client_id: oaClient.client_id })).body;
     ok(r1.access_token && r1.refresh_token !== oaTok.refresh_token && rAgain.access_token, 'refreshing rotates the token, and a retry within a minute still works');
@@ -520,7 +529,7 @@ async function main() {
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(!detB.sharedDomains.length, 'unsharing removes it');
     await a.call('PUT', `/api/parties/${cA.id}/grants`, { domains: { education: true } });
-    await a.call('POST', '/api/data/education', { data: { institution: 'Konstfack', degree: 'MFA' }, validFrom: '2012-09', validTo: '2014-06' });
+    await a.call('POST', '/api/data/education', { data: { institution: await org('Konstfack'), degree: 'MFA', outcome: 'graduated', conferredOn: '2014-06' }, validFrom: '2012-09', validTo: '2014-06' });
     await sleep(3000);
     detB = await b.call('GET', `/api/parties/${cB.id}`);
     ok(detB.sharedDomains.some((d: any) => d.domain === 'education' && d.records.length === 1), 'grant + edit nudge B to sync without asking');
@@ -529,16 +538,22 @@ async function main() {
     const dentist = await a.call('POST', '/api/data/events', { data: { title: 'Dentist', start: { at: '2026-11-04T09:30', tz: 'America/New_York' }, end: { at: '2026-11-04T10:15', tz: 'America/New_York' }, location: 'Main St' } });
     const backwards = await fetch(`${a.base}/api/data/events`, { method: 'POST', headers: { 'content-type': 'application/json', origin: a.base, cookie: [...a.jar].map(([k, v]) => `${k}=${v}`).join('; ') }, body: JSON.stringify({ data: { title: 'Oops', start: { at: '2026-11-04T10:00', tz: 'UTC' }, end: { at: '2026-11-04T09:00', tz: 'UTC' } } }) });
     ok(backwards.status === 400 && (await backwards.json()).code === 'end_before_start', 'an event that ends before it starts is refused');
-    await a.call('POST', '/api/data/events', { data: { title: 'Yoga', start: { at: '2026-11-02T18:00', tz: 'Europe/Stockholm' }, end: { at: '2026-11-02T19:00', tz: 'Europe/Stockholm' }, repeat: 'weekly', repeatUntil: '2026-11-30' } });
+    await a.call('POST', '/api/data/events', { data: { title: 'Yoga', start: { at: '2026-11-02T18:00', tz: 'Europe/Stockholm' }, end: { at: '2026-11-02T19:00', tz: 'Europe/Stockholm' }, repeat: 'FREQ=WEEKLY;UNTIL=20261130' } });
+    await a.call('POST', '/api/data/events', { data: { title: 'Book club', start: { at: '2026-01-12T19:00', tz: 'America/Los_Angeles' }, repeat: 'FREQ=MONTHLY;BYDAY=2MO' } });
+    await a.call('POST', '/api/data/events', { data: { title: 'Physio', start: { at: '2026-11-03T08:00', tz: 'America/Los_Angeles' }, repeat: 'FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,TH;COUNT=3' } });
+    await a.call('POST', '/api/data/events', { data: { title: 'x', start: { at: '2026-11-03T08:00', tz: 'America/Los_Angeles' }, repeat: 'weekly' } }, [400]);
     await a.call('POST', '/api/data/events', { data: { title: 'Design conference', start: { at: '2026-11-18T00:00', tz: 'America/Los_Angeles' }, end: { at: '2026-11-20T00:00', tz: 'America/Los_Angeles' }, allDay: true } });
-    await a.call('POST', '/api/data/relationships', { data: { relation: 'sibling', name: 'Ada', birthDate: '1990-11-12' } });
+    const ada = await a.call('POST', '/api/parties', { type: 'person', name: 'Ada', birthDate: '1990-11-12' });
+    await a.call('POST', '/api/data/relationships', { data: { party: ada.id, relation: 'sibling' } });
     await a.call('POST', '/api/data/travel', { data: { country: 'JP', city: 'Kyoto', purpose: 'leisure' }, validFrom: '2026-11-24', validTo: '2026-11-27' });
     const cal = (await a.call('GET', '/api/calendar?from=2026-11-01&to=2026-11-30')).items;
     const yoga = cal.filter((i: any) => i.title === 'Yoga');
     ok(cal.some((i: any) => i.recordId === dentist.id && i.start.at === '2026-11-04T09:30:00-05:00' && i.end.at === '2026-11-04T10:15:00-05:00' && i.location === 'Main St'), 'a timed event is on the calendar with its zone');
     ok(yoga.length === 5 && yoga.map((i: any) => i.startDate).join() === '2026-11-02,2026-11-09,2026-11-16,2026-11-23,2026-11-30' && yoga.every((i: any) => i.start.at.endsWith('T18:00:00+01:00')), 'a weekly event repeats until its end date, at the same local time');
     ok(cal.some((i: any) => i.title === 'Design conference' && i.allDay && i.startDate === '2026-11-18' && i.endDate === '2026-11-20'), 'an all-day event spans its days');
-    ok(cal.some((i: any) => i.kind === 'birthday' && i.title === 'Ada’s birthday' && i.detail === 'turns 36' && i.startDate === '2026-11-12'), 'birthdays come from family records');
+    ok(cal.some((i: any) => i.kind === 'birthday' && i.title === 'Ada’s birthday' && i.detail === 'turns 36' && i.startDate === '2026-11-12'), 'birthdays come from the people themselves');
+    ok(cal.some((i: any) => i.title === 'Book club' && i.startDate === '2026-11-09'), 'a monthly rule finds the second Monday');
+    ok(cal.filter((i: any) => i.title === 'Physio').map((i: any) => i.startDate).join() === '2026-11-03,2026-11-05,2026-11-17', 'every other week on Tuesday and Thursday, three times');
     ok(cal.some((i: any) => i.kind === 'trip' && i.startDate === '2026-11-24' && i.endDate === '2026-11-27'), 'trips span their days');
     ok(cal.map((i: any) => i.startDate).every((d: string, i: number, all: string[]) => !i || all[i - 1] <= d), 'the calendar is in date order');
     await a.call('GET', '/api/calendar?from=2026-11-30&to=2026-11-01', undefined, [400]);
@@ -637,7 +652,7 @@ async function main() {
     // Receipts: a photo becomes a receipt document linked to the entry
     const soon = new Date(Date.now() + 10 * 86400_000).toISOString().slice(0, 10);
     const rc1 = await a.call('POST', '/api/data/receipts', { data: {
-      merchant: 'Blue Bottle', purchased: '2026-10-01', total: { amount: 12.5, currency: 'USD' }, returnBy: soon,
+      merchant: await org('Blue Bottle'), purchased: '2026-10-01', total: { amount: 12.5, currency: 'USD' }, returnBy: soon,
       items: [{ description: 'Latte', quantity: 2, price: { amount: 5, currency: 'USD' } }, { description: '', quantity: '' }, { description: 'Scone', price: { amount: 2.5, currency: 'USD' } }],
     } });
     ok(rc1.title === 'Blue Bottle · $12.50' && rc1.data.items.length === 2, 'receipt with line items (blank rows dropped)');
@@ -647,7 +662,7 @@ async function main() {
     ok(true, 'line items need a description');
     const rk = await a.call('POST', '/api/keys', { name: 'Receipt reader', scopes: ['receipts:read', 'receipts:write'] });
     const asRk = { authorization: `Bearer ${rk.secret}` };
-    const rc2 = await (await fetch(`${a.base}/api/data/receipts`, { method: 'POST', headers: { ...asRk, 'content-type': 'application/json' }, body: JSON.stringify({ data: { capturedVia: 'assistant', merchant: 'Hardware Co', purchased: '2026-10-15', total: { amount: 89.99, currency: 'USD' } } }) })).json();
+    const rc2 = await (await fetch(`${a.base}/api/data/receipts`, { method: 'POST', headers: { ...asRk, 'content-type': 'application/json' }, body: JSON.stringify({ data: { merchant: await org('Hardware Co'), purchased: '2026-10-15', total: { amount: 89.99, currency: 'USD' } } }) })).json();
     ok((await raw('POST', `/api/documents?name=hw.png&link=receipts:${rc2.id}`, png, 'image/png', asRk)).status === 201, 'a receipts key can file photos on receipts');
     ok((await raw('POST', '/api/documents?name=loose.png', png, 'image/png', asRk)).status === 403, '…but not put documents in the general library');
     ok((await fetch(`${a.base}/api/files/${up.body.pages[0].id}`, { headers: asRk })).status === 403, "…and can't open the license scan");
@@ -788,7 +803,7 @@ async function main() {
     ok(!lines.some((l) => l.collection === 'apiKeys'), 'export excludes credential hashes');
     ok(lines.some((l) => l.collection === 'recordVersions') && !lines.some((l) => (l.collection === 'records' || l.collection === 'recordVersions') && JSON.stringify(l.data).includes('enc:v1:')), 'export includes history, with secret record parts readable');
     const before = (await a.call('GET', '/api/data/education')).items.length;
-    await a.call('POST', '/api/data/education', { data: { institution: 'After the backup' } });
+    await a.call('POST', '/api/data/education', { data: { institution: await org('After the backup') } });
     await a.call('POST', `/api/node/backups/${bk._id ?? bk.id}/restore`);
     ok((await a.call('GET', '/api/data/education')).items.length === before, 'restoring a backup puts records back as they were');
     const kitBefore = (await a.call('GET', '/api/node')).recoveryKit;

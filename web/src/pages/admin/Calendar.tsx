@@ -6,7 +6,7 @@ import { fetchCatalog, localZone, RecordEditor, useContactsLite, type DateTime, 
 
 /** One thing on the calendar, as GET /api/calendar returns it. */
 export type CalItem = {
-  id: string; kind: 'event' | 'birthday' | 'trip' | 'milestone' | 'deadline' | 'expiry' | 'moment';
+  id: string; kind: 'event' | 'birthday' | 'trip' | 'deadline' | 'expiry' | 'moment';
   title: string; detail?: string; startDate: string; endDate: string; allDay: boolean;
   start?: DateTime; end?: DateTime; location?: string; repeat?: string;
   domain: string; domainLabel: string; recordId: string; contact?: { id: string; name: string };
@@ -46,7 +46,6 @@ const LOOK: Record<CalItem['kind'] | 'shared', Look> = {
   moment: { bg: 'var(--color-accent-100)', ink: 'var(--color-accent-800)', dot: 'var(--color-accent-400)', label: 'Appointment' },
   birthday: { bg: 'var(--color-accent-2-100)', ink: 'var(--color-accent-2-800)', dot: 'var(--color-accent-2-500)', label: 'Birthday' },
   trip: { bg: 'var(--color-accent-2-200)', ink: 'var(--color-accent-2-900)', dot: 'var(--color-accent-2-700)', label: 'Trip' },
-  milestone: { bg: 'var(--color-neutral-200)', ink: 'var(--color-neutral-800)', dot: 'var(--color-neutral-600)', label: 'Life event' },
   deadline: { bg: 'var(--color-neutral-100)', ink: 'var(--color-accent-800)', dot: 'var(--color-accent-500)', border: '1.5px solid var(--color-accent-400)', label: 'Deadline' },
   expiry: { bg: 'var(--color-accent-700)', ink: 'var(--color-neutral-100)', dot: 'var(--color-accent-800)', label: 'Expires' },
   shared: { bg: 'transparent', ink: 'var(--color-accent-2-800)', dot: 'var(--color-accent-2-600)', border: '1px dashed var(--color-accent-2-500)', label: 'Shared with you' },
@@ -56,9 +55,9 @@ export const lookOf = (i: CalItem) => LOOK[i.contact ? 'shared' : i.kind];
 export const labelOf = (i: CalItem) => (i.kind === 'deadline' && i.detail ? `${i.detail} · ${i.title}` : i.kind === 'expiry' ? `${i.title} expires` : i.title);
 
 type Filter = 'mine' | 'shared' | 'birthday' | 'life' | 'due';
-const FILTERS: [Filter, string][] = [['mine', 'My events'], ['shared', 'Shared with me'], ['birthday', 'Birthdays'], ['life', 'Trips & milestones'], ['due', 'Deadlines & expiries']];
+const FILTERS: [Filter, string][] = [['mine', 'My events'], ['shared', 'Shared with me'], ['birthday', 'Birthdays'], ['life', 'Trips'], ['due', 'Deadlines & expiries']];
 const filterOf = (i: CalItem): Filter =>
-  i.contact ? 'shared' : i.kind === 'event' || i.kind === 'moment' ? 'mine' : i.kind === 'birthday' ? 'birthday' : i.kind === 'trip' || i.kind === 'milestone' ? 'life' : 'due';
+  i.contact ? 'shared' : i.kind === 'event' || i.kind === 'moment' ? 'mine' : i.kind === 'birthday' ? 'birthday' : i.kind === 'trip' ? 'life' : 'due';
 const FILTER_DOT: Record<Filter, string> = { mine: LOOK.event.dot, shared: LOOK.shared.dot, birthday: LOOK.birthday.dot, life: LOOK.trip.dot, due: LOOK.expiry.dot };
 
 /** Calendar: your events beside the dates your data already holds, and what contacts share with you. */

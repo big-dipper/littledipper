@@ -1,5 +1,6 @@
 import { config } from './config.js';
 import { ctx } from './ctx.js';
+import { loadPartyNames, trackPartyNames } from './domains/records.js';
 import { openStore, SQLITE_FILE } from './store/index.js';
 import { bootNode } from './node.js';
 import { runMigrations } from './migrate.js';
@@ -11,7 +12,8 @@ import { startFileSweeper } from './files.js';
 
 async function main() {
   const say = (m: string) => console.log(`[little-dipper] ${m}`);
-  ctx.store = await openStore(config, say);
+  ctx.store = trackPartyNames(await openStore(config, say));
+  await loadPartyNames();
   say(`Store: SQLite (${config.dataDir}/${SQLITE_FILE})`);
   const { moved } = await bootNode(say);
   await runMigrations(say);

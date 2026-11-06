@@ -4,7 +4,7 @@ import { fingerprint, newId, randomToken } from '../crypto.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner } from '../auth.js';
 import { ownerName, profileLines, PROFILE_LINES, publicName } from '../profile.js';
-import { getDomain, partyReferences, unlinkParty } from '../domains/records.js';
+import { getDomain, isPartialDate, partyReferences, unlinkParty } from '../domains/records.js';
 import { checkMethods } from '../methods.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import { getOwner } from '../owner.js';
@@ -25,7 +25,16 @@ async function getContact(id: string) {
 }
 
 const TYPES = ['person', 'organisation'] as const;
-type PartyInput = { type?: string; name?: string; notes?: string; methods?: unknown; affiliations?: { party?: string; role?: string }[] };
+type PartyInput = { type?: string; name?: string; notes?: string; methods?: unknown; affiliations?: { party?: string; role?: string }[]; birthDate?: string | null };
+
+/** A person's date of birth, as a partial date; organisations don't have one. */
+function checkBirthDate(v: PartyInput['birthDate'], type: string) {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  if (type !== 'person') throw bad('invalid_value', 'Only a person has a date of birth');
+  if (!isPartialDate(v)) throw bad('invalid_value', 'Date of birth: use YYYY, YYYY-MM or YYYY-MM-DD');
+  return v;
+}
 
 /** Validated affiliations: each points to an organisation that exists, never to the party itself. */
 async function checkAffiliations(list: PartyInput['affiliations'], self: string | null) {
@@ -118,6 +127,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     const c: PartyDoc = {
       _id: newId('pty'), type: b.type as PartyDoc['type'], name, methods: checkMethods(b.methods), notes: String(b.notes || '').slice(0, 10000),
       affiliations: (await checkAffiliations(b.affiliations, null)) ?? [], node: null, sharedIn: [], sharedInFetchedAt: null, createdAt: t,
+      ...(checkBirthDate(b.birthDate, String(b.type)) ? { birthDate: b.birthDate! } : {}),
     };
     await ctx.store.insert('parties', c);
     await audit({ actor: ownerActor(p.key._id), action: 'party.create', resource: `parties/${c._id}`, text: `You added ${name}`, tone: 'owner' });
@@ -151,6 +161,8 @@ export default async function contactRoutes(app: FastifyInstance) {
       patch.type = b.type;
     }
     if (b.notes !== undefined) patch.notes = String(b.notes).slice(0, 10000);
+    const born = checkBirthDate(b.birthDate, String(patch.type ?? c.type));
+    if (born !== undefined) patch.birthDate = born ?? undefined;
     if (b.methods !== undefined) patch.methods = checkMethods(b.methods);
     const aff = await checkAffiliations(b.affiliations, c._id);
     if (aff) patch.affiliations = aff;

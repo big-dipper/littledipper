@@ -27,6 +27,8 @@ export type PartyDoc = Doc & {
   name: string;
   methods: import('./methods.js').ContactMethod[];
   notes: string;
+  /** A person's date of birth (YYYY, YYYY-MM or YYYY-MM-DD). Their birthday shows on your calendar. */
+  birthDate?: string;
   /** People and organisations this one belongs to, e.g. works at Acme. */
   affiliations: { party: string; role: string }[];
   /** The party runs Little Dipper: its node, and our connection with it. */

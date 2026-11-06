@@ -12,6 +12,7 @@ import { createInterface } from 'node:readline/promises';
 import QRCode from 'qrcode';
 import { config } from './config.js';
 import { ctx } from './ctx.js';
+import { loadPartyNames, trackPartyNames } from './domains/records.js';
 import { decryptWithPassphrase, nodeIdFromPublicKey } from './crypto.js';
 import { loadKeystore, saveKeystore } from './keystore.js';
 import { attachNode, canonicalUrl, issueClaimLink } from './node.js';
@@ -21,7 +22,8 @@ import { runMigrations } from './migrate.js';
 
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
-  ctx.store = await openStore(config, (m) => console.error(m));
+  ctx.store = trackPartyNames(await openStore(config, (m) => console.error(m)));
+  await loadPartyNames();
   try {
     switch (cmd) {
       case 'claim-link': {

@@ -20,7 +20,7 @@ const INSTRUCTIONS = `This is the owner's Little Dipper: their records (addresse
 - Call whoami first to see which kinds of records your key can read or change, and your mode: answer (read only), suggest (your changes wait for the owner to approve them) or make (your changes are saved, except secret values and core identity, which always wait for approval: legal names, birth, citizenship, IDs, the current address, email and phone). In suggest mode, documents you upload wait unfiled in the owner's inbox.
 - When a change comes back "pending_review", tell the owner it's waiting for them in Review. Don't say it's saved. list_review_items shows what's still waiting.
 - Call get_profile for the owner's current facts (names, birth, citizenship, where they live, main email and phone). The profile is worked out from their records: to change a line, change the record it comes from (each line says which).
-- Call list_kinds to learn each kind's fields before adding or updating records. Use the field keys it gives you. A party field takes the id of a person or organisation, never a typed name; a record field takes the id of another record of the kinds it lists.
+- Call list_kinds to learn each kind's fields before adding or updating records. Use the field keys it gives you. A party field takes the id of a person or organisation, never a typed name: find_parties, then add_party if they're new; a record field takes the id of another record of the kinds it lists.
 - Record only what's true and what the owner said. Don't work out legal conclusions (tax residency, marital or immigration status) from other facts: ask the owner, or suggest it to them.
 - Dated kinds keep history: when something ends (a move, a job change), set validTo on the old record and add a new one, rather than overwriting it.
 - Fields marked secret come back masked unless the owner has let you read that field.
@@ -75,6 +75,28 @@ const TOOLS: Tool[] = [
     run: async (_a, call) => {
       const r = await ok(call('GET', '/api/profile')) as { items: Json[] };
       return { lines: r.items.map((l) => ({ key: l.key, label: l.label, value: l.value, sensitivity: l.sensitivity, from: l.from })) };
+    },
+  },
+  {
+    name: 'find_parties', title: 'Find people and organisations',
+    description: 'Search the owner’s people and organisations by name (employers, landlords, doctors, shops, friends). Use the id in any party field. Search before adding, so nobody is added twice.',
+    inputSchema: obj({ q: str('Part of the name, e.g. "Acme"'), type: { type: 'string', enum: ['person', 'organisation'] } }), annotations: { readOnlyHint: true },
+    run: async (a, call) => {
+      const r = await ok(call('GET', `/api/parties${q({ q: a.q, type: a.type })}`)) as { items: Json[] };
+      return { parties: r.items.slice(0, 50).map((p) => ({ id: p.id, type: p.type, name: p.name, onLittleDipper: !!p.node })) };
+    },
+  },
+  {
+    name: 'add_party', title: 'Add a person or organisation',
+    description: 'Add a person or organisation the owner deals with, to point records at (a receipt’s merchant, a job’s employer). Check find_parties first. Only what you know to be true: a name, and optionally an email, phone or website.',
+    inputSchema: obj({
+      type: { type: 'string', enum: ['person', 'organisation'] }, name: str('Their name as they write it'),
+      email: str('Optional'), phone: str('Optional, with country code outside North America'), website: str('Optional'),
+    }, ['type', 'name']),
+    run: async (a, call) => {
+      const methods = [['email', a.email], ['phone', a.phone], ['website', a.website]].filter(([, v]) => v).map(([kind, value]) => ({ kind, value }));
+      const p = await ok(call('POST', '/api/parties', { type: a.type, name: a.name, methods })) as Json;
+      return { id: p.id, type: p.type, name: p.name };
     },
   },
   {

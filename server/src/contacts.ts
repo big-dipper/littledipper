@@ -39,7 +39,7 @@ export async function partyOut(c: PartyDoc, opts: { detail?: boolean } = {}) {
     node: c.node && link ? { url: displayAddr(link.peerUrl), nodeId: link.peerNodeId, linkId: link._id } : null,
     grants: { profile: g.profile, fields: g.fields, domains: g.domains },
     lastActivity: await lastActivityOf(c, link), createdAt: c.createdAt,
-    methods: c.methods, affiliations: c.affiliations ?? [],
+    methods: c.methods, affiliations: c.affiliations ?? [], ...(c.birthDate ? { birthDate: c.birthDate } : {}),
   };
   if (!opts.detail) return base;
   const req = link ? await ctx.store.findOne<RequestDoc>('connectionRequests', { linkId: link._id, status: 'pending' }) : null;

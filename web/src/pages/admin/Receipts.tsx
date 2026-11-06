@@ -11,6 +11,9 @@ const needsDetails = (r: Rec) => !r.data.merchant || !r.data.total;
 const yearOf = (r: Rec) => String(r.data.purchased ?? '').slice(0, 4);
 
 /** Totals per currency: receipts from a trip abroad don't get added to dollars. */
+/** The merchant's name, from the title (an entry stores the merchant as a party id). */
+const merchantName = (r: Rec) => (r.data.merchant ? r.title.split(' · ')[0] : '');
+
 function totals(recs: Rec[]): Money[] {
   const by = new Map<string, number>();
   for (const r of recs) { const t = r.data.total as Money | undefined; if (t) by.set(t.currency, (by.get(t.currency) ?? 0) + t.amount); }
@@ -45,7 +48,8 @@ export default function Receipts() {
   const years = useMemo(() => [...new Set(all.map(yearOf).filter(Boolean))].sort().reverse(), [all]);
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return all.filter((r) => (year === 'all' || yearOf(r) === year) && (!needle || JSON.stringify(r.data).toLowerCase().includes(needle) || r.notes.toLowerCase().includes(needle)));
+    // Search the title too: it carries the merchant's name (the data holds its id).
+    return all.filter((r) => (year === 'all' || yearOf(r) === year) && (!needle || r.title.toLowerCase().includes(needle) || JSON.stringify(r.data).toLowerCase().includes(needle) || r.notes.toLowerCase().includes(needle)));
   }, [all, year, q]);
   const incomplete = shown.filter(needsDetails);
   const complete = shown.filter((r) => !needsDetails(r));
@@ -68,7 +72,7 @@ export default function Receipts() {
     const made: Rec[] = [];
     for (const f of files) {
       // The receipt first, then its photo filed on it. A failed upload takes the empty receipt with it.
-      const rec = await post<Rec>(`/api/data/${DOMAIN}`, { data: { capturedVia: 'upload' } }).catch((e) => { toast(`${f.name}: ${(e as Error).message}`); return null; });
+      const rec = await post<Rec>(`/api/data/${DOMAIN}`, { data: {} }).catch((e) => { toast(`${f.name}: ${(e as Error).message}`); return null; });
       if (!rec) continue;
       try {
         const doc = await uploadDocument(f, { link: { domain: DOMAIN, recordId: rec.id } });
@@ -88,7 +92,7 @@ export default function Receipts() {
     const lines = shown.map((r) => {
       const v = r.data, t = v.total as Money | undefined;
       const items = ((v.items as { description: string; quantity?: number }[] | undefined) ?? []).map((i) => (i.quantity ? `${i.quantity} × ${i.description}` : i.description)).join('; ');
-      return [v.purchased, v.merchant, v.category, t?.amount, t?.currency, (v.subtotal as Money | undefined)?.amount, (v.tax as Money | undefined)?.amount, v.paymentMethod, v.orderNumber, v.returnBy, v.warrantyUntil, items, r.notes].map(csvCell).join(',');
+      return [v.purchased, merchantName(r), v.category, t?.amount, t?.currency, (v.subtotal as Money | undefined)?.amount, (v.tax as Money | undefined)?.amount, v.paymentMethod, v.orderNumber, v.returnBy, v.warrantyUntil, items, r.notes].map(csvCell).join(',');
     });
     saveFile(`receipts-${year === 'all' ? 'all' : year}.csv`, [head.join(','), ...lines].join('\n') + '\n', 'text/csv');
   };
@@ -168,7 +172,7 @@ export default function Receipts() {
 
       {editing && (
         <RecordEditor d={d} rec={editing === 'new' ? null : editing} contacts={contacts} onClose={() => { setEditing(null); reload(); }} onSaved={() => { setEditing(null); reload(); }}
-          defaults={editing === 'new' ? { purchased: today(), capturedVia: 'manual' } : undefined} />
+          defaults={editing === 'new' ? { purchased: today() } : undefined} />
       )}
     </div>
   );
@@ -184,7 +188,7 @@ function Row({ r, onOpen, catLabel }: { r: Rec; onOpen: () => void; catLabel?: [
     <button className="bare card receipt-row" onClick={onOpen} style={{ padding: '12px 18px', gap: 14 }}>
       <span className="text-muted" style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{r.data.purchased ? fmtDate(String(r.data.purchased)) : 'No date'}</span>
       <span style={{ minWidth: 0 }}>
-        <span style={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(r.data.merchant || (files[0]?.title ?? 'Receipt'))}</span>
+        <span style={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{merchantName(r) || (files[0]?.title ?? 'Receipt')}</span>
         {sub && <span className="text-muted" style={{ display: 'block', fontSize: 12 }}>{sub}</span>}
       </span>
       <span className="receipt-tags">{due && <span className="tag tag-accent">{due.label} {fmtDate(due.date)}</span>}{needsDetails(r) && <span className="tag tag-neutral">Needs details</span>}</span>

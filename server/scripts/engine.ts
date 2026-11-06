@@ -12,7 +12,7 @@ import { ctx } from '../src/ctx.js';
 import { isEncrypted, newId } from '../src/crypto.js';
 import { newKeystore } from '../src/keystore.js';
 import { openStore } from '../src/store/index.js';
-import { buildRecord, describeRepeat, displayValue, entrySens, recordOut } from '../src/domains/records.js';
+import { buildRecord, describeRepeat, trackPartyNames, displayValue, entrySens, recordOut } from '../src/domains/records.js';
 import { shapeRecords } from '../src/domains/sharing.js';
 import type { Actor, DomainDef, PartDef } from '../src/domains/types.js';
 
@@ -23,7 +23,7 @@ async function rejects(fn: () => Promise<unknown>, code: string, what: string) {
 }
 
 const dir = mkdtempSync(path.join(os.tmpdir(), 'ld-engine-'));
-ctx.store = await openStore({ dataDir: dir });
+ctx.store = trackPartyNames(await openStore({ dataDir: dir }));
 ctx.keys = newKeystore();
 const owner: Actor = { type: 'owner', id: 'test' };
 
