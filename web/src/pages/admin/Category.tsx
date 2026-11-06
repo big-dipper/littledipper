@@ -53,7 +53,8 @@ export default function Category() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {data.items.length > 0 && <button className="btn btn-secondary" onClick={() => setSending(true)}>Send a copy</button>}
-          <button className="btn btn-primary" onClick={() => setEditing('new')}>Add {/^[aeiou]/i.test(d.noun) ? 'an' : 'a'} {d.noun}</button>
+          {/* A one-entry category (Birth, Health basics) is edited, never added to, once it has its entry. */}
+          {!(d.single && data.items.length > 0) && <button className="btn btn-primary" onClick={() => setEditing('new')}>Add {/^[aeiou]/i.test(d.noun) ? 'an' : 'a'} {d.noun}</button>}
         </div>
       </div>
 

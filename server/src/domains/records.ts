@@ -323,6 +323,8 @@ export function plainData(rec: RecordDoc): Record<string, unknown> {
 const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
 export const countryName = (code: string) => { try { return regionNames.of(code) || code; } catch { return code; } };
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export function displayValue(p: PartDef, v: unknown): string {
   if (v === undefined || v === null || v === '') return '';
   switch (p.type) {
@@ -343,6 +345,7 @@ export function displayValue(p: PartDef, v: unknown): string {
     case 'geo': { const g = v as { lat: number; lon: number }; return `${Math.abs(g.lat)}° ${g.lat >= 0 ? 'N' : 'S'}, ${Math.abs(g.lon)}° ${g.lon >= 0 ? 'E' : 'W'}`; }
     case 'record': { const n = Array.isArray(v) ? v.length : 1; return `${n} linked ${n === 1 ? 'entry' : 'entries'}`; }
     case 'party': case 'contact': return (Array.isArray(v) ? v : [v]).map((x) => partyName(String(x))).join(', ');
+    case 'date': { const [y, m, d] = String(v).split('-'); return [d && String(+d), m && MONTH_NAMES[+m - 1], y].filter(Boolean).join(' '); }
     default: return String(v);
   }
 }
