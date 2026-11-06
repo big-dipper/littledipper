@@ -6,7 +6,7 @@ import { bad, bearer, checkAssistant, checkAssistantScopes, COOKIE, findKey, Htt
 const MODE_TEXT: Record<AssistantMode, string> = { answer: 'answer questions only', suggest: 'suggest changes', make: 'make changes' };
 import { allFields, plainValue } from '../fields.js';
 import { canonicalUrl, getNode } from '../node.js';
-import { sendSigned, tokenHash, type ContactDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc } from '../federation.js';
+import { sendSigned, tokenHash, type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc } from '../federation.js';
 import { contactsSharing, endLink, nudgePeers } from '../contacts.js';
 import { listDomains, recordOut, versionRecord } from '../domains/records.js';
 import { appVersions, sessionsOf, undoChanges } from '../undo.js';
@@ -147,7 +147,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     if (k._id === p.key._id) throw bad('current_session', 'Sign out instead');
     if (k.kind === 'peer' && k.contactId) {
       // Revoking a peer token ends the connection; the contact stays in the list.
-      const c = await ctx.store.get<ContactDoc>('contacts', k.contactId);
+      const c = await ctx.store.get<PartyDoc>('parties', k.contactId);
       const link = c?.node ? await ctx.store.get<LinkDoc>('nodeLinks', c.node.linkId) : null;
       if (link && link.status !== 'revoked') {
         try { await sendSigned(link.peerUrl, '/peer/links/revoke', { type: 'link.revoke' }); } catch { /* best effort */ }

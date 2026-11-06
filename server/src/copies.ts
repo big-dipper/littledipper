@@ -8,7 +8,8 @@ import { decrypt, encrypt, newId } from './crypto.js';
 import { bad, HttpError } from './auth.js';
 import { shapeRecords, type SharedDomain } from './domains/sharing.js';
 import { getDomain, partSens, recordsOf, sortRecords } from './domains/records.js';
-import { now, type ContactDoc } from './federation.js';
+import { now, type PartyDoc } from './federation.js';
+import { checkMethod } from './methods.js';
 import { firstName } from './contacts.js';
 
 export type Delivery = 'link' | 'file' | 'inline';
@@ -43,11 +44,11 @@ export const snapshotOf = (c: CopyDoc): SharedDomain[] => JSON.parse(decrypt(ctx
 export const linkActive = (c: CopyDoc) => !!c.tokenHash && !c.revokedAt && (!c.expiresAt || c.expiresAt > new Date().toISOString());
 
 export async function copyOut(c: CopyDoc) {
-  const contact = c.contactId ? await ctx.store.get<ContactDoc>('contacts', c.contactId) : null;
+  const contact = c.contactId ? await ctx.store.get<PartyDoc>('parties', c.contactId) : null;
   return {
     id: c._id, title: c.title, note: c.note, delivery: c.delivery,
     items: c.items.map((i) => ({ domain: i.domain, entries: i.recordIds.length, includeSecret: i.includeSecret })),
-    contact: contact ? { id: contact._id, displayName: contact.displayName } : null, sentTo: c.sentTo,
+    contact: contact ? { id: contact._id, name: contact.name } : null, sentTo: c.sentTo,
     link: c.tokenHash ? { active: linkActive(c), expiresAt: c.expiresAt, revokedAt: c.revokedAt } : null,
     views: c.views, downloads: c.downloads, lastViewedAt: c.lastViewedAt, createdAt: c.createdAt,
   };
@@ -95,21 +96,20 @@ export async function recipient(to: { contactId?: string; email?: string; name?:
   const email = to.email?.trim() || null;
   if (email && !EMAIL.test(email)) throw bad('invalid_value', 'That email address doesn’t look right');
   if (to.contactId) {
-    const c = await ctx.store.get<ContactDoc>('contacts', to.contactId);
+    const c = await ctx.store.get<PartyDoc>('parties', to.contactId);
     if (!c) throw bad('invalid_value', 'No such contact');
-    return { contact: c, email: email ?? c.methods.find((m) => m.type === 'email')?.value ?? null, created: false };
+    return { contact: c, email: email ?? (c.methods.find((m) => m.kind === 'email')?.value as string | undefined) ?? null, created: false };
   }
   const lower = email!.toLowerCase();
-  const all = await ctx.store.find<ContactDoc>('contacts', {});
-  const found = all.find((c) => c.methods.some((m) => m.type === 'email' && m.value.trim().toLowerCase() === lower));
+  const all = await ctx.store.find<PartyDoc>('parties', {});
+  const found = all.find((c) => c.methods.some((m) => m.kind === 'email' && String(m.value).toLowerCase() === lower));
   if (found) return { contact: found, email, created: false };
   const t = now();
-  const c: ContactDoc = {
-    _id: newId('con'), kind: 'person', displayName: to.name?.trim().slice(0, 120) || email!, org: null,
-    methods: [{ type: 'email', label: 'Email', value: email! }], notes: '', node: null,
-    sharedIn: [], sharedInFetchedAt: null, requested: [], offered: [], lastActivity: { text: 'Added when you sent a copy', at: t }, createdAt: t,
+  const c: PartyDoc = {
+    _id: newId('pty'), type: 'person', name: to.name?.trim().slice(0, 120) || email!, affiliations: [],
+    methods: [checkMethod({ kind: 'email', value: email! })], notes: '', node: null, sharedIn: [], sharedInFetchedAt: null, createdAt: t,
   };
-  await ctx.store.insert('contacts', c);
+  await ctx.store.insert('parties', c);
   return { contact: c, email, created: true };
 }
 

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ago, copy, del, firstName, get, initials, patch, post, put, SENS, shortDate, STATUS, type ContactDetail as CD, type Field } from '../../api';
+import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, put, SENS, shortDate, STATUS, type ContactMethod, type PartyDetail as CD, type Field } from '../../api';
 import { Confirm, Dialog, ErrorNote, Loading, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
-import { fetchCatalog, fmtRange } from '../../life';
+import { fetchCatalog, fmtRange, Select } from '../../life';
 import { CopyList, SendCopy } from './Copies';
 
 export default function ContactDetail() {
@@ -13,21 +13,21 @@ export default function ContactDetail() {
   const toast = useToast();
   const { tech, refresh } = useAdmin();
   const { run, busy } = useAction();
-  const { data: c, error, reload, setData } = useAsync(() => get<CD>(`/api/contacts/${id}`), [id]);
+  const { data: c, error, reload, setData } = useAsync(() => get<CD>(`/api/parties/${id}`), [id]);
   const { data: fieldsResp } = useAsync(() => get<{ items: Field[] }>('/api/owner/fields'), []);
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(0);
   const { data: catalog } = useAsync(fetchCatalog, []);
-  const [edit, setEdit] = useState<{ notes: string; methods: { type: string; label: string; value: string }[] } | null>(null);
+  const [edit, setEdit] = useState<Edit | null>(null);
 
   if (error) return <div><Link className="btn btn-ghost" to="/admin/contacts">← All contacts</Link><ErrorNote error={error} /></div>;
   if (!c || !fieldsResp) return <Loading />;
   const fields = fieldsResp.items;
-  const first = firstName(c.displayName);
-  const isNode = c.kind === 'node';
+  const first = firstName(c.name);
+  const isNode = !!c.node;
   const s = c.status;
-  const sub = c.node ? c.node.url : c.org || '';
+  const sub = c.node ? c.node.url : c.type === 'organisation' ? 'Organisation' : '';
 
   const accept = async () => {
     if (!c.request) return;
@@ -42,7 +42,7 @@ export default function ContactDetail() {
     if (await run(() => post(`/api/federation/links/${c.node!.linkId}/rotate`), 'Keys rotated. Their Little Dipper was notified.')) reload();
   };
   const disconnect = () => setConfirm({
-    title: `Disconnect ${c.displayName}?`, body: 'They will no longer see anything you shared. They stay in your contacts.', cta: 'Disconnect',
+    title: `Disconnect ${c.name}?`, body: 'They will no longer see anything you shared. They stay in your contacts.', cta: 'Disconnect',
     onConfirm: async () => {
       const r = await run(() => del<{ peerNotified: boolean }>(`/api/federation/links/${c.node!.linkId}`), (r) => (r.peerNotified ? 'Disconnected' : "Disconnected. Their Little Dipper couldn't be reached; it'll find out next time it asks."));
       setConfirm(null);
@@ -50,18 +50,21 @@ export default function ContactDetail() {
     },
   });
   const remove = () => setConfirm({
-    title: `Delete ${c.displayName}?`, body: isNode ? 'This disconnects you and removes them from your contacts.' : 'This removes them and everything you noted about them.', cta: 'Delete',
-    onConfirm: async () => { if (await run(() => del(`/api/contacts/${c.id}`), `${c.displayName} deleted`)) nav('/admin/contacts'); setConfirm(null); },
+    title: `Delete ${c.name}?`,
+    body: [isNode ? 'This disconnects you and removes them from your contacts.' : 'This removes them and everything you noted about them.',
+      c.usedBy.length ? ` ${c.usedBy.length === 1 ? 'One entry points' : `${c.usedBy.length} entries point`} to them (${c.usedBy.map((u) => `${u.title} in ${u.domainLabel}`).join('; ')}); ${c.usedBy.length === 1 ? 'it' : 'they'} will no longer name them.` : ''].join(''),
+    cta: 'Delete',
+    onConfirm: async () => { if (await run(() => del(`/api/parties/${c.id}${c.usedBy.length ? '?confirm=true' : ''}`), `${c.name} deleted`)) nav('/admin/contacts'); setConfirm(null); },
   });
   const invite = async () => {
-    const r = await run(() => post<{ url: string; to: string; subject: string; body: string }>(`/api/contacts/${c.id}/invite`));
+    const r = await run(() => post<{ url: string; to: string; subject: string; body: string }>(`/api/parties/${c.id}/invite`));
     if (!r) return;
     await copy(`${r.body}`);
     toast(r.to ? `Invite message copied. Paste it into an email to ${r.to}.` : 'Invite message copied with your invite link');
   };
 
   const theirTitle = s === 'active' ? `What ${first} shares with you` : s === 'pending_in' ? `${first} offers to share` : 'They share';
-  const theirRows: { label: string; value: string }[] = s === 'active' ? c.sharedIn : s === 'pending_in' ? c.offered.map((l) => ({ label: l, value: 'After you accept' })) : [];
+  const theirRows: { label: string; value: string }[] = s === 'active' ? c.sharedIn : s === 'pending_in' ? (c.request?.offeredLabels ?? []).map((l) => ({ label: l, value: 'After you accept' })) : [];
   const syncNote = s === 'active'
     ? (c.syncError ? `Couldn't reach their Little Dipper just now · showing what was fetched ${ago(c.sharedInFetchedAt)}` : c.sharedInFetchedAt ? `Fetched from their Little Dipper ${ago(c.sharedInFetchedAt)} · cached locally` : 'Not fetched yet')
     : s === 'pending_in' ? 'From their signed request. Values become available after you accept.' : 'Available once they approve.';
@@ -70,9 +73,9 @@ export default function ContactDetail() {
     <div data-screen-label="Contact detail" style={{ maxWidth: 1040 }}>
       <Link className="btn btn-ghost" to="/admin/contacts" style={{ marginBottom: 14 }}>← All contacts</Link>
       <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ width: 72, height: 72, borderRadius: '50%', background: isNode ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', display: 'grid', placeItems: 'center', fontSize: 22, fontFamily: 'var(--font-heading)', flex: 'none' }}>{initials(c.displayName)}</span>
+        <span style={{ width: 72, height: 72, borderRadius: '50%', background: isNode ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', display: 'grid', placeItems: 'center', fontSize: 22, fontFamily: 'var(--font-heading)', flex: 'none' }}>{initials(c.name)}</span>
         <div style={{ flex: 1, minWidth: 220 }}>
-          <h1 style={{ margin: 0 }}>{c.displayName}</h1>
+          <h1 style={{ margin: 0 }}>{c.name}</h1>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
             <span className={`tag ${isNode ? 'tag-accent-2' : 'tag-neutral'}`}>{isNode ? 'On Little Dipper' : 'Person'}</span>
             <span className={`tag ${STATUS[s][1]}`}>{STATUS[s][0]}</span>
@@ -115,10 +118,10 @@ export default function ContactDetail() {
           <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="card-kicker">Contact info</div>
-              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ notes: c.notes, methods: c.methods.length ? c.methods : [{ type: 'email', label: 'Email', value: '' }] })}>Edit</button>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, notes: c.notes, methods: c.methods.length ? c.methods : [{ kind: 'email', value: '' }] })}>Edit</button>
             </div>
             {c.methods.map((m, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}><span className="text-muted" style={{ fontSize: 13 }}>{m.label}</span><span style={{ fontSize: 14, overflowWrap: 'anywhere' }}>{m.value}</span></div>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}><span className="text-muted" style={{ fontSize: 13 }}>{m.label || KIND_LABEL[m.kind]}{m.primary ? ' · main' : ''}</span><span style={{ fontSize: 14, overflowWrap: 'anywhere' }}>{displayMethod(m)}</span></div>
             ))}
             {c.methods.length === 0 && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>{isNode ? `Nothing saved yet. Whatever ${first} shares appears below.` : 'No details yet.'}</div>}
             {c.notes && <p className="text-muted" style={{ fontSize: 13, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
@@ -156,7 +159,7 @@ export default function ContactDetail() {
               {s === 'active' && theirRows.length === 0 && !(c.sharedDomains || []).length && !c.syncError && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>{first} isn't sharing anything with you yet.</div>}
               <div className="card-meta" style={{ marginTop: 10, flexWrap: 'wrap' }}>
                 {syncNote}
-                {s === 'active' && <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} disabled={busy} onClick={() => run(() => get<CD>(`/api/contacts/${c.id}?sync=1`)).then((x) => x && setData(x))}>Refresh</button>}
+                {s === 'active' && <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} disabled={busy} onClick={() => run(() => get<CD>(`/api/parties/${c.id}?sync=1`)).then((x) => x && setData(x))}>Refresh</button>}
               </div>
             </div>
           )}
@@ -194,17 +197,22 @@ export default function ContactDetail() {
       </div>
 
       {edit && (
-        <Dialog title={`Edit ${c.displayName}`} onClose={() => setEdit(null)} width={520} actions={<>
+        <Dialog title={`Edit ${c.name}`} onClose={() => setEdit(null)} width={520} actions={<>
           <button className="btn btn-secondary" onClick={() => setEdit(null)}>Cancel</button>
           <button className="btn btn-primary" disabled={busy} onClick={async () => { const r = await run(() => saveContact(c.id, edit), 'Saved'); if (r) { setEdit(null); reload(); } }}>Save</button>
         </>}>
-          {edit.methods.map((m, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 8 }}>
-              <input className="input" aria-label="Label" value={m.label} onChange={(e) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} />
-              <input className="input" aria-label={m.label} value={m.value} onChange={(e) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) })} />
+          <div className="field"><label htmlFor="pname">Name</label><input id="pname" className="input" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
+          <div className="field"><label>Type</label><Select value={edit.type} onChange={(v) => setEdit({ ...edit, type: (v || 'person') as Edit['type'] })} options={[['person', 'Person'], ['organisation', 'Organisation']]} /></div>
+          {edit.methods.map((m, i) => (typeof m.value === 'object' ? (
+            <div key={i} className="text-muted" style={{ fontSize: 13 }}>{m.label || 'Postal address'}: {displayMethod(m)}</div>
+          ) : (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: 8 }}>
+              <Select value={m.kind} onChange={(v) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, kind: (v || 'email') as ContactMethod['kind'] } : x)) })} options={STRING_KINDS.map((k) => [k, KIND_LABEL[k]])} />
+              <input className="input" aria-label={KIND_LABEL[m.kind]} value={m.value} placeholder={m.kind === 'social' || m.kind === 'messaging' ? '@handle' : ''} onChange={(e) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) })} />
+              {(m.kind === 'social' || m.kind === 'messaging') && <input className="input" style={{ gridColumn: 2 }} aria-label="Service" placeholder="Service, e.g. Signal" value={m.service ?? ''} onChange={(e) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, service: e.target.value } : x)) })} />}
             </div>
-          ))}
-          <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 13 }} onClick={() => setEdit({ ...edit, methods: [...edit.methods, { type: 'note', label: 'Phone', value: '' }] })}>Add a detail</button>
+          )))}
+          <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 13 }} onClick={() => setEdit({ ...edit, methods: [...edit.methods, { kind: 'phone', value: '' }] })}>Add a detail</button>
           <div className="field"><label htmlFor="notes">Notes</label><textarea id="notes" className="input" value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} style={{ borderRadius: 20 }} /></div>
         </Dialog>
       )}
@@ -214,8 +222,10 @@ export default function ContactDetail() {
   );
 }
 
-const TYPE_BY_LABEL: Record<string, string> = { email: 'email', phone: 'phone', mobile: 'phone', address: 'address', website: 'url' };
-function saveContact(id: string, e: { notes: string; methods: { type: string; label: string; value: string }[] }) {
-  const methods = e.methods.filter((m) => m.value.trim()).map((m) => ({ ...m, type: TYPE_BY_LABEL[m.label.toLowerCase()] || m.type }));
-  return patch(`/api/contacts/${id}`, { notes: e.notes, methods });
+type Edit = { name: string; type: 'person' | 'organisation'; notes: string; methods: ContactMethod[] };
+const KIND_LABEL: Record<ContactMethod['kind'], string> = { email: 'Email', phone: 'Phone', postal: 'Postal address', website: 'Website', social: 'Social', messaging: 'Messaging' };
+const STRING_KINDS: ContactMethod['kind'][] = ['email', 'phone', 'website', 'social', 'messaging'];
+function saveContact(id: string, e: Edit) {
+  const methods = e.methods.filter((m) => typeof m.value === 'object' || m.value.trim());
+  return patch(`/api/parties/${id}`, { name: e.name, type: e.type, notes: e.notes, methods });
 }

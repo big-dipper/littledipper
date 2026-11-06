@@ -11,7 +11,7 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
   const toast = useToast();
   const { run, busy } = useAction();
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [person, setPerson] = useState({ name: '', email: '', phone: '', address: '' });
+  const [person, setPerson] = useState<{ type: 'person' | 'organisation'; name: string; email: string; phone: string }>({ type: 'person', name: '', email: '', phone: '' });
   const [nodeUrl, setNodeUrl] = useState('');
   const [found, setFound] = useState<Lookup | null>(null);
   const [lookupError, setLookupError] = useState('');
@@ -36,7 +36,7 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
 
   const savePerson = async () => {
     if (!person.name.trim()) return toast('Add a name first');
-    const r = await run(() => post('/api/contacts', { displayName: person.name, email: person.email, phone: person.phone, address: person.address }), `${person.name} added`);
+    const r = await run(() => post('/api/parties', { type: person.type, name: person.name, methods: [...(person.email.trim() ? [{ kind: 'email', value: person.email, primary: true }] : []), ...(person.phone.trim() ? [{ kind: 'phone', value: person.phone, primary: true }] : [])] }), `${person.name} added`);
     if (r) onDone(r.id);
   };
 
@@ -70,12 +70,12 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
       {tab === 'person' && (
         <form className="dialog-body" style={{ opacity: 1, display: 'grid', gap: 12 }} onSubmit={(e) => { e.preventDefault(); savePerson(); }}>
           <div className="text-muted" style={{ fontSize: 13 }}>For people who don't use Little Dipper. Stored only on your Little Dipper; nothing is sent to them.</div>
+          <Pills value={person.type} options={[['person', 'A person'], ['organisation', 'An organisation']]} onChange={(v) => setPerson({ ...person, type: v as 'person' | 'organisation' })} />
           <div className="field"><label htmlFor="cn">Name</label><input id="cn" className="input" value={person.name} onChange={(e) => setPerson({ ...person, name: e.target.value })} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
             <div className="field"><label htmlFor="ce">Email</label><input id="ce" className="input" type="email" value={person.email} onChange={(e) => setPerson({ ...person, email: e.target.value })} /></div>
             <div className="field"><label htmlFor="cp">Phone</label><input id="cp" className="input" type="tel" value={person.phone} onChange={(e) => setPerson({ ...person, phone: e.target.value })} /></div>
           </div>
-          <div className="field"><label htmlFor="ca">Address</label><input id="ca" className="input" value={person.address} onChange={(e) => setPerson({ ...person, address: e.target.value })} /></div>
           <button type="submit" hidden />
         </form>
       )}

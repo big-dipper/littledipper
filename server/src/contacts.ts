@@ -5,28 +5,41 @@ import { issueKey } from './auth.js';
 import { allFields, plainValue } from './fields.js';
 import type { SharedDomain } from './domains/sharing.js';
 import { displayAddr } from './node.js';
+import type { ContactMethod } from './methods.js';
 import {
-  grantsFor, now, peerGet, sendSigned, type ContactDoc, type LinkDoc, type Method, type RequestDoc,
+  grantsFor, now, peerGet, sendSigned, type PartyDoc, type LinkDoc, type RequestDoc,
 } from './federation.js';
 
 export const firstName = (name: string) => name.replace(/^(Dr|Mr|Mrs|Ms|Mx)\.?\s+/i, '').split(' ')[0];
 
-export async function linkFor(c: ContactDoc) {
+export async function linkFor(c: PartyDoc) {
   return c.node?.linkId ? ctx.store.get<LinkDoc>('nodeLinks', c.node.linkId) : null;
 }
 
 export type ContactStatus = 'plain' | 'pending_in' | 'pending_out' | 'active';
 
-export async function contactOut(c: ContactDoc, opts: { detail?: boolean } = {}) {
+/** The latest thing that happened with a party, worked out from the connection, messages and copies (never stored). */
+export async function lastActivityOf(c: PartyDoc, link: LinkDoc | null) {
+  const items: { text: string; at: string }[] = [{ text: 'Added', at: c.createdAt }];
+  const step = link?.timeline.at(-1);
+  if (step) items.push({ text: step.label, at: step.at });
+  const [m] = await ctx.store.find<{ _id: string; direction: string; createdAt: string }>('messages', { contactId: c._id }, { sort: { createdAt: -1 }, limit: 1 });
+  if (m) items.push({ text: m.direction === 'in' ? 'Sent you a message' : 'You sent a message', at: m.createdAt });
+  const [cp] = await ctx.store.find<{ _id: string; title: string; createdAt: string }>('copies', { contactId: c._id }, { sort: { createdAt: -1 }, limit: 1 });
+  if (cp) items.push({ text: `You sent a copy of ${cp.title}`, at: cp.createdAt });
+  return items.sort((a, b) => b.at.localeCompare(a.at))[0];
+}
+
+export async function partyOut(c: PartyDoc, opts: { detail?: boolean } = {}) {
   const link = await linkFor(c);
-  const status: ContactStatus = c.kind === 'node' && link && link.status !== 'revoked' ? link.status : 'plain';
+  const status: ContactStatus = c.node && link && link.status !== 'revoked' ? link.status : 'plain';
   const g = await grantsFor(c._id);
   const base = {
-    id: c._id, kind: c.kind, displayName: c.displayName, org: c.org, status,
+    id: c._id, type: c.type, name: c.name, status,
     node: c.node && link ? { url: displayAddr(link.peerUrl), nodeId: link.peerNodeId, linkId: link._id } : null,
     grants: { profile: g.profile, fields: g.fields, domains: g.domains },
-    lastActivity: c.lastActivity, createdAt: c.createdAt,
-    methods: c.methods,
+    lastActivity: await lastActivityOf(c, link), createdAt: c.createdAt,
+    methods: c.methods, affiliations: c.affiliations ?? [],
   };
   if (!opts.detail) return base;
   const req = link ? await ctx.store.findOne<RequestDoc>('connectionRequests', { linkId: link._id, status: 'pending' }) : null;
@@ -34,12 +47,14 @@ export async function contactOut(c: ContactDoc, opts: { detail?: boolean } = {})
   return {
     ...base,
     notes: c.notes,
-    requested: c.requested || [],
-    offered: c.offered || [],
-    sharedIn: status === 'active' ? c.sharedIn : [],
-    sharedDomains: status === 'active' ? c.sharedDomains || [] : [],
+    // What they shared with us is kept when the connection ends: the last known values, with when we last fetched them.
+    sharedIn: c.sharedIn,
+    sharedDomains: c.sharedDomains || [],
     sharedInFetchedAt: c.sharedInFetchedAt,
-    request: req ? { id: req._id, direction: req.direction, note: req.note, quiet: req.quiet, viaInvite: !!req.inviteId, expiresAt: req.expiresAt, requestedFields: req.requestedFields } : null,
+    request: req ? {
+      id: req._id, direction: req.direction, note: req.note, quiet: req.quiet, viaInvite: !!req.inviteId, expiresAt: req.expiresAt,
+      requestedFields: req.requestedFields, offeredLabels: req.offeredLabels,
+    } : null,
     timeline: link?.timeline || [],
     keys: link ? {
       peerSigningKey: fingerprint(link.peerSigningKey),
@@ -51,18 +66,14 @@ export async function contactOut(c: ContactDoc, opts: { detail?: boolean } = {})
   };
 }
 
-export async function touch(contactId: string, text: string) {
-  await ctx.store.update('contacts', contactId, { lastActivity: { text, at: now() } });
-}
-
 export async function pushTimeline(link: LinkDoc, label: string) {
   const fresh = (await ctx.store.get<LinkDoc>('nodeLinks', link._id))!;
   await ctx.store.update('nodeLinks', link._id, { timeline: [...fresh.timeline, { label, at: now() }] });
 }
 
 /** Token we hand a peer so it can read what we share. */
-export async function issuePeerToken(contact: ContactDoc) {
-  return issueKey({ kind: 'peer', name: contact.displayName, scopes: ['peer:profile', 'peer:fields'], contactId: contact._id });
+export async function issuePeerToken(contact: PartyDoc) {
+  return issueKey({ kind: 'peer', name: contact.name, scopes: ['peer:profile', 'peer:fields'], contactId: contact._id });
 }
 
 export async function revokeIssuedToken(link: LinkDoc) {
@@ -74,12 +85,14 @@ export async function endLink(link: LinkDoc, reason: string) {
   await revokeIssuedToken(link);
   await ctx.store.update('nodeLinks', link._id, { status: 'revoked', tokenFromPeerEnc: null, tokenIssuedToPeer: null });
   await ctx.store.removeMany('connectionRequests', { linkId: link._id, status: 'pending' });
-  const c = await ctx.store.get<ContactDoc>('contacts', link.contactId);
+  const c = await ctx.store.get<PartyDoc>('parties', link.contactId);
   if (c) {
-    const methods: Method[] = [...c.methods];
-    if (!methods.some((m) => m.type === 'url')) methods.push({ type: 'url', label: 'Little Dipper', value: displayAddr(link.peerUrl) });
-    await ctx.store.update('contacts', c._id, { kind: 'person', node: null, sharedIn: [], sharedDomains: [], sharedInFetchedAt: null, methods, lastActivity: { text: reason, at: now() } });
+    // They stay a party, with their Little Dipper address as a website, and what they last shared is kept.
+    const methods: ContactMethod[] = [...c.methods];
+    if (!methods.some((m) => m.kind === 'website' && m.value === link.peerUrl)) methods.push({ kind: 'website', label: 'Little Dipper', value: link.peerUrl });
+    await ctx.store.update('parties', c._id, { node: null, methods });
   }
+  await pushTimeline(link, reason);
 }
 
 /** Fields this contact's token may read right now. */
@@ -121,11 +134,11 @@ export async function contactsSharing(domain: string) {
   return grants.map((g) => g.contactId);
 }
 
-export async function syncContact(c: ContactDoc) {
+export async function syncContact(c: PartyDoc) {
   const link = await linkFor(c);
   if (!link || link.status !== 'active') return c;
-  const profile = (await peerGet(link, '/peer/profile')) as { fields?: ContactDoc['sharedIn'] };
-  const extra = (await peerGet(link, '/peer/fields')) as { fields?: ContactDoc['sharedIn'] };
+  const profile = (await peerGet(link, '/peer/profile')) as { fields?: PartyDoc['sharedIn'] };
+  const extra = (await peerGet(link, '/peer/fields')) as { fields?: PartyDoc['sharedIn'] };
   const seen = new Set<string>();
   const sharedIn = [...(profile.fields || []), ...(extra.fields || [])]
     .filter((f) => f && typeof f.key === 'string' && !seen.has(f.key) && seen.add(f.key))
@@ -147,28 +160,26 @@ export async function syncContact(c: ContactDoc) {
     });
   }
   const t = now();
-  await ctx.store.update('contacts', c._id, { sharedIn, sharedDomains, sharedInFetchedAt: t });
+  await ctx.store.update('parties', c._id, { sharedIn, sharedDomains, sharedInFetchedAt: t });
   await ctx.store.update('nodeLinks', link._id, { lastSyncAt: t, tokenFromPeerLastUsedAt: t });
-  return (await ctx.store.get<ContactDoc>('contacts', c._id))!;
+  return (await ctx.store.get<PartyDoc>('parties', c._id))!;
 }
 
-export async function newNodeContact(opts: { displayName: string; address: string; nodeId: string; signingKey: string; version: string | null; status: LinkDoc['status']; requestId: string; offered?: string[]; requested?: string[] }) {
-  const contactId = newId('con');
+export async function newNodeParty(opts: { name: string; address: string; nodeId: string; signingKey: string; version: string | null; status: LinkDoc['status']; requestId: string }) {
+  const contactId = newId('pty');
   const linkId = newId('lnk');
   const t = now();
-  const contact: ContactDoc = {
-    _id: contactId, kind: 'node', displayName: opts.displayName, org: null, methods: [], notes: '',
-    node: { url: opts.address, nodeId: opts.nodeId, linkId }, sharedIn: [], sharedInFetchedAt: null,
-    requested: opts.requested || [], offered: opts.offered || [],
-    lastActivity: { text: opts.status === 'pending_out' ? 'Request sent' : 'Request received', at: t }, createdAt: t,
+  const contact: PartyDoc = {
+    _id: contactId, type: 'person', name: opts.name, methods: [], notes: '', affiliations: [],
+    node: { url: opts.address, nodeId: opts.nodeId, linkId }, sharedIn: [], sharedInFetchedAt: null, createdAt: t,
   };
   const link: LinkDoc = {
     _id: linkId, contactId, peerNodeId: opts.nodeId, peerUrl: opts.address, status: opts.status, peerSigningKey: opts.signingKey,
     peerVersion: opts.version, requestId: opts.requestId, tokenIssuedToPeer: null, tokenFromPeerEnc: null, tokenFromPeerLastUsedAt: null,
-    timeline: [{ label: opts.status === 'pending_out' ? 'Request sent by you' : `Request received from ${firstName(opts.displayName)}`, at: t }],
+    timeline: [{ label: opts.status === 'pending_out' ? 'Request sent by you' : `Request received from ${firstName(opts.name)}`, at: t }],
     establishedAt: null, lastSyncAt: null, rotatedAt: null,
   };
-  await ctx.store.insert('contacts', contact);
+  await ctx.store.insert('parties', contact);
   await ctx.store.insert('nodeLinks', link);
   return { contact, link };
 }
@@ -177,7 +188,7 @@ export async function newNodeContact(opts: { displayName: string; address: strin
 export async function existingForNode(nodeId: string) {
   const link = (await ctx.store.find<LinkDoc>('nodeLinks', { peerNodeId: nodeId })).find((l) => l.status !== 'revoked');
   if (!link) return null;
-  const contact = await ctx.store.get<ContactDoc>('contacts', link.contactId);
+  const contact = await ctx.store.get<PartyDoc>('parties', link.contactId);
   return contact ? { contact, link } : null;
 }
 

@@ -7,11 +7,11 @@ import { bad, findKey, HttpError, rateLimit } from '../auth.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import {
   grantsFor, hasMutual, lookupDescriptor, now, openEnvelope, parsePeerInput, REQUEST_TTL_DAYS, sealToken, tokenHash,
-  type ContactDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc, type RequestDoc,
+  type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc, type RequestDoc,
 } from '../federation.js';
 import { getDomain } from '../domains/records.js';
 import { sharedDomainOut } from '../domains/sharing.js';
-import { endLink, existingForNode, firstName, issuePeerToken, newNodeContact, pushTimeline, sharedOut, syncContact, touch } from '../contacts.js';
+import { endLink, existingForNode, firstName, issuePeerToken, newNodeParty, pushTimeline, sharedOut, syncContact } from '../contacts.js';
 import { receiveMessage, type WireMessage } from '../messages.js';
 
 type Intro = { nodeId: string; address: string; signingKey: string; displayName: string; version?: string };
@@ -37,7 +37,7 @@ async function peerContact(req: FastifyRequest) {
   const h = req.headers.authorization;
   const key = await findKey(h?.startsWith('Bearer ') ? h.slice(7).trim() : undefined, ['peer']);
   if (!key?.contactId) throw new HttpError(401, 'bad_peer_token');
-  const c = await ctx.store.get<ContactDoc>('contacts', key.contactId);
+  const c = await ctx.store.get<PartyDoc>('parties', key.contactId);
   if (!c) throw new HttpError(401, 'bad_peer_token');
   return c;
 }
@@ -85,15 +85,15 @@ export default async function peerRoutes(app: FastifyInstance) {
     const requested = (p.requestedFields || []).map(String).slice(0, 50);
     const offered = (p.offeredLabels || []).map(String).slice(0, 50);
     const name = String(intro.displayName || displayAddr(intro.address)).slice(0, 120);
-    let contact: ContactDoc, link: LinkDoc;
+    let contact: PartyDoc, link: LinkDoc;
     if (existing) {
       // Requests crossed (we had asked them too) or a repeat: refresh the pending link.
       ({ contact, link } = existing);
       await ctx.store.update('nodeLinks', link._id, { status: 'pending_in', requestId: p.requestId, peerUrl: origin, peerSigningKey: intro.signingKey });
-      await ctx.store.update('contacts', contact._id, { requested, offered, displayName: name });
+      await ctx.store.update('parties', contact._id, { name });
       await ctx.store.removeMany('connectionRequests', { linkId: link._id, status: 'pending' });
     } else {
-      ({ contact, link } = await newNodeContact({ displayName: name, address: origin, nodeId: intro.nodeId, signingKey: intro.signingKey, version: intro.version || null, status: 'pending_in', requestId: p.requestId, offered, requested }));
+      ({ contact, link } = await newNodeParty({ name, address: origin, nodeId: intro.nodeId, signingKey: intro.signingKey, version: intro.version || null, status: 'pending_in', requestId: p.requestId }));
       // Default if accepted: basic profile only. Requests never pre-select sensitive fields.
       await ctx.store.insert('grants', { _id: newId('grt'), contactId: contact._id, profile: true, access: 'read', confirmedSecret: false, grantedAt: now(), expiresAt: null });
     }
@@ -104,7 +104,7 @@ export default async function peerRoutes(app: FastifyInstance) {
       nonce: (body as { payload: { nonce: string } }).payload.nonce, signature: (body as unknown as { signature: string }).signature, inviteId, quiet,
       status: 'pending', contactId: contact._id, linkId: link._id, createdAt: t, expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString(),
     });
-    await audit({ actor: { type: 'peer', id: intro.nodeId }, action: 'link.request.in', resource: `contacts/${contact._id}`, text: `${name} sent a connection request${inviteId ? ' with your invite link' : ''}`, tone: 'request', ip: req.ip });
+    await audit({ actor: { type: 'peer', id: intro.nodeId }, action: 'link.request.in', resource: `parties/${contact._id}`, text: `${name} sent a connection request${inviteId ? ' with your invite link' : ''}`, tone: 'request', ip: req.ip });
     reply.code(202);
     return { received: true };
   });
@@ -113,20 +113,19 @@ export default async function peerRoutes(app: FastifyInstance) {
     const { requestId } = req.params as { requestId: string };
     const { link, payload } = await verifiedLink<{ type: string; requestId: string; token: string; version?: string }>(req.body, ['pending_out']);
     if (payload.type !== 'connect.accept' || payload.requestId !== requestId || link.requestId !== requestId || !payload.token) throw bad('bad_accept');
-    const contact = (await ctx.store.get<ContactDoc>('contacts', link.contactId))!;
+    const contact = (await ctx.store.get<PartyDoc>('parties', link.contactId))!;
     const { secret, doc } = await issuePeerToken(contact);
     await ctx.store.update('nodeLinks', link._id, {
       status: 'active', tokenFromPeerEnc: sealToken(payload.token), tokenIssuedToPeer: { keyId: doc._id, scope: 'peer:profile peer:fields' },
       establishedAt: now(), peerVersion: payload.version || link.peerVersion,
     });
-    await pushTimeline(link, `Approved by ${firstName(contact.displayName)}`);
+    await pushTimeline(link, `Approved by ${firstName(contact.name)}`);
     await pushTimeline(link, 'Secure connection set up');
     const r = await ctx.store.findOne<RequestDoc>('connectionRequests', { linkId: link._id, status: 'pending' });
     if (r) await ctx.store.update('connectionRequests', r._id, { status: 'accepted' });
-    await touch(contact._id, 'Connected');
-    await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.accept', resource: `contacts/${contact._id}`, text: `${contact.displayName} approved your request`, tone: 'peer' });
+    await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.accept', resource: `parties/${contact._id}`, text: `${contact.name} approved your request`, tone: 'peer' });
     // Fetch what they share once they've stored our token.
-    setTimeout(() => { ctx.store.get<ContactDoc>('contacts', contact._id).then((c) => c && syncContact(c)).catch(() => {}); }, 300);
+    setTimeout(() => { ctx.store.get<PartyDoc>('parties', contact._id).then((c) => c && syncContact(c)).catch(() => {}); }, 300);
     return signedReply({ type: 'connect.accepted', requestId, token: secret });
   });
 
@@ -134,32 +133,32 @@ export default async function peerRoutes(app: FastifyInstance) {
     const { requestId } = req.params as { requestId: string };
     const { link, payload } = await verifiedLink<{ type: string; requestId: string }>(req.body, ['pending_out']);
     if (payload.type !== 'connect.decline' || link.requestId !== requestId) throw bad('bad_decline');
-    const contact = await ctx.store.get<ContactDoc>('contacts', link.contactId);
+    const contact = await ctx.store.get<PartyDoc>('parties', link.contactId);
     const r = await ctx.store.findOne<RequestDoc>('connectionRequests', { linkId: link._id, status: 'pending' });
     if (r) await ctx.store.update('connectionRequests', r._id, { status: 'declined' });
     await endLink(link, 'Request declined');
     await ctx.store.removeMany('grants', { contactId: link.contactId });
-    await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.declined', resource: `contacts/${link.contactId}`, text: `${contact?.displayName || displayAddr(link.peerUrl)} declined your request`, tone: 'peer' });
+    await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.declined', resource: `parties/${link.contactId}`, text: `${contact?.name || displayAddr(link.peerUrl)} declined your request`, tone: 'peer' });
     return { ok: true };
   });
 
   app.post('/peer/links/revoke', async (req) => {
     const { link, payload } = await verifiedLink<{ type: string }>(req.body, ['active', 'pending_out', 'pending_in']);
     if (payload.type !== 'link.revoke') throw bad('bad_revoke');
-    const contact = await ctx.store.get<ContactDoc>('contacts', link.contactId);
-    await endLink(link, `${contact ? firstName(contact.displayName) : 'They'} disconnected`);
-    await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.revoked', resource: `contacts/${link.contactId}`, text: `${contact?.displayName || displayAddr(link.peerUrl)} disconnected`, tone: 'peer' });
+    const contact = await ctx.store.get<PartyDoc>('parties', link.contactId);
+    await endLink(link, `${contact ? firstName(contact.name) : 'They'} disconnected`);
+    await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.revoked', resource: `parties/${link.contactId}`, text: `${contact?.name || displayAddr(link.peerUrl)} disconnected`, tone: 'peer' });
     return { ok: true };
   });
 
   app.post('/peer/links/rotate', async (req) => {
     const { link, payload } = await verifiedLink<{ type: string; token: string }>(req.body, ['active']);
     if (payload.type !== 'link.rotate' || !payload.token) throw bad('bad_rotate');
-    const contact = (await ctx.store.get<ContactDoc>('contacts', link.contactId))!;
+    const contact = (await ctx.store.get<PartyDoc>('parties', link.contactId))!;
     const { secret, doc } = await issuePeerToken(contact);
     if (link.tokenIssuedToPeer) await ctx.store.update('apiKeys', link.tokenIssuedToPeer.keyId, { revokedAt: now() });
     await ctx.store.update('nodeLinks', link._id, { tokenFromPeerEnc: sealToken(payload.token), tokenIssuedToPeer: { keyId: doc._id, scope: 'peer:profile peer:fields' }, rotatedAt: now() });
-    await pushTimeline(link, `Connection refreshed by ${firstName(contact.displayName)}`);
+    await pushTimeline(link, `Connection refreshed by ${firstName(contact.name)}`);
     return signedReply({ type: 'link.rotated', token: secret });
   });
 
@@ -167,7 +166,7 @@ export default async function peerRoutes(app: FastifyInstance) {
   app.post('/peer/links/changed', async (req, reply) => {
     const { link, payload } = await verifiedLink<{ type: string }>(req.body, ['active']);
     if (payload.type !== 'link.changed') throw bad('bad_nudge');
-    setTimeout(() => { ctx.store.get<ContactDoc>('contacts', link.contactId).then((c) => c && syncContact(c)).catch(() => {}); }, 100);
+    setTimeout(() => { ctx.store.get<PartyDoc>('parties', link.contactId).then((c) => c && syncContact(c)).catch(() => {}); }, 100);
     reply.code(202);
     return { ok: true };
   });
@@ -180,10 +179,10 @@ export default async function peerRoutes(app: FastifyInstance) {
     const d = await lookupDescriptor(origin);
     if (d.nodeId !== link.peerNodeId) throw new HttpError(401, 'address_mismatch');
     await ctx.store.update('nodeLinks', link._id, { peerUrl: origin });
-    const c = await ctx.store.get<ContactDoc>('contacts', link.contactId);
-    if (c?.node) await ctx.store.update('contacts', c._id, { node: { ...c.node, url: origin } });
+    const c = await ctx.store.get<PartyDoc>('parties', link.contactId);
+    if (c?.node) await ctx.store.update('parties', c._id, { node: { ...c.node, url: origin } });
     await pushTimeline(link, `Moved to ${displayAddr(origin)}`);
-    await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.address', resource: `nodeLinks/${link._id}`, text: `${c?.displayName || 'A contact'} moved to ${displayAddr(origin)}`, tone: 'peer' });
+    await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.address', resource: `nodeLinks/${link._id}`, text: `${c?.name || 'A connection'} moved to ${displayAddr(origin)}`, tone: 'peer' });
     reply.code(202);
     return { updated: true };
   });
@@ -201,8 +200,7 @@ export default async function peerRoutes(app: FastifyInstance) {
   app.get('/peer/profile', async (req) => {
     const c = await peerContact(req);
     const fields = await sharedOut(c._id, 'profile');
-    await audit({ actor: { type: 'peer', id: c.node?.nodeId || c._id }, action: 'peer.read', resource: 'peer/profile', text: `${c.displayName}'s Little Dipper read your basic profile`, tone: 'peer', ip: req.ip });
-    await touch(c._id, 'Read your basic profile');
+    await audit({ actor: { type: 'peer', id: c.node?.nodeId || c._id }, action: 'peer.read', resource: 'peer/profile', text: `${c.name}'s Little Dipper read your basic profile`, tone: 'peer', ip: req.ip });
     return { fields };
   });
 
@@ -223,7 +221,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     const { domain } = req.params as { domain: string };
     const shared = await sharedDomainOut(c._id, domain);
     if (!shared) throw new HttpError(403, 'not_granted', 'Not shared with you');
-    await audit({ actor: { type: 'peer', id: c.node?.nodeId || c._id }, action: 'domain.read', resource: `peer/domains/${domain}`, text: `${c.displayName}'s Little Dipper read your ${shared.label.toLowerCase()} (${shared.records.length})`, tone: 'peer', ip: req.ip });
+    await audit({ actor: { type: 'peer', id: c.node?.nodeId || c._id }, action: 'domain.read', resource: `peer/domains/${domain}`, text: `${c.name}'s Little Dipper read your ${shared.label.toLowerCase()} (${shared.records.length})`, tone: 'peer', ip: req.ip });
     return shared;
   });
 
@@ -232,7 +230,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     const c = await peerContact(req);
     const fields = await sharedOut(c._id, 'fields');
     if (fields.length) {
-      await audit({ actor: { type: 'peer', id: c.node?.nodeId || c._id }, action: 'field.read', resource: 'peer/fields', text: `${c.displayName}'s Little Dipper read your ${fields.map((f) => f.label.toLowerCase()).join(', ')}`, tone: 'peer', ip: req.ip, meta: { keys: fields.map((f) => f.key) } });
+      await audit({ actor: { type: 'peer', id: c.node?.nodeId || c._id }, action: 'field.read', resource: 'peer/fields', text: `${c.name}'s Little Dipper read your ${fields.map((f) => f.label.toLowerCase()).join(', ')}`, tone: 'peer', ip: req.ip, meta: { keys: fields.map((f) => f.key) } });
     }
     return { fields };
   });

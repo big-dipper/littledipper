@@ -26,7 +26,7 @@ export type Rec = {
   sourceLabel?: string;
   documents?: DocRef[];
 };
-export type ContactLite = { id: string; displayName: string };
+export type ContactLite = { id: string; name: string; type: 'person' | 'organisation' };
 
 export const fetchCatalog = () => get<{ domains: Domain[] }>('/api/catalog').then((r) => r.domains);
 
@@ -141,7 +141,7 @@ export function show(p: Part, v: unknown, contacts: ContactLite[]): string {
     case 'boolean': return v ? 'Yes' : 'No';
     case 'date': return fmtDate(String(v));
     case 'datetime': return fmtDateTime(v as DateTime);
-    case 'contact': return contacts.find((c) => c.id === v)?.displayName ?? 'Removed contact';
+    case 'party': case 'contact': return contacts.find((c) => c.id === v)?.name ?? 'Removed contact';
     case 'last4': return `•••• ${v}`;
     case 'url': return String(v).replace(/^https?:\/\//, '').replace(/\/$/, '');
     default: return String(v);
@@ -201,8 +201,9 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOn
         : <Select id={id} value={String(value ?? '')} onChange={onChange} options={p.options!} placeholder="Choose…" />);
     case 'boolean':
       return <Toggle on={!!value} label={p.label} onChange={() => onChange(!value)} />;
+    case 'party':
     case 'contact':
-      return <Select id={id} value={String(value ?? '')} onChange={onChange} options={contacts.map((c) => [c.id, c.displayName])} placeholder={contacts.length ? 'Choose from your contacts' : 'No contacts yet'} />;
+      return <Select id={id} value={String(value ?? '')} onChange={onChange} options={contacts.map((c) => [c.id, c.name])} placeholder={contacts.length ? 'Choose from your contacts' : 'No contacts yet'} />;
     case 'money': {
       const m = (value as { amount?: number | string; currency?: string } | null) ?? {};
       return (
@@ -568,7 +569,7 @@ export function ListTable({ p, rows, contacts }: { p: Part; rows: Row[]; contact
 
 export function useContactsLite() {
   const [list, setList] = useState<ContactLite[]>([]);
-  useEffect(() => { get<{ items: ContactLite[] }>('/api/contacts').then((r) => setList(r.items)).catch(() => {}); }, []);
+  useEffect(() => { get<{ items: ContactLite[] }>('/api/parties').then((r) => setList(r.items)).catch(() => {}); }, []);
   return list;
 }
 

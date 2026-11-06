@@ -29,7 +29,7 @@ export async function sharedDomainOut(contactId: string, domainId: string): Prom
 export async function shapeRecords(d: DomainDef, recs: RecordDoc[], includeSecret: boolean): Promise<SharedRecord[]> {
   const names = new Map<string, string>();
   const nameOf = async (id: string) => {
-    if (!names.has(id)) names.set(id, (await ctx.store.get('contacts', id))?.displayName ?? '');
+    if (!names.has(id)) names.set(id, (await ctx.store.get('parties', id))?.name ?? '');
     return names.get(id)!;
   };
   // Sharing doesn't follow links: a linked entry shows only that it exists ("Proven by: Government IDs"), never its contents.

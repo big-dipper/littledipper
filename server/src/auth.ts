@@ -5,7 +5,8 @@ import { newId, randomToken, sha256 } from './crypto.js';
 import type { Doc } from './store/index.js';
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: string, message?: string) {
+  /** details: extra machine-readable context sent with the error, e.g. which entries point to what's being deleted. */
+  constructor(public status: number, public code: string, message?: string, public details?: Record<string, unknown>) {
     super(message || code);
   }
 }
@@ -50,7 +51,7 @@ export function checkAssistant(v: unknown): AssistantSettings | undefined {
 }
 
 /** Fixed scopes. Each domain also has its own: {domain}:read and {domain}:write. records:* covers every domain. */
-export const SCOPES = ['owner:read', 'owner:write', 'records:read', 'records:write', 'contacts:read', 'contacts:write', 'public:write', 'keys:manage', 'audit:read', 'export', 'messages:read', 'messages:write', 'documents:read', 'documents:write'] as const;
+export const SCOPES = ['owner:read', 'owner:write', 'records:read', 'records:write', 'parties:read', 'parties:write', 'public:write', 'keys:manage', 'audit:read', 'export', 'messages:read', 'messages:write', 'documents:read', 'documents:write'] as const;
 
 export const COOKIE = { session: 'ld_session', setup: 'ld_setup', mfa: 'ld_mfa' } as const;
 

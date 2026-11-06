@@ -2,12 +2,12 @@
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { notFound, requireOwner } from '../auth.js';
-import { now, type ContactDoc } from '../federation.js';
-import { contactOut } from '../contacts.js';
+import { now, type PartyDoc } from '../federation.js';
+import { partyOut } from '../contacts.js';
 import { deliver, messageOut, queueMessage, type MessageDoc } from '../messages.js';
 
 async function getContact(id: string) {
-  const c = await ctx.store.get<ContactDoc>('contacts', id);
+  const c = await ctx.store.get<PartyDoc>('parties', id);
   if (!c) throw notFound('contact_not_found');
   return c;
 }
@@ -31,11 +31,11 @@ export default async function messageRoutes(app: FastifyInstance) {
     for (const m of all) byContact.set(m.contactId, [...(byContact.get(m.contactId) || []), m]);
     const items = [];
     for (const [contactId, msgs] of byContact) {
-      const c = await ctx.store.get<ContactDoc>('contacts', contactId);
+      const c = await ctx.store.get<PartyDoc>('parties', contactId);
       if (!c) continue;
-      const out = await contactOut(c);
+      const out = await partyOut(c);
       items.push({
-        contact: { id: out.id, displayName: out.displayName, kind: out.kind, status: out.status, node: out.node },
+        party: { id: out.id, name: out.name, type: out.type, status: out.status, node: out.node },
         last: { id: msgs[0]._id, direction: msgs[0].direction, kind: msgs[0].kind, preview: preview(msgs[0]), status: msgs[0].status, at: msgs[0].createdAt },
         unread: msgs.filter((m) => m.direction === 'in' && m.status === 'received').length,
         canMessage: out.status === 'active',
@@ -54,9 +54,9 @@ export default async function messageRoutes(app: FastifyInstance) {
       .filter((m) => !q.before || m.createdAt < q.before)
       .slice(0, limit)
       .reverse();
-    const out = await contactOut(c);
+    const out = await partyOut(c);
     return {
-      contact: { id: out.id, displayName: out.displayName, kind: out.kind, status: out.status, node: out.node },
+      party: { id: out.id, name: out.name, type: out.type, status: out.status, node: out.node },
       canMessage: out.status === 'active',
       items: msgs.map(messageOut),
     };

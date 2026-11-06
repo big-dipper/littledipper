@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { get, initials, post, whenLabel, ago, type Contact, type Conversation, type Message } from '../../api';
+import { get, initials, post, whenLabel, ago, type Party as Contact, type Conversation, type Message } from '../../api';
 import { Dialog, ErrorNote, Loading, useAction, useAsync } from '../../ui';
 import { useAdmin } from './Layout';
 
@@ -53,12 +53,12 @@ export default function Messages() {
           {!data ? <Loading /> : data.items.length === 0 ? (
             <p className="text-muted" style={{ fontSize: 14 }}>No messages yet. Start one with someone you're connected to.</p>
           ) : data.items.map((c) => (
-            <button key={c.contact.id} className="bare nav-pill" aria-current={c.contact.id === contactId ? 'page' : undefined} onClick={() => nav(`/admin/messages/${c.contact.id}`)}
+            <button key={c.party.id} className="bare nav-pill" aria-current={c.party.id === contactId ? 'page' : undefined} onClick={() => nav(`/admin/messages/${c.party.id}`)}
               style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 12px', borderRadius: 20, whiteSpace: 'normal' }}>
-              <Avatar name={c.contact.displayName} />
+              <Avatar name={c.party.name} />
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontWeight: c.unread ? 700 : 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.contact.displayName}</span>
+                  <span style={{ fontWeight: c.unread ? 700 : 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.party.name}</span>
                   <span className="text-muted" style={{ fontSize: 11, flex: 'none' }}>{ago(c.last.at)}</span>
                 </span>
                 <span className="text-muted" style={{ display: 'block', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.last.direction === 'out' ? 'You: ' : ''}{c.last.preview}</span>
@@ -84,7 +84,7 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
   const { run, busy } = useAction();
   const [text, setText] = useState('');
   const end = useRef<HTMLDivElement>(null);
-  const { data, error, reload } = useAsync(() => get<{ contact: Conversation['contact']; canMessage: boolean; items: Message[] }>(`/api/messages/conversations/${contactId}`), [contactId]);
+  const { data, error, reload } = useAsync(() => get<{ party: Conversation['party']; canMessage: boolean; items: Message[] }>(`/api/messages/conversations/${contactId}`), [contactId]);
 
   useEffect(() => {
     const t = setInterval(reload, POLL_MS);
@@ -105,7 +105,7 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
 
   if (error) return <ErrorNote error={error} />;
   if (!data) return <Loading />;
-  const name = data.contact.displayName;
+  const name = data.party.name;
 
   const send = async () => {
     const body = text.trim();
@@ -121,8 +121,8 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
         <Link className="btn btn-ghost inbox-back" to="/admin/messages" aria-label="All conversations" style={{ padding: '6px 10px' }}>←</Link>
         <Avatar name={name} size={40} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Link to={`/admin/contacts/${data.contact.id}`} style={{ fontWeight: 600, color: 'inherit', textDecoration: 'none' }}>{name}</Link>
-          {data.contact.node && <div className="text-muted mono" style={{ fontSize: 12 }}>{data.contact.node.url}</div>}
+          <Link to={`/admin/contacts/${data.party.id}`} style={{ fontWeight: 600, color: 'inherit', textDecoration: 'none' }}>{name}</Link>
+          {data.party.node && <div className="text-muted mono" style={{ fontSize: 12 }}>{data.party.node.url}</div>}
         </div>
       </div>
 
@@ -156,7 +156,7 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
             <button className="btn btn-primary" type="submit" disabled={busy || !text.trim()}>Send</button>
           </form>
         ) : (
-          <div className="text-muted" style={{ fontSize: 13 }}>You can message {name} while you're connected. <Link to={`/admin/contacts/${data.contact.id}`}>View contact</Link></div>
+          <div className="text-muted" style={{ fontSize: 13 }}>You can message {name} while you're connected. <Link to={`/admin/contacts/${data.party.id}`}>View contact</Link></div>
         )}
       </div>
     </div>
@@ -164,8 +164,8 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
 }
 
 function PickContact({ onClose, onPick }: { onClose: () => void; onPick: (id: string) => void }) {
-  const { data, error } = useAsync(() => get<{ items: Contact[] }>('/api/contacts'), []);
-  const connected = (data?.items || []).filter((c) => c.kind === 'node' && c.status === 'active');
+  const { data, error } = useAsync(() => get<{ items: Contact[] }>('/api/parties'), []);
+  const connected = (data?.items || []).filter((c) => !!c.node && c.status === 'active');
   return (
     <Dialog title="New message" onClose={onClose} width={440}>
       {error ? <ErrorNote error={error} /> : !data ? <Loading /> : connected.length === 0 ? (
@@ -174,8 +174,8 @@ function PickContact({ onClose, onPick }: { onClose: () => void; onPick: (id: st
         <div style={{ display: 'grid', gap: 4 }}>
           {connected.map((c) => (
             <button key={c.id} className="bare nav-pill" onClick={() => onPick(c.id)} style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'flex-start', padding: '10px 12px', borderRadius: 20 }}>
-              <Avatar name={c.displayName} />
-              <span><span style={{ display: 'block', fontWeight: 600 }}>{c.displayName}</span><span className="text-muted mono" style={{ fontSize: 12 }}>{c.node?.url}</span></span>
+              <Avatar name={c.name} />
+              <span><span style={{ display: 'block', fontWeight: 600 }}>{c.name}</span><span className="text-muted mono" style={{ fontSize: 12 }}>{c.node?.url}</span></span>
             </button>
           ))}
         </div>

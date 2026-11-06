@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ApiError, copy as toClipboard, del, firstName, get, longDate, post, type Contact } from '../../api';
+import { ApiError, copy as toClipboard, del, firstName, get, longDate, post, type Party as Contact } from '../../api';
 import { Confirm, Dialog, Pills, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { fmtRange, Select, type Domain, type Rec } from '../../life';
 
 export type CopyOut = {
   id: string; title: string; note: string; delivery: 'link' | 'file' | 'inline';
   items: { domain: string; entries: number; includeSecret: boolean }[];
-  contact: { id: string; displayName: string } | null; sentTo: string | null;
+  contact: { id: string; name: string } | null; sentTo: string | null;
   link: { active: boolean; expiresAt: string | null; revokedAt: string | null } | null;
   views: number; downloads: number; lastViewedAt: string | null; createdAt: string;
 };
-type Created = { copy: CopyOut; url: string | null; contact: { id: string; displayName: string; created: boolean } | null; email: { to: string; subject: string; body: string } };
+type Created = { copy: CopyOut; url: string | null; contact: { id: string; name: string; created: boolean } | null; email: { to: string; subject: string; body: string } };
 type Choice = { records: Rec[]; chosen: string[]; includeSecret: boolean };
 
 const HOURS: [string, string][] = [['24', '1 day'], ['168', '7 days'], ['720', '30 days'], ['0', 'Until I turn it off']];
@@ -29,12 +29,15 @@ const Check = ({ on, onClick, children }: { on: boolean; onClick: () => void; ch
  * Send a copy of entries to someone without a Little Dipper: a link that can end, a file to attach, or text in the email.
  * With an email address they're added to your contacts. The node never sends the email itself; your mail app does.
  */
-export function SendCopy({ catalog, start, contact, onClose, onSent }: { catalog: Domain[]; start?: string; contact?: Pick<Contact, 'id' | 'displayName' | 'methods'>; onClose: () => void; onSent?: () => void }) {
+/** Their main email, as a plain string. */
+const emailOf = (c?: Pick<Contact, 'methods'>) => { const m = c?.methods.find((x) => x.kind === 'email' && x.primary) ?? c?.methods.find((x) => x.kind === 'email'); return typeof m?.value === 'string' ? m.value : ''; };
+
+export function SendCopy({ catalog, start, contact, onClose, onSent }: { catalog: Domain[]; start?: string; contact?: Pick<Contact, 'id' | 'name' | 'methods'>; onClose: () => void; onSent?: () => void }) {
   const toast = useToast();
   const { run, busy } = useAction();
   const [picks, setPicks] = useState<Record<string, Choice>>({});
   const [order, setOrder] = useState<string[]>([]);
-  const [email, setEmail] = useState(contact?.methods.find((m) => m.type === 'email')?.value ?? '');
+  const [email, setEmail] = useState(emailOf(contact));
   const [name, setName] = useState('');
   const [contactId, setContactId] = useState(contact?.id ?? '');
   const [delivery, setDelivery] = useState<'link' | 'file' | 'inline'>('link');
@@ -42,7 +45,7 @@ export function SendCopy({ catalog, start, contact, onClose, onSent }: { catalog
   const [note, setNote] = useState('');
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
   const [done, setDone] = useState<Created | null>(null);
-  const { data: people } = useAsync(() => (contact ? Promise.resolve({ items: [] as Contact[] }) : get<{ items: Contact[] }>('/api/contacts')), []);
+  const { data: people } = useAsync(() => (contact ? Promise.resolve({ items: [] as Contact[] }) : get<{ items: Contact[] }>('/api/parties')), []);
 
   const addDomain = async (id: string) => {
     const d = catalog.find((x) => x.id === id);
@@ -58,7 +61,7 @@ export function SendCopy({ catalog, start, contact, onClose, onSent }: { catalog
 
   const set = (id: string, p: Partial<Choice>) => setPicks((all) => ({ ...all, [id]: { ...all[id], ...p } }));
   const remove = (id: string) => { setOrder((o) => o.filter((x) => x !== id)); setPicks(({ [id]: _, ...rest }) => rest); };
-  const known = people?.items.find((c) => c.methods.some((m) => m.type === 'email' && m.value.toLowerCase() === email.trim().toLowerCase()));
+  const known = people?.items.find((c) => c.methods.some((m) => m.kind === 'email' && String(m.value).toLowerCase() === email.trim().toLowerCase()));
   const chosenContact = contact ?? people?.items.find((c) => c.id === contactId);
   const isNew = !chosenContact && !known && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
   const count = order.reduce((n, id) => n + picks[id].chosen.length, 0);
@@ -90,7 +93,7 @@ export function SendCopy({ catalog, start, contact, onClose, onSent }: { catalog
 
   if (done) return <CopyDone done={done} onClose={onClose} />;
   const addable = catalog.filter((d) => d.count > 0 && !picks[d.id]);
-  const recipientName = chosenContact?.displayName ?? known?.displayName ?? (name.trim() || null);
+  const recipientName = chosenContact?.name ?? known?.name ?? (name.trim() || null);
 
   return (
     <Dialog title="Send a copy" onClose={onClose} width={620} actions={<>
@@ -139,15 +142,15 @@ export function SendCopy({ catalog, start, contact, onClose, onSent }: { catalog
         {/* who */}
         <div className="field">
           <label htmlFor="cpto">Who it’s for <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span></label>
-          {contact ? <div style={{ fontSize: 14 }}>{contact.displayName}</div> : (
-            <Select value={contactId} onChange={(v) => { setContactId(v); const c = people?.items.find((x) => x.id === v); setEmail(c?.methods.find((m) => m.type === 'email')?.value ?? ''); }}
-              options={(people?.items ?? []).map((c) => [c.id, c.displayName])} placeholder="Someone new, or no one in particular" />
+          {contact ? <div style={{ fontSize: 14 }}>{contact.name}</div> : (
+            <Select value={contactId} onChange={(v) => { setContactId(v); const c = people?.items.find((x) => x.id === v); setEmail(emailOf(c)); }}
+              options={(people?.items ?? []).map((c) => [c.id, c.name])} placeholder="Someone new, or no one in particular" />
           )}
           <input id="cpto" className="input" type="email" placeholder="Their email address" value={email} onChange={(e) => { setEmail(e.target.value); if (!contact) setContactId(''); }} />
           {isNew && <input className="input" aria-label="Their name" placeholder="Their name (optional)" value={name} onChange={(e) => setName(e.target.value)} />}
           <div className="text-muted" style={{ fontSize: 12 }}>
             {isNew ? `We’ll add ${name.trim() || 'them'} to your contacts, so you can see what you’ve sent them.`
-              : known && !chosenContact ? `${known.displayName} is already in your contacts.`
+              : known && !chosenContact ? `${known.name} is already in your contacts.`
                 : email.trim() ? 'We write the email; you send it from your own email app.'
                   : 'Leave it empty to just make a link or a file.'}
           </div>
@@ -196,7 +199,7 @@ function CopyDone({ done, onClose }: { done: Created; onClose: () => void }) {
   return (
     <Dialog title={c.delivery === 'link' ? 'Your link is ready' : 'Your copy is ready'} onClose={onClose} width={560} actions={<button className="btn btn-primary" onClick={onClose}>Done</button>}>
       <div className="dialog-body" style={{ opacity: 1, display: 'grid', gap: 16 }}>
-        {contact?.created && <div style={{ fontSize: 14 }}><Link to={`/admin/contacts/${contact.id}`}>{contact.displayName}</Link> was added to your contacts.</div>}
+        {contact?.created && <div style={{ fontSize: 14 }}><Link to={`/admin/contacts/${contact.id}`}>{contact.name}</Link> was added to your contacts.</div>}
         {url && (
           <div className="field">
             <label>Link{c.link?.expiresAt ? ` · works until ${longDate(c.link.expiresAt)}` : ' · works until you turn it off'}</label>
@@ -248,7 +251,7 @@ export function CopyList({ query, heading, showContact = true, version = 0 }: { 
         <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 0', borderBottom: '1px solid var(--color-divider)' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ fontSize: 14 }}>
-              {c.title}{showContact && c.contact ? <> · <Link to={`/admin/contacts/${c.contact.id}`}>{c.contact.displayName}</Link></> : null}
+              {c.title}{showContact && c.contact ? <> · <Link to={`/admin/contacts/${c.contact.id}`}>{c.contact.name}</Link></> : null}
             </div>
             <div className="text-muted" style={{ fontSize: 12 }}>
               {longDate(c.createdAt)} · {status(c)}{c.link ? ` · opened ${c.views} time${c.views === 1 ? '' : 's'}` : ''}{c.downloads ? ` · saved ${c.downloads}×` : ''}

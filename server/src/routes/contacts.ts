@@ -4,23 +4,41 @@ import { fingerprint, newId, randomToken } from '../crypto.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner } from '../auth.js';
 import { allFields, type FieldDoc } from '../fields.js';
-import { getDomain } from '../domains/records.js';
+import { getDomain, partyReferences, unlinkParty } from '../domains/records.js';
+import { checkMethods } from '../methods.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import { getOwner } from '../owner.js';
 import {
   grantsFor, lookupDescriptor, mutualHints, now, parsePeerInput, REQUEST_TTL_DAYS, sealToken, sendSigned, setDomainGrant, setFieldGrant, setProfileGrant, tokenHash,
-  type ContactDoc, type InviteDoc, type LinkDoc, type Method, type PublicProfileDoc, type RequestDoc,
+  type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc, type RequestDoc,
 } from '../federation.js';
 import {
-  nudgePeers, contactOut, endLink, existingForNode, firstName, issuePeerToken, linkFor, newNodeContact, pushTimeline, revokeIssuedToken, syncContact, touch,
+  nudgePeers, partyOut, endLink, existingForNode, firstName, issuePeerToken, linkFor, newNodeParty, pushTimeline, revokeIssuedToken, syncContact,
 } from '../contacts.js';
 
 const STALE_MS = 10 * 60_000;
 
 async function getContact(id: string) {
-  const c = await ctx.store.get<ContactDoc>('contacts', id);
-  if (!c) throw notFound('contact_not_found');
+  const c = await ctx.store.get<PartyDoc>('parties', id);
+  if (!c) throw notFound('party_not_found');
   return c;
+}
+
+const TYPES = ['person', 'organisation'] as const;
+type PartyInput = { type?: string; name?: string; notes?: string; methods?: unknown; affiliations?: { party?: string; role?: string }[] };
+
+/** Validated affiliations: each points to an organisation that exists, never to the party itself. */
+async function checkAffiliations(list: PartyInput['affiliations'], self: string | null) {
+  if (list === undefined) return undefined;
+  if (!Array.isArray(list) || list.length > 20) throw bad('invalid_value', 'Affiliations must be a list (up to 20)');
+  const out: PartyDoc['affiliations'] = [];
+  for (const a of list) {
+    const org = await ctx.store.get<PartyDoc>('parties', String(a?.party));
+    if (!org || org._id === self) throw bad('invalid_value', 'An affiliation points to an organisation in your parties');
+    if (org.type !== 'organisation') throw bad('invalid_value', `${org.name} is a person, not an organisation`);
+    out.push({ party: org._id, role: String(a.role || '').trim().slice(0, 80) });
+  }
+  return out;
 }
 
 /** What we tell a peer about ourselves in a request. */
@@ -51,18 +69,18 @@ export async function requestConnection(keyId: string, address: string, offeredF
   const n = await getNode();
   if (d.nodeId === n._id) throw bad('self', "That's your own Little Dipper");
   const existing = await existingForNode(d.nodeId);
-  if (existing && existing.link.status === 'active') throw new HttpError(409, 'already_connected', `You're already connected with ${existing.contact.displayName}`);
-  if (existing && existing.link.status === 'pending_in') throw new HttpError(409, 'request_waiting', `${existing.contact.displayName} already asked to connect. Review their request instead.`);
-  if (existing) throw new HttpError(409, 'request_pending', `You already asked ${existing.contact.displayName}. Use Resend on their contact page.`);
+  if (existing && existing.link.status === 'active') throw new HttpError(409, 'already_connected', `You're already connected with ${existing.contact.name}`);
+  if (existing && existing.link.status === 'pending_in') throw new HttpError(409, 'request_waiting', `${existing.contact.name} already asked to connect. Review their request instead.`);
+  if (existing) throw new HttpError(409, 'request_pending', `You already asked ${existing.contact.name}. Use Resend on their contact page.`);
   const fields = await allFields();
   const offered = offeredFields.filter((k) => fields.some((f) => f.key === k && f.sensitivity === 'sensitive'));
   const requestId = newId('req');
   const name = d.displayName || displayAddr(d.address);
-  const { contact, link } = await newNodeContact({ displayName: name, address: d.address, nodeId: d.nodeId, signingKey: d.signingKey, version: d.version, status: 'pending_out', requestId });
+  const { contact, link } = await newNodeParty({ name, address: d.address, nodeId: d.nodeId, signingKey: d.signingKey, version: d.version, status: 'pending_out', requestId });
   try {
     await sendRequest(link, offered, note.slice(0, 500), invite);
   } catch (e) {
-    await ctx.store.remove('contacts', contact._id);
+    await ctx.store.remove('parties', contact._id);
     await ctx.store.remove('nodeLinks', link._id);
     throw e;
   }
@@ -75,46 +93,40 @@ export async function requestConnection(keyId: string, address: string, offeredF
     offeredFields: offered, offeredLabels: [], requestedFields: [], note, nonce: randomToken(8), signature: '', inviteId: null,
     quiet: false, status: 'pending', contactId: contact._id, linkId: link._id, createdAt: t, expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString(),
   });
-  await audit({ actor: ownerActor(keyId), action: 'link.request.out', resource: `contacts/${contact._id}`, text: `You sent ${name} a connection request`, tone: 'request' });
+  await audit({ actor: ownerActor(keyId), action: 'link.request.out', resource: `parties/${contact._id}`, text: `You sent ${name} a connection request`, tone: 'request' });
   return { delivered: true, contactId: contact._id, requestId };
 }
 
 export default async function contactRoutes(app: FastifyInstance) {
-  // ── contacts ─────────────────────────────────────────────────────────
-  app.get('/api/contacts', async (req) => {
-    await requireOwner(req, 'contacts:read');
-    const q = req.query as { kind?: string; status?: string; q?: string };
-    const all = await ctx.store.find<ContactDoc>('contacts', {}, { sort: { createdAt: -1 } });
-    const items = await Promise.all(all.map((c) => contactOut(c)));
+  // ── parties ──────────────────────────────────────────────────────────
+  app.get('/api/parties', async (req) => {
+    await requireOwner(req, 'parties:read');
+    const q = req.query as { type?: string; status?: string; q?: string };
+    const all = await ctx.store.find<PartyDoc>('parties', {}, { sort: { createdAt: -1 } });
+    const items = await Promise.all(all.map((c) => partyOut(c)));
     const term = (q.q || '').toLowerCase();
-    return {
-      items: items.filter((c) => (!q.kind || c.kind === q.kind) && (!q.status || c.status === q.status) && (!term || c.displayName.toLowerCase().includes(term) || (c.org || '').toLowerCase().includes(term))),
-    };
+    return { items: items.filter((c) => (!q.type || c.type === q.type) && (!q.status || c.status === q.status) && (!term || c.name.toLowerCase().includes(term))) };
   });
 
-  app.post('/api/contacts', async (req, reply) => {
-    const p = await requireOwner(req, 'contacts:write');
-    const b = (req.body || {}) as { displayName?: string; org?: string; email?: string; phone?: string; address?: string; notes?: string; methods?: Method[] };
-    const name = String(b.displayName || '').trim();
+  app.post('/api/parties', async (req, reply) => {
+    const p = await requireOwner(req, 'parties:write');
+    const b = (req.body || {}) as PartyInput;
+    const name = String(b.name || '').trim().slice(0, 200);
     if (!name) throw bad('name_required', 'Add a name first');
-    const methods: Method[] = b.methods || [
-      ...(b.email ? [{ type: 'email' as const, label: 'Email', value: b.email }] : []),
-      ...(b.phone ? [{ type: 'phone' as const, label: 'Phone', value: b.phone }] : []),
-      ...(b.address ? [{ type: 'address' as const, label: 'Address', value: b.address }] : []),
-    ];
+    if (!TYPES.includes(b.type as never)) throw bad('invalid_value', 'Type: person or organisation');
     const t = now();
-    const c: ContactDoc = {
-      _id: newId('con'), kind: 'person', displayName: name, org: b.org?.trim() || null, methods, notes: b.notes || '', node: null,
-      sharedIn: [], sharedInFetchedAt: null, requested: [], offered: [], lastActivity: { text: 'Added', at: t }, createdAt: t,
+    const c: PartyDoc = {
+      _id: newId('pty'), type: b.type as PartyDoc['type'], name, methods: checkMethods(b.methods), notes: String(b.notes || '').slice(0, 10000),
+      affiliations: (await checkAffiliations(b.affiliations, null)) ?? [], node: null, sharedIn: [], sharedInFetchedAt: null, createdAt: t,
     };
-    await ctx.store.insert('contacts', c);
-    await audit({ actor: ownerActor(p.key._id), action: 'contact.create', resource: `contacts/${c._id}`, text: `You added ${name}`, tone: 'owner' });
+    await ctx.store.insert('parties', c);
+    await audit({ actor: ownerActor(p.key._id), action: 'party.create', resource: `parties/${c._id}`, text: `You added ${name}`, tone: 'owner' });
     reply.code(201);
-    return contactOut(c, { detail: true });
+    return partyOut(c, { detail: true });
   });
 
-  app.get('/api/contacts/:id', async (req) => {
-    await requireOwner(req, 'contacts:read');
+  app.get('/api/parties/:id', async (req) => {
+    await requireOwner(req, 'parties:read');
     let c = await getContact((req.params as { id: string }).id);
     const link = await linkFor(c);
     let syncError: string | null = null;
@@ -122,27 +134,39 @@ export default async function contactRoutes(app: FastifyInstance) {
     if (link?.status === 'active' && (stale || (req.query as { sync?: string }).sync)) {
       try { c = await syncContact(c); } catch (e) { syncError = (e as Error).message; }
     }
-    return { ...(await contactOut(c, { detail: true })), syncError };
+    return { ...(await partyOut(c, { detail: true })), usedBy: await partyReferences(c._id), syncError };
   });
 
-  app.patch('/api/contacts/:id', async (req) => {
-    const p = await requireOwner(req, 'contacts:write');
+  app.patch('/api/parties/:id', async (req) => {
+    const p = await requireOwner(req, 'parties:write');
     const c = await getContact((req.params as { id: string }).id);
-    const b = (req.body || {}) as { displayName?: string; org?: string; notes?: string; methods?: Method[] };
+    const b = (req.body || {}) as PartyInput;
     const patch: Record<string, unknown> = {};
-    if (b.displayName?.trim()) patch.displayName = b.displayName.trim();
-    if (b.org !== undefined) patch.org = b.org || null;
-    if (b.notes !== undefined) patch.notes = b.notes;
-    if (Array.isArray(b.methods)) patch.methods = b.methods.filter((m) => m?.value).map((m) => ({ type: m.type, label: String(m.label), value: String(m.value) }));
-    patch.lastActivity = { text: 'Edited', at: now() };
-    await ctx.store.update('contacts', c._id, patch);
-    await audit({ actor: ownerActor(p.key._id), action: 'contact.update', resource: `contacts/${c._id}`, text: `You edited ${c.displayName}`, tone: 'owner' });
-    return contactOut((await ctx.store.get<ContactDoc>('contacts', c._id))!, { detail: true });
+    if (b.name !== undefined) {
+      if (!String(b.name).trim()) throw bad('name_required', 'A party needs a name');
+      patch.name = String(b.name).trim().slice(0, 200);
+    }
+    if (b.type !== undefined) {
+      if (!TYPES.includes(b.type as never)) throw bad('invalid_value', 'Type: person or organisation');
+      patch.type = b.type;
+    }
+    if (b.notes !== undefined) patch.notes = String(b.notes).slice(0, 10000);
+    if (b.methods !== undefined) patch.methods = checkMethods(b.methods);
+    const aff = await checkAffiliations(b.affiliations, c._id);
+    if (aff) patch.affiliations = aff;
+    await ctx.store.update('parties', c._id, patch);
+    await audit({ actor: ownerActor(p.key._id), action: 'party.update', resource: `parties/${c._id}`, text: `You edited ${c.name}`, tone: 'owner' });
+    return partyOut((await ctx.store.get<PartyDoc>('parties', c._id))!, { detail: true });
   });
 
-  app.delete('/api/contacts/:id', async (req) => {
-    const p = await requireOwner(req, 'contacts:write');
+  /** Entries that point to a party stop pointing to it, so nothing dangles. Without confirm:true, says what would change. */
+  app.delete('/api/parties/:id', async (req) => {
+    const p = await requireOwner(req, 'parties:write');
     const c = await getContact((req.params as { id: string }).id);
+    const usedBy = await partyReferences(c._id);
+    if (usedBy.length && (req.query as { confirm?: string }).confirm !== 'true') {
+      throw new HttpError(409, 'in_use', `${usedBy.length} ${usedBy.length === 1 ? 'entry points' : 'entries point'} to ${c.name}. Deleting removes ${c.name} from ${usedBy.length === 1 ? 'it' : 'them'}.`, { usedBy });
+    }
     const link = await linkFor(c);
     if (link && link.status === 'active') {
       try { await sendSigned(link.peerUrl, '/peer/links/revoke', { type: 'link.revoke' }); } catch { /* peer offline: our side still revokes */ }
@@ -155,13 +179,17 @@ export default async function contactRoutes(app: FastifyInstance) {
     for (const cp of await ctx.store.find<{ _id: string; revokedAt: string | null }>('copies', { contactId: c._id })) {
       if (!cp.revokedAt) await ctx.store.update('copies', cp._id, { revokedAt: now() });
     }
-    await ctx.store.remove('contacts', c._id);
-    await audit({ actor: ownerActor(p.key._id), action: 'contact.delete', resource: `contacts/${c._id}`, text: `You deleted ${c.displayName}`, tone: 'owner' });
-    return { deleted: true };
+    await unlinkParty(c._id, ownerActor(p.key._id).id);
+    for (const o of await ctx.store.find<PartyDoc>('parties', {})) {
+      if (o.affiliations?.some((a) => a.party === c._id)) await ctx.store.update('parties', o._id, { affiliations: o.affiliations.filter((a) => a.party !== c._id) });
+    }
+    await ctx.store.remove('parties', c._id);
+    await audit({ actor: ownerActor(p.key._id), action: 'party.delete', resource: `parties/${c._id}`, text: `You deleted ${c.name}`, tone: 'owner' });
+    return { deleted: true, unlinked: usedBy.length };
   });
 
-  app.get('/api/contacts/:id/grants', async (req) => {
-    await requireOwner(req, 'contacts:read');
+  app.get('/api/parties/:id/grants', async (req) => {
+    await requireOwner(req, 'parties:read');
     const c = await getContact((req.params as { id: string }).id);
     const g = await grantsFor(c._id);
     return { profile: g.profile, fields: g.fields };
@@ -171,10 +199,10 @@ export default async function contactRoutes(app: FastifyInstance) {
    * Body: { profile?: boolean, fields?: { [key]: boolean }, domains?: { [domain]: false | true | { scope?: 'all'|'current', includeSecret?: boolean } }, confirm?: boolean }
    * Secret fields, secret domains and includeSecret need confirm:true.
    */
-  app.put('/api/contacts/:id/grants', async (req) => {
-    const p = await requireOwner(req, 'contacts:write');
+  app.put('/api/parties/:id/grants', async (req) => {
+    const p = await requireOwner(req, 'parties:write');
     const c = await getContact((req.params as { id: string }).id);
-    if (c.kind !== 'node') throw bad('not_connected', 'Only contacts on Little Dipper can be granted access');
+    if (!c.node) throw bad('not_connected', 'Only people and organisations on Little Dipper can be granted access');
     const b = (req.body || {}) as { profile?: boolean; fields?: Record<string, boolean>; domains?: Record<string, boolean | { scope?: 'all' | 'current'; includeSecret?: boolean }>; confirm?: boolean };
     const fields = await allFields();
     const changes: string[] = [];
@@ -205,27 +233,27 @@ export default async function contactRoutes(app: FastifyInstance) {
       changes.push(`${d.label} shared (${scope === 'current' ? 'current only' : 'all'}${includeSecret ? ', with secret details' : ''})`);
     }
     if (changes.length) {
-      await audit({ actor: ownerActor(p.key._id), action: 'grant.update', resource: `contacts/${c._id}/grants`, text: `Sharing with ${c.displayName}: ${changes.join(', ')}`, tone: 'owner' });
+      await audit({ actor: ownerActor(p.key._id), action: 'grant.update', resource: `parties/${c._id}/grants`, text: `Sharing with ${c.name}: ${changes.join(', ')}`, tone: 'owner' });
     }
     if (changes.length) nudgePeers([c._id]);
     const g = await grantsFor(c._id);
     return { profile: g.profile, fields: g.fields, domains: g.domains };
   });
 
-  app.post('/api/contacts/:id/invite', async (req) => {
-    await requireOwner(req, 'contacts:write');
+  app.post('/api/parties/:id/invite', async (req) => {
+    await requireOwner(req, 'parties:write');
     const c = await getContact((req.params as { id: string }).id);
     const inv = await createInvite('7d', []);
     const n = await getNode();
-    const email = c.methods.find((m) => m.type === 'email')?.value || '';
+    const email = String(c.methods.find((m) => m.kind === 'email' && m.primary)?.value ?? c.methods.find((m) => m.kind === 'email')?.value ?? '');
     const o = await getOwner();
-    const body = `Hi ${firstName(c.displayName)},\n\nI keep my contact details on Little Dipper, a personal data store I run myself. If you set one up too, open this link in it and we'll be connected:\n\n${inv.url}\n\nDon't have one yet? It's free and open source.\n\n${o?.displayName || ''}`;
+    const body = `Hi ${firstName(c.name)},\n\nI keep my contact details on Little Dipper, a personal data store I run myself. If you set one up too, open this link in it and we'll be connected:\n\n${inv.url}\n\nDon't have one yet? It's free and open source.\n\n${o?.displayName || ''}`;
     return { ...inv, to: email, subject: 'Connect with me on Little Dipper', body, address: displayAddr(canonicalUrl(n)) };
   });
 
   // ── federation (owner side) ──────────────────────────────────────────
   app.post('/api/federation/lookup', async (req) => {
-    await requireOwner(req, 'contacts:write');
+    await requireOwner(req, 'parties:write');
     const { address } = (req.body || {}) as { address?: string };
     const { origin, invite } = parsePeerInput(String(address || ''));
     const d = await lookupDescriptor(origin);
@@ -241,7 +269,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/federation/requests', async (req, reply) => {
-    const p = await requireOwner(req, 'contacts:write');
+    const p = await requireOwner(req, 'parties:write');
     const b = (req.body || {}) as { address?: string; offeredFields?: string[]; note?: string };
     const out = await requestConnection(p.key._id, String(b.address || ''), b.offeredFields || [], String(b.note || ''), true);
     reply.code(202);
@@ -249,7 +277,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/federation/requests', async (req) => {
-    await requireOwner(req, 'contacts:read');
+    await requireOwner(req, 'parties:read');
     const q = req.query as { status?: string; direction?: string };
     for (const r of await ctx.store.find<RequestDoc>('connectionRequests', { status: 'pending' })) {
       if (new Date(r.expiresAt).getTime() < Date.now()) await ctx.store.update('connectionRequests', r._id, { status: 'expired' });
@@ -259,7 +287,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/federation/requests/:id/resend', async (req) => {
-    await requireOwner(req, 'contacts:write');
+    await requireOwner(req, 'parties:write');
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'out' || r.status !== 'pending') throw notFound('request_not_found');
     const link = (await ctx.store.get<LinkDoc>('nodeLinks', r.linkId))!;
@@ -269,11 +297,11 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/federation/requests/:id/accept', async (req) => {
-    const p = await requireOwner(req, 'contacts:write');
+    const p = await requireOwner(req, 'parties:write');
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'in' || r.status !== 'pending') throw notFound('request_not_found');
     const link = (await ctx.store.get<LinkDoc>('nodeLinks', r.linkId))!;
-    const contact = (await ctx.store.get<ContactDoc>('contacts', r.contactId))!;
+    const contact = (await ctx.store.get<PartyDoc>('parties', r.contactId))!;
     const { secret, doc } = await issuePeerToken(contact);
     let theirs: { token?: string };
     try {
@@ -288,19 +316,18 @@ export default async function contactRoutes(app: FastifyInstance) {
     await pushTimeline(link, 'Approved by you');
     await pushTimeline(link, 'Secure connection set up');
     await ctx.store.update('connectionRequests', r._id, { status: 'accepted' });
-    await touch(contact._id, 'Connected');
     const g = await grantsFor(contact._id);
-    await audit({ actor: ownerActor(p.key._id), action: 'link.accept', resource: `contacts/${contact._id}`, text: `You connected with ${contact.displayName}`, tone: 'peer', meta: { grants: g } });
-    try { await syncContact((await ctx.store.get<ContactDoc>('contacts', contact._id))!); } catch { /* fetched later */ }
+    await audit({ actor: ownerActor(p.key._id), action: 'link.accept', resource: `parties/${contact._id}`, text: `You connected with ${contact.name}`, tone: 'peer', meta: { grants: g } });
+    try { await syncContact((await ctx.store.get<PartyDoc>('parties', contact._id))!); } catch { /* fetched later */ }
     return { status: 'active', grants: { profile: g.profile, fields: g.fields, domains: g.domains }, issuedToken: doc.prefix };
   });
 
   app.post('/api/federation/requests/:id/decline', async (req) => {
-    const p = await requireOwner(req, 'contacts:write');
+    const p = await requireOwner(req, 'parties:write');
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'in' || r.status !== 'pending') throw notFound('request_not_found');
     const link = await ctx.store.get<LinkDoc>('nodeLinks', r.linkId);
-    const contact = await ctx.store.get<ContactDoc>('contacts', r.contactId);
+    const contact = await ctx.store.get<PartyDoc>('parties', r.contactId);
     if (link) {
       try { await sendSigned(link.peerUrl, `/peer/requests/${encodeURIComponent(r.requestId)}/decline`, { type: 'connect.decline', requestId: r.requestId }); } catch { /* best effort */ }
     }
@@ -310,11 +337,11 @@ export default async function contactRoutes(app: FastifyInstance) {
       await ctx.store.update('nodes', n._id, { blockedNodeIds: [...new Set([...(n.blockedNodeIds || []), r.fromNodeId])] });
     }
     // Declined strangers don't linger in the address book.
-    if (contact) await ctx.store.remove('contacts', contact._id);
+    if (contact) await ctx.store.remove('parties', contact._id);
     if (link) await ctx.store.remove('nodeLinks', link._id);
     await ctx.store.removeMany('grants', { contactId: r.contactId });
     await ctx.store.update('connectionRequests', r._id, { status: 'declined' });
-    await audit({ actor: ownerActor(p.key._id), action: 'link.decline', resource: `connectionRequests/${r._id}`, text: `You declined ${contact?.displayName || r.fromNode}'s request${block ? ' and blocked them' : ''}`, tone: 'owner' });
+    await audit({ actor: ownerActor(p.key._id), action: 'link.decline', resource: `connectionRequests/${r._id}`, text: `You declined ${contact?.name || r.fromNode}'s request${block ? ' and blocked them' : ''}`, tone: 'owner' });
     return { status: 'declined' };
   });
 
@@ -330,7 +357,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   }
 
   app.post('/api/federation/invites', async (req, reply) => {
-    const p = await requireOwner(req, 'contacts:write');
+    const p = await requireOwner(req, 'parties:write');
     const b = (req.body || {}) as { expiresIn?: string; offeredFields?: string[] };
     const fields = await allFields();
     const offered = (b.offeredFields || []).filter((k) => fields.some((f) => f.key === k && f.sensitivity === 'sensitive'));
@@ -342,10 +369,10 @@ export default async function contactRoutes(app: FastifyInstance) {
 
   // ── links ────────────────────────────────────────────────────────────
   app.post('/api/federation/links/:id/rotate', async (req) => {
-    const p = await requireOwner(req, 'contacts:write');
+    const p = await requireOwner(req, 'parties:write');
     const link = await ctx.store.get<LinkDoc>('nodeLinks', (req.params as { id: string }).id);
     if (!link || link.status !== 'active') throw notFound('link_not_found');
-    const contact = (await ctx.store.get<ContactDoc>('contacts', link.contactId))!;
+    const contact = (await ctx.store.get<PartyDoc>('parties', link.contactId))!;
     const { secret, doc } = await issuePeerToken(contact);
     let theirs: { token?: string };
     try {
@@ -358,19 +385,19 @@ export default async function contactRoutes(app: FastifyInstance) {
     await revokeIssuedToken(link);
     await ctx.store.update('nodeLinks', link._id, { tokenIssuedToPeer: { keyId: doc._id, scope: 'peer:profile peer:fields' }, tokenFromPeerEnc: sealToken(theirs.token), rotatedAt: now() });
     await pushTimeline(link, 'Connection refreshed');
-    await audit({ actor: ownerActor(p.key._id), action: 'link.rotate', resource: `nodeLinks/${link._id}`, text: `You refreshed the connection with ${contact.displayName}`, tone: 'owner' });
+    await audit({ actor: ownerActor(p.key._id), action: 'link.rotate', resource: `nodeLinks/${link._id}`, text: `You refreshed the connection with ${contact.name}`, tone: 'owner' });
     return { rotated: true, newTokenPrefix: doc.prefix };
   });
 
   app.delete('/api/federation/links/:id', async (req) => {
-    const p = await requireOwner(req, 'contacts:write');
+    const p = await requireOwner(req, 'parties:write');
     const link = await ctx.store.get<LinkDoc>('nodeLinks', (req.params as { id: string }).id);
     if (!link || link.status === 'revoked') throw notFound('link_not_found');
-    const contact = await ctx.store.get<ContactDoc>('contacts', link.contactId);
+    const contact = await ctx.store.get<PartyDoc>('parties', link.contactId);
     let notified = true;
     try { await sendSigned(link.peerUrl, '/peer/links/revoke', { type: 'link.revoke' }); } catch { notified = false; }
     await endLink(link, 'Disconnected');
-    await audit({ actor: ownerActor(p.key._id), action: 'link.revoke', resource: `nodeLinks/${link._id}`, text: `You disconnected from ${contact?.displayName || displayAddr(link.peerUrl)}`, tone: 'owner' });
+    await audit({ actor: ownerActor(p.key._id), action: 'link.revoke', resource: `nodeLinks/${link._id}`, text: `You disconnected from ${contact?.name || displayAddr(link.peerUrl)}`, tone: 'owner' });
     return { status: 'revoked', peerNotified: notified };
   });
 }

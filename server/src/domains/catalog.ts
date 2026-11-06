@@ -394,5 +394,5 @@ export const BUILT_IN_DOMAINS: DomainDef[] = DEFS.map((d) => ({ ...d, builtIn: t
 
 /** Names domains may never use: they would read as API sections (/api/{name}). */
 export const RESERVED = new Set([
-  'node', 'auth', 'owner', 'contacts', 'federation', 'public-profile', 'keys', 'audit', 'export', 'catalog', 'timeline', 'attention', 'records', 'files', 'documents', 'shares', 'copies', 'domains', 'messages',
+  'node', 'auth', 'owner', 'contacts', 'parties', 'federation', 'public-profile', 'keys', 'audit', 'export', 'catalog', 'timeline', 'attention', 'records', 'files', 'documents', 'shares', 'copies', 'domains', 'messages',
 ]);

@@ -66,7 +66,7 @@ export async function buildApp(opts: { onRoute?: (method: string, url: string) =
   });
 
   app.setErrorHandler((err: FastifyError | HttpError, req, reply) => {
-    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message });
+    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, ...err.details });
     const fe = err as FastifyError;
     if (fe.statusCode && fe.statusCode < 500) return reply.code(fe.statusCode).send({ code: fe.code || 'bad_request', message: fe.message });
     req.log.error(err);

@@ -28,20 +28,46 @@ export const del = <T = any>(p: string) => api<T>('DELETE', p);
 // ── shared shapes ──────────────────────────────────────────────────────
 export type Sensitivity = 'standard' | 'sensitive' | 'secret';
 export type Field = { key: string; label: string; section: string; sensitivity: Sensitivity; value: string; masked: boolean; hasValue: boolean; derivedFrom?: string | null; public?: boolean; sharedWith?: number; updatedAt: string };
-export type Method = { type: string; label: string; value: string };
-export type ContactStatus = 'plain' | 'pending_in' | 'pending_out' | 'active';
-export type Contact = {
-  id: string; kind: 'person' | 'node'; displayName: string; org: string | null; status: ContactStatus;
-  node: { url: string; nodeId: string; linkId: string } | null; grants: { profile: boolean; fields: string[]; domains?: Record<string, { scope: 'all' | 'current'; includeSecret: boolean }> };
-  lastActivity: { text: string; at: string }; createdAt: string; methods: Method[];
+export type PostalAddress = { street1?: string; street2?: string; city?: string; region?: string; postalCode?: string; country: string };
+/** One shape for every contact method, yours and every party's. Phones are E.164 (+15035550148). */
+export type ContactMethod = {
+  kind: 'email' | 'phone' | 'postal' | 'website' | 'social' | 'messaging'; value: string | PostalAddress;
+  service?: string; label?: string; primary?: boolean; validFrom?: string | null; validTo?: string | null;
 };
-export type ContactDetail = Contact & {
-  notes: string; requested: string[]; offered: string[]; sharedIn: { key: string; label: string; value: string }[]; sharedInFetchedAt: string | null;
-  request: { id: string; direction: 'in' | 'out'; note: string; quiet: boolean; viaInvite: boolean; expiresAt: string; requestedFields: string[] } | null;
+export type ContactStatus = 'plain' | 'pending_in' | 'pending_out' | 'active';
+/** A person or organisation in the owner's life. The screens still call them contacts. */
+export type Party = {
+  id: string; type: 'person' | 'organisation'; name: string; status: ContactStatus;
+  node: { url: string; nodeId: string; linkId: string } | null; grants: { profile: boolean; fields: string[]; domains?: Record<string, { scope: 'all' | 'current'; includeSecret: boolean }> };
+  lastActivity: { text: string; at: string }; createdAt: string; methods: ContactMethod[]; affiliations: { party: string; role: string }[];
+};
+export type Reference = { domain: string; domainLabel: string; recordId: string; title: string; part: string; partLabel: string };
+export type PartyDetail = Party & {
+  notes: string; sharedIn: { key: string; label: string; value: string }[]; sharedInFetchedAt: string | null;
+  request: { id: string; direction: 'in' | 'out'; note: string; quiet: boolean; viaInvite: boolean; expiresAt: string; requestedFields: string[]; offeredLabels: string[] } | null;
   timeline: { label: string; at: string }[];
   sharedDomains?: { domain: string; label: string; scope: 'all' | 'current'; records: { id: string; title: string; fields: { key: string; label: string; value: string }[]; validFrom: string | null; validTo: string | null; current: boolean }[] }[];
   keys: { peerSigningKey: string; peerVersion: string | null; tokenIssued: { prefix: string; scopes: string[]; lastUsedAt: string | null } | null; tokenFromPeer: { stored: boolean; lastUsedAt: string | null } | null; lastSyncAt: string | null; rotatedAt: string | null } | null;
+  usedBy: Reference[];
   syncError?: string | null;
+};
+
+/** +15035550148 → (503) 555-0148; others in international form. */
+export function displayPhone(e164: string) {
+  const [num, ext] = e164.split(';ext=');
+  const d = num.replace(/^\+/, '');
+  const out = d.startsWith('1') && d.length === 11 ? `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}` : `+${d}`;
+  return ext ? `${out} ext. ${ext}` : out;
+}
+export function displayMethod(m: ContactMethod) {
+  if (typeof m.value === 'object') { const a = m.value; return [a.street1, a.street2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country].filter(Boolean).join(', '); }
+  if (m.kind === 'phone') return displayPhone(m.value);
+  if ((m.kind === 'social' || m.kind === 'messaging') && m.service) return `${m.value} on ${m.service}`;
+  return m.value;
+}
+export const methodValue = (p: Party, kind: ContactMethod['kind']) => {
+  const m = p.methods.find((x) => x.kind === kind && x.primary) ?? p.methods.find((x) => x.kind === kind);
+  return m ? displayMethod(m) : '';
 };
 export type NodeInfo = {
   id: string; signingKey: string; address: string;
@@ -60,7 +86,7 @@ export type Message = {
   transport: 'peer' | 'email' | 'service'; status: MessageStatus; lastError: string | null; createdAt: string; sentAt: string | null; deliveredAt: string | null; readAt: string | null;
 };
 export type Conversation = {
-  contact: Pick<Contact, 'id' | 'displayName' | 'kind' | 'status' | 'node'>;
+  party: Pick<Party, 'id' | 'name' | 'type' | 'status' | 'node'>;
   last: { id: string; direction: 'in' | 'out'; kind: string; preview: string; status: MessageStatus; at: string };
   unread: number; canMessage: boolean;
 };

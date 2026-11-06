@@ -16,9 +16,9 @@ export default async function calendarRoutes(app: FastifyInstance) {
     if (!DAY.test(q.from ?? '') || !DAY.test(q.to ?? '')) throw bad('invalid_range', 'Give from and to as YYYY-MM-DD');
     const span = (Date.parse(q.to!) - Date.parse(q.from!)) / 86400_000;
     if (!(span >= 0 && span <= MAX_DAYS)) throw bad('invalid_range', `from must be on or before to, at most ${MAX_DAYS} days apart`);
-    // An events-only key sees just events; contacts' shared events need contacts:read.
+    // An events-only key sees just events; contacts' shared events need parties:read.
     const can = (s: string) => p.key.scopes.includes('admin:*') || p.key.scopes.includes(s);
-    let items = await calendarItems(q.from!, q.to!, { contacts: can('contacts:read') });
+    let items = await calendarItems(q.from!, q.to!, { contacts: can('parties:read') });
     if (!can('records:read')) items = items.filter((i) => i.domain === 'events' && !i.contact);
     return { from: q.from, to: q.to, items };
   });

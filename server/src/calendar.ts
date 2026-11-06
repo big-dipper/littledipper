@@ -4,7 +4,7 @@
  * contacts share with them. A read-only view over records; nothing is stored here.
  */
 import { ctx } from './ctx.js';
-import type { ContactDoc } from './federation.js';
+import type { PartyDoc } from './federation.js';
 import { isDateTime, normalizeDateTime, type DateTimeValue } from './domains/datetime.js';
 import { isCurrent, isPartialDate, listDomains, plainData, recordOut, recordsOf } from './domains/records.js';
 import type { DomainDef } from './domains/types.js';
@@ -136,13 +136,13 @@ export async function calendarItems(from: string, to: string, opts: { contacts: 
 
   // Events contacts share with us, as last synced from their nodes. Their data is theirs: shape-checked, never trusted.
   if (opts.contacts) {
-    for (const c of await ctx.store.find<ContactDoc>('contacts', { kind: 'node' })) {
+    for (const c of (await ctx.store.find<PartyDoc>('parties', {})).filter((x) => x.node)) {
       const shared = (c.sharedDomains || []).find((s) => s.domain === 'events');
       if (!shared) continue;
       for (const r of shared.records) {
         items.push(...occurrences({
           kind: 'event', title: String(r.title).slice(0, 200), allDay: false, domain: 'events', domainLabel: shared.label, recordId: String(r.id),
-          contact: { id: c._id, name: c.displayName }, ...(typeof r.data?.location === 'string' ? { location: r.data.location.slice(0, 200) } : {}),
+          contact: { id: c._id, name: c.name }, ...(typeof r.data?.location === 'string' ? { location: r.data.location.slice(0, 200) } : {}),
         }, (r.data || {}) as Record<string, unknown>, from, to).map((i) => ({ ...i, id: `${c._id}:${i.id}` })));
       }
     }

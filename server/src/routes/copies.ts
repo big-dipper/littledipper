@@ -7,7 +7,6 @@ import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, rateLimit, requireSession } from '../auth.js';
 import { ctx } from '../ctx.js';
 import { newId, randomToken, safeEqual, sha256 } from '../crypto.js';
-import { touch } from '../contacts.js';
 import { canonicalUrl, getNode } from '../node.js';
 import { getOwner } from '../owner.js';
 import {
@@ -66,17 +65,16 @@ export default async function copyRoutes(app: FastifyInstance) {
     };
     await ctx.store.insert('copies', copy);
     const url = secret ? `${canonicalUrl(await getNode())}/c/${copy._id}.${secret}` : null;
-    const who = to.contact?.displayName;
+    const who = to.contact?.name;
     const how = delivery === 'link' ? (copy.expiresAt ? `a link until ${longDate(copy.expiresAt)}` : 'a link with no end date') : delivery === 'file' ? 'a file' : 'text in an email';
-    if (to.created) await audit({ actor: ownerActor(p.key._id), action: 'contact.create', resource: `contacts/${to.contact!._id}`, text: `You added ${who} when sending a copy`, tone: 'owner' });
-    if (to.contact) await touch(to.contact._id, `You sent a copy of ${copy.title}`);
+    if (to.created) await audit({ actor: ownerActor(p.key._id), action: 'contact.create', resource: `parties/${to.contact!._id}`, text: `You added ${who} when sending a copy`, tone: 'owner' });
     await audit({ actor: ownerActor(p.key._id), action: 'copy.create', resource: `copies/${copy._id}`, text: `You made a copy of ${copy.title}${who ? ` for ${who}` : ''} as ${how}`, tone: 'owner' });
     const owner = await ownerName();
     reply.code(201);
     return {
       copy: await copyOut(copy), url,
-      contact: to.contact ? { id: to.contact._id, displayName: to.contact.displayName, created: to.created } : null,
-      email: emailFor({ to: to.email, name: to.contact?.displayName ?? null, owner, title: copy.title, delivery, url, expiresAt: copy.expiresAt, note: copy.note, text: asText({ title: copy.title, sharedBy: owner, createdAt: t, note: '' }, snapshot) }),
+      contact: to.contact ? { id: to.contact._id, name: to.contact.name, created: to.created } : null,
+      email: emailFor({ to: to.email, name: to.contact?.name ?? null, owner, title: copy.title, delivery, url, expiresAt: copy.expiresAt, note: copy.note, text: asText({ title: copy.title, sharedBy: owner, createdAt: t, note: '' }, snapshot) }),
     };
   });
 

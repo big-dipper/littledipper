@@ -13,7 +13,7 @@ import { contactsSharing, nudgePeers } from '../contacts.js';
 import { documentsByRecord, recordRemoved } from '../documents.js';
 import { isDateTime } from '../domains/datetime.js';
 import {
-  actorLabels, buildRecord, checkCustomDomain, deletedRecords, KEEP_DELETED_DAYS, recordVersion, versionRecord, versionsOf, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, entrySens, plainData,
+  actorLabels, buildRecord, checkCustomDomain, deletedRecords, KEEP_DELETED_DAYS, recordVersion, versionRecord, versionsOf, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, entrySens, plainData, recordReferences, unlinkRecord,
   recordOut, recordsOf, sortRecords, syncDerived, DERIVED, type DomainDef, type RecordDoc, type RecordInput,
 } from '../domains/records.js';
 import type { Actor, VersionDoc } from '../domains/types.js';
@@ -141,7 +141,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     if (d.builtIn) throw bad('built_in', 'Built-in categories can’t be removed');
     const n = await ctx.store.count('records', { domain: d.id });
     if (n && (req.query as { force?: string }).force !== '1') throw new HttpError(409, 'not_empty', `${d.label} still has ${n} entr${n === 1 ? 'y' : 'ies'}`);
-    for (const r of await recordsOf(d.id)) await recordRemoved(r._id);
+    for (const r of await recordsOf(d.id)) { await unlinkRecord(r._id, { type: 'owner', id: p.key._id }); await recordRemoved(r._id); }
     await ctx.store.removeMany('records', { domain: d.id });
     await ctx.store.removeMany('grants', { domain: d.id });
     await ctx.store.remove('domainDefs', d.id);
@@ -271,6 +271,12 @@ export default async function domainRoutes(app: FastifyInstance) {
     if (p.key.assistant) throw new HttpError(403, 'owner_only', 'Only the owner deletes. Tell them what to remove.');
     const r = await recordOr404(d, id!);
     const title = recordOut(d, r).title;
+    // Entries that link here (a citizenship proven by this passport) lose the link. Say so first.
+    const usedBy = await recordReferences(r._id);
+    if (usedBy.length && (req.query as { confirm?: string }).confirm !== 'true') {
+      throw new HttpError(409, 'in_use', `${usedBy.length} ${usedBy.length === 1 ? 'entry links' : 'entries link'} to ${title}. Deleting removes the link.`, { usedBy });
+    }
+    await unlinkRecord(r._id, by);
     await recordVersion(r, 'delete', by);
     await ctx.store.remove('records', r._id);
     const docsDeleted = await recordRemoved(r._id);

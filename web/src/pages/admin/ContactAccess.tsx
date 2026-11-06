@@ -3,7 +3,7 @@
  * Profile first (basic profile + extra fields), then every life category with Off / Current / All.
  */
 import { useState } from 'react';
-import { put, SENS, type ContactDetail, type Field } from '../../api';
+import { put, SENS, type PartyDetail as ContactDetail, type Field } from '../../api';
 import { Confirm, Pills, Toggle, useAction, useAsync, type ConfirmCfg } from '../../ui';
 import { fetchCatalog, GROUPS, Lock, Mono, type Domain } from '../../life';
 
@@ -28,7 +28,7 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
   const dg = grants.domains || {};
 
   const send = async (body: object, msg?: string) => {
-    const g = await run(() => put<Grants>(`/api/contacts/${c.id}/grants`, body), msg);
+    const g = await run(() => put<Grants>(`/api/parties/${c.id}/grants`, body), msg);
     if (g) onGrants(g);
     return g;
   };
@@ -37,7 +37,8 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
   const standard = fields.filter((f) => f.sensitivity === 'standard');
   const extraRows = fields.filter((f) => f.sensitivity !== 'standard' || !grants.profile);
   const extraOn = grants.fields.length;
-  const requestedSensitive = c.requested.some((k) => fields.find((f) => f.key === k)?.sensitivity !== 'standard');
+  const requested = c.request?.requestedFields ?? [];
+  const requestedSensitive = requested.some((k) => fields.find((f) => f.key === k)?.sensitivity !== 'standard');
   const showExtra = extraOpen ?? (extraOn > 0 || requestedSensitive);
   const toggleField = (f: Field) => {
     const on = grants.fields.includes(f.key);
@@ -127,7 +128,7 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
             {extraRows.map((f) => (
               <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: '1px solid var(--color-divider)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14 }}>{f.label}</div><div className="text-muted" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.value || 'Not added'}</div></div>
-                {c.requested.includes(f.key) && <span className="tag tag-accent">Requested</span>}
+                {requested.includes(f.key) && <span className="tag tag-accent">Requested</span>}
                 <span className={`tag ${SENS[f.sensitivity][1]}`}>{SENS[f.sensitivity][0]}</span>
                 <Toggle on={grants.fields.includes(f.key)} label={`Share ${f.label}`} onChange={() => toggleField(f)} />
               </div>

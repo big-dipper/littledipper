@@ -9,8 +9,8 @@ import { ctx } from './ctx.js';
 import { decrypt, encrypt, newId } from './crypto.js';
 import { bad, HttpError } from './auth.js';
 import { getNode } from './node.js';
-import { lookupDescriptor, now, sendSigned, type ContactDoc, type LinkDoc } from './federation.js';
-import { linkFor, touch } from './contacts.js';
+import { lookupDescriptor, now, sendSigned, type PartyDoc, type LinkDoc } from './federation.js';
+import { linkFor } from './contacts.js';
 import type { Doc } from './store/index.js';
 
 export type MessageStatus = 'queued' | 'sent' | 'delivered' | 'failed' | 'received' | 'read';
@@ -82,10 +82,10 @@ export function messageOut(m: MessageDoc) {
 
 // ── sending ─────────────────────────────────────────────────────────────
 
-export async function queueMessage(contact: ContactDoc, kind: string, body: unknown, inReplyTo: string | null) {
+export async function queueMessage(contact: PartyDoc, kind: string, body: unknown, inReplyTo: string | null) {
   checkBody(kind, body);
   const link = await linkFor(contact);
-  if (!link || link.status !== 'active') throw new HttpError(409, 'not_connected', `You can message ${contact.displayName} once you're connected`);
+  if (!link || link.status !== 'active') throw new HttpError(409, 'not_connected', `You can message ${contact.name} once you're connected`);
   const t = now();
   const m: MessageDoc = {
     _id: newId('msg'), contactId: contact._id, conversationId: contact._id, direction: 'out', kind, body: seal(body),
@@ -118,7 +118,7 @@ export async function deliver(id: string) {
     const m = await ctx.store.get<MessageDoc>('messages', id);
     if (!m || m.status !== 'queued') return;
     try {
-      const contact = await ctx.store.get<ContactDoc>('contacts', m.contactId);
+      const contact = await ctx.store.get<PartyDoc>('parties', m.contactId);
       const link = contact ? await linkFor(contact) : null;
       if (!link || link.status !== 'active') throw new HttpError(409, 'not_connected', 'No longer connected');
       if (!(await supportsMessages(link))) throw new HttpError(409, 'not_supported', "Their Little Dipper can't receive messages yet");
@@ -175,6 +175,5 @@ export async function receiveMessage(link: LinkDoc, p: WireMessage) {
     inReplyTo, attachments: [], transport: 'peer', status: 'received', attempts: 0, nextAttemptAt: null, lastError: null,
     queuedAt: null, createdAt: t, sentAt: typeof p.createdAt === 'string' ? p.createdAt.slice(0, 40) : null, deliveredAt: t, readAt: null,
   });
-  await touch(link.contactId, 'Sent you a message');
   return { duplicate: false };
 }

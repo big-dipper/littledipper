@@ -70,7 +70,7 @@ const ADDRESS_KEYS = ['street1', 'street2', 'city', 'region', 'postalCode', 'cou
 const RRULE_KEYS = new Set(['FREQ', 'INTERVAL', 'COUNT', 'UNTIL', 'BYDAY', 'BYMONTHDAY', 'BYMONTH', 'BYSETPOS', 'BYYEARDAY', 'BYWEEKNO', 'WKST']);
 
 /** A party exists. Parties live in the contacts collection until it's renamed. */
-export const partyExists = async (id: string) => !!(await ctx.store.get('contacts', id));
+export const partyExists = async (id: string) => !!(await ctx.store.get('parties', id));
 
 /** An iCalendar RRULE: KEY=VALUE pairs, FREQ required, COUNT and UNTIL not both. Normalised to upper case without the RRULE: prefix. */
 export function checkRepeat(v: unknown): string | null {
@@ -417,6 +417,54 @@ export async function pruneDeleted() {
 export async function recordsOf(domainId: string) {
   return ctx.store.find<RecordDoc & { [k: string]: unknown }>('records', { domain: domainId }) as Promise<RecordDoc[]>;
 }
+
+// ── references ─────────────────────────────────────────────────────────
+// Entries point to parties and to other entries. Deleting the target shows what points to it, then removes those
+// pointers, so a link never dangles. The reverse ("this passport proves a citizenship") is worked out, never stored.
+
+export type Reference = { domain: string; domainLabel: string; recordId: string; title: string; part: string; partLabel: string };
+
+async function referencesWhere(match: (p: PartDef, v: unknown) => boolean): Promise<Reference[]> {
+  const out: Reference[] = [];
+  for (const d of await listDomains()) {
+    const parts = d.parts.filter((p) => ['party', 'contact', 'record'].includes(p.type));
+    if (!parts.length) continue;
+    for (const r of await recordsOf(d.id)) {
+      const plain = plainData(r);
+      // Titles as recordOut gives them: secret parts masked.
+      for (const p of parts) if (plain[p.key] !== undefined && match(p, plain[p.key])) out.push({ domain: d.id, domainLabel: d.label, recordId: r._id, title: recordOut(d, r).title, part: p.key, partLabel: p.label });
+    }
+  }
+  return out;
+}
+
+const pointsTo = (v: unknown, id: string) => (Array.isArray(v) ? v.includes(id) : v === id);
+
+/** Entries that name this party (employer, landlord, supervisor…). */
+export const partyReferences = (partyId: string) => referencesWhere((p, v) => p.type !== 'record' && pointsTo(v, partyId));
+
+/** Entries that link to this entry (a citizenship proven by a passport…). */
+export const recordReferences = (recordId: string) => referencesWhere((p, v) => p.type === 'record' && pointsTo(v, recordId));
+
+/** Remove every pointer to a party or entry that's being deleted. Each changed entry gets a version, like any edit. */
+async function unlink(refs: Reference[], id: string, by: Actor) {
+  for (const ref of refs) {
+    const r = await ctx.store.get<RecordDoc>('records', ref.recordId);
+    if (!r) continue;
+    const plain = plainData(r);
+    const v = plain[ref.part];
+    const next = Array.isArray(v) ? v.filter((x) => x !== id) : null;
+    const data = { ...r.data };
+    if (next && next.length) data[ref.part] = isEncrypted(r.data[ref.part]) ? encrypt(ctx.keys.masterKey, JSON.stringify(next)) : next;
+    else delete data[ref.part];
+    const updated = { ...r, data, updatedBy: by, updatedAt: new Date().toISOString() };
+    await ctx.store.update('records', r._id, { data, updatedBy: by, updatedAt: updated.updatedAt });
+    await recordVersion(updated, 'update', by);
+  }
+}
+
+export async function unlinkParty(partyId: string, byId: string) { await unlink(await partyReferences(partyId), partyId, { type: 'owner', id: byId }); }
+export async function unlinkRecord(recordId: string, by: Actor) { await unlink(await recordReferences(recordId), recordId, by); }
 
 // ── derived profile fields ─────────────────────────────────────────────
 // A few core profile fields mirror domain records so there is one source of truth:

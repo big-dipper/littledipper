@@ -36,7 +36,7 @@ export default function Apps() {
     { id: 'assistant', label: 'AI assistant', name: 'AI assistant', scopes: ['owner:read'] },
     { id: 'resume', label: 'Résumé builder', name: 'Résumé builder', scopes: ['owner:read', 'employment:read', 'education:read', 'credentials:read'] },
     { id: 'tax', label: 'Tax helper', name: 'Tax helper', scopes: ['owner:read', 'income:read', 'tax_returns:read', 'financial_accounts:read', 'relationships:read'] },
-    { id: 'home', label: 'Home automation', name: 'Home Assistant', scopes: ['owner:read', 'contacts:read', 'preferences:read'] },
+    { id: 'home', label: 'Home automation', name: 'Home Assistant', scopes: ['owner:read', 'parties:read', 'preferences:read'] },
   ] : [];
   const applyPreset = (id: string) => {
     const p = presets.find((x) => x.id === id);

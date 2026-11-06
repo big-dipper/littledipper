@@ -16,24 +16,26 @@ import type { SharedDomain } from './domains/sharing.js';
 
 // ── documents ───────────────────────────────────────────────────────────
 
-export type Method = { type: 'email' | 'phone' | 'address' | 'url' | 'note'; label: string; value: string };
+export type { ContactMethod } from './methods.js';
 
-export type ContactDoc = Doc & {
-  kind: 'person' | 'node';
-  displayName: string;
-  org: string | null;
-  methods: Method[];
+/**
+ * A party: a person or an organisation in the owner's life (a friend, an employer, a bank, a doctor). Entries point
+ * to parties instead of typing their names, so each one's details live in one place.
+ */
+export type PartyDoc = Doc & {
+  type: 'person' | 'organisation';
+  name: string;
+  methods: import('./methods.js').ContactMethod[];
   notes: string;
+  /** People and organisations this one belongs to, e.g. works at Acme. */
+  affiliations: { party: string; role: string }[];
+  /** The party runs Little Dipper: its node, and our connection with it. */
   node: { url: string; nodeId: string; linkId: string } | null;
+  /** What they share with us, as last fetched from their node. Kept when sharing stops: the last known values. */
   sharedIn: { key: string; label: string; value: string }[];
   /** Domains they share with us (employment, residences…), as fetched from their node. */
   sharedDomains?: SharedDomain[];
   sharedInFetchedAt: string | null;
-  /** Fields this contact asked us for in their request. */
-  requested: string[];
-  /** Field labels they offered in their request (values arrive after accept). */
-  offered: string[];
-  lastActivity: { text: string; at: string };
   createdAt: string;
 };
 

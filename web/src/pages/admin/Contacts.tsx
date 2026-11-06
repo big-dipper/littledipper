@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ago, get, initials, post, STATUS, type Contact } from '../../api';
+import { ago, displayMethod, get, initials, post, STATUS, type Party as Contact } from '../../api';
 import { ErrorNote, Loading, Pills, useAction, useAsync } from '../../ui';
 import { useAdmin } from './Layout';
 import AddContact from './AddContact';
@@ -9,7 +9,7 @@ import BigDipperBanner from './BigDipperBanner';
 type Req = { _id: string; contactId: string; peerName: string; fromNode: string; requestedFields: string[]; inviteId: string | null; quiet: boolean };
 
 export const shareSummary = (c: Contact) => {
-  if (c.kind !== 'node') return '—';
+  if (!c.node) return '—';
   if (c.status === 'pending_in') return 'Not yet';
   const n = c.grants.fields.length;
   return c.grants.profile ? (n ? `Basic profile + ${n}` : 'Basic profile') : n ? `${n} field${n === 1 ? '' : 's'} only` : 'Nothing';
@@ -20,14 +20,16 @@ export default function Contacts() {
   const { refresh } = useAdmin();
   const { run } = useAction();
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<'all' | 'node' | 'person'>('all');
+  const [filter, setFilter] = useState<'all' | 'node' | 'person' | 'organisation'>('all');
   const [modal, setModal] = useState<null | 'person' | 'invite'>(null);
-  const { data, error, reload } = useAsync(() => get<{ items: Contact[] }>('/api/contacts'), []);
+  const { data, error, reload } = useAsync(() => get<{ items: Contact[] }>('/api/parties'), []);
   const { data: reqs, reload: reloadReqs } = useAsync(() => get<{ items: Req[] }>('/api/federation/requests?status=pending&direction=in'), []);
 
   if (error) return <ErrorNote error={error} />;
   const term = q.toLowerCase();
-  const rows = (data?.items || []).filter((c) => (filter === 'all' || c.kind === filter) && (!term || c.displayName.toLowerCase().includes(term) || (c.org || '').toLowerCase().includes(term)));
+  const names = new Map((data?.items || []).map((c) => [c.id, c.name]));
+  const worksAt = (c: Contact) => c.affiliations.map((a) => names.get(a.party)).filter(Boolean).join(', ');
+  const rows = (data?.items || []).filter((c) => (filter === 'all' || (filter === 'node' ? !!c.node : c.type === filter)) && (!term || c.name.toLowerCase().includes(term) || worksAt(c).toLowerCase().includes(term)));
 
   const decline = async (r: Req) => {
     if (await run(() => post(`/api/federation/requests/${r._id}/decline`), 'Request declined')) {
@@ -65,7 +67,7 @@ export default function Contacts() {
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '24px 0 12px', flexWrap: 'wrap' }}>
         <input className="input" aria-label="Search contacts" placeholder="Search contacts" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 320 }} />
-        <Pills value={filter} options={[['all', 'All'], ['node', 'On Little Dipper'], ['person', 'People']]} onChange={setFilter} />
+        <Pills value={filter} options={[['all', 'All'], ['node', 'On Little Dipper'], ['person', 'People'], ['organisation', 'Organisations']]} onChange={setFilter} />
       </div>
       {!data ? <Loading /> : (
         <div style={{ overflowX: 'auto' }}>
@@ -73,14 +75,14 @@ export default function Contacts() {
             <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>You share</th><th>Last activity</th></tr></thead>
             <tbody>
               {rows.map((c) => {
-                const sub = c.node ? c.node.url : c.org || c.methods[0]?.value || '';
+                const sub = c.node ? c.node.url : worksAt(c) || (c.methods[0] ? displayMethod(c.methods[0]) : '');
                 return (
                   <tr key={c.id} className="row-btn" tabIndex={0} onClick={() => nav(`/admin/contacts/${c.id}`)} onKeyDown={(e) => e.key === 'Enter' && nav(`/admin/contacts/${c.id}`)}>
                     <td><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ width: 34, height: 34, borderRadius: '50%', background: c.kind === 'node' ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', display: 'grid', placeItems: 'center', fontSize: 12, flex: 'none' }}>{initials(c.displayName)}</span>
-                      <div><div style={{ fontWeight: 600 }}>{c.displayName}</div><div className="text-muted" style={{ fontSize: 12, fontFamily: c.node ? 'var(--mono)' : 'inherit' }}>{sub}</div></div>
+                      <span style={{ width: 34, height: 34, borderRadius: '50%', background: c.node ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', display: 'grid', placeItems: 'center', fontSize: 12, flex: 'none' }}>{initials(c.name)}</span>
+                      <div><div style={{ fontWeight: 600 }}>{c.name}</div><div className="text-muted" style={{ fontSize: 12, fontFamily: c.node ? 'var(--mono)' : 'inherit' }}>{sub}</div></div>
                     </div></td>
-                    <td><span className={`tag ${c.kind === 'node' ? 'tag-accent-2' : 'tag-neutral'}`}>{c.kind === 'node' ? 'Little Dipper' : 'Person'}</span></td>
+                    <td><span className="tag tag-neutral">{c.type === 'organisation' ? 'Organisation' : 'Person'}</span>{c.node && <span className="tag tag-accent-2" style={{ marginLeft: 6 }}>Little Dipper</span>}</td>
                     <td><span className={`tag ${STATUS[c.status][1]}`}>{STATUS[c.status][0]}</span></td>
                     <td style={{ fontSize: 13 }}>{shareSummary(c)}</td>
                     <td className="text-muted" style={{ fontSize: 13 }}>{c.lastActivity.text} · {ago(c.lastActivity.at)}</td>
