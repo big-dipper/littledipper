@@ -91,19 +91,21 @@ export async function buildApp(opts: { onRoute?: (method: string, url: string) =
 
   // The React app: built files from web/dist; every other non-API GET gets index.html.
   const root = config.webDist;
-  const indexHtml = existsSync(path.join(root, 'index.html')) ? readFileSync(path.join(root, 'index.html')) : null;
+  // Read on each request (it's tiny), so a new web build shows up without restarting the node.
+  const indexHtml = () => (existsSync(path.join(root, 'index.html')) ? readFileSync(path.join(root, 'index.html')) : null);
   app.setNotFoundHandler((req, reply) => {
     const urlPath = req.url.split('?')[0];
     const isApi = API_PREFIXES.some((p) => urlPath.startsWith(p));
     if ((req.method === 'GET' || req.method === 'HEAD') && !isApi && config.webDevUrl) return reply.redirect(config.webDevUrl + req.url, 302);
-    if ((req.method === 'GET' || req.method === 'HEAD') && !isApi && indexHtml) {
+    const html = (req.method === 'GET' || req.method === 'HEAD') && !isApi ? indexHtml() : null;
+    if (html) {
       const file = staticFile(root, urlPath);
       if (file) {
         reply.type(MIME[path.extname(file)] || 'application/octet-stream');
         if (urlPath.startsWith('/assets/')) reply.header('cache-control', 'public, max-age=31536000, immutable');
         return reply.send(readFileSync(file));
       }
-      return reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(indexHtml);
+      return reply.type('text/html; charset=utf-8').header('cache-control', 'no-cache').send(html);
     }
     return reply.code(404).send({ code: 'not_found', message: `No route for ${req.method} ${urlPath}` });
   });
