@@ -53,7 +53,9 @@ export function checkAssistant(v: unknown): AssistantSettings | undefined {
 /** Fixed scopes. Each domain also has its own: {domain}:read and {domain}:write. records:* covers every domain. */
 export const SCOPES = ['owner:read', 'owner:write', 'records:read', 'records:write', 'parties:read', 'parties:write', 'public:write', 'keys:manage', 'audit:read', 'export', 'messages:read', 'messages:write', 'documents:read', 'documents:write'] as const;
 
-export const COOKIE = { session: 'ld_session', setup: 'ld_setup', mfa: 'ld_mfa' } as const;
+/** LD_COOKIE_SUFFIX keeps nodes on one host apart (the demo runs two on localhost; browsers share cookies across ports). */
+const sfx = process.env.LD_COOKIE_SUFFIX ? `_${process.env.LD_COOKIE_SUFFIX}` : '';
+export const COOKIE = { session: `ld_session${sfx}`, setup: `ld_setup${sfx}`, mfa: `ld_mfa${sfx}` } as const;
 
 const secure = () => config.hostUrl.startsWith('https://');
 export const cookieOpts = (maxAgeSec: number) => ({ path: '/', httpOnly: true, sameSite: 'strict' as const, secure: secure(), maxAge: maxAgeSec });

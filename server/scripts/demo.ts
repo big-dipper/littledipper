@@ -56,7 +56,7 @@ async function node(port: number, name: string, who: string) {
   dirs.push(dir);
   const proc = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], {
     cwd: path.resolve(import.meta.dirname, '..'),
-    env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: base },
+    env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: base, LD_COOKIE_SUFFIX: String(port) },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   procs.push(proc);
