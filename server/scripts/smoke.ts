@@ -757,6 +757,8 @@ async function main() {
     ok((await a.call('GET', '/api/messages/conversations')).items[0].last.preview === 'Can’t take this one', 'the inbox shows it in words');
     const own = await a.call('POST', '/api/tasks', { title: 'Call the bank' });
     ok(!own.asked && own.who === null, 'a task with no one else is just yours');
+    const note = await a.call('POST', '/api/data/notes', { data: { text: 'Ideas for the garden\nMore tomatoes this year, fewer zucchini.' } });
+    ok(note.title === 'Ideas for the garden…', 'a note is kept as written, and its title is its first line');
     await a.call('POST', `/api/messages/conversations/${cA.id}/read`, {});
     // Offline recipient: queued now, delivered by the outbox once B is back.
     // B comes back as a node from before SQLite, so everything after this also runs on a migrated node.

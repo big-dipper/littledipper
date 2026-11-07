@@ -379,7 +379,10 @@ export function renderTitle(d: DomainDef, raw: Record<string, unknown>, hidden: 
     const p = d.parts.find((x) => x.key === k);
     return p ? displayValue(p, values[k]) : '';
   });
-  return out.replace(/\(\s*\)/g, '').replace(/\s+(at|·|:)\s*$/g, '').replace(/^\s*(·|:|at)\s+/g, '').replace(/\s{2,}/g, ' ').replace(/\s+·\s+·\s+/g, ' · ').trim() || d.noun;
+  // A title is one line: a note's is its opening words.
+  const [first, ...rest] = out.trim().split('\n');
+  const line = first.replace(/\(\s*\)/g, '').replace(/\s+(at|·|:)\s*$/g, '').replace(/^\s*(·|:|at)\s+/g, '').replace(/\s{2,}/g, ' ').replace(/\s+·\s+·\s+/g, ' · ').trim() || d.noun;
+  return line.length > 80 ? `${line.slice(0, 79).trimEnd()}…` : rest.some((x) => x.trim()) ? `${line}…` : line;
 }
 
 export const isCurrent = (d: DomainDef, r: RecordDoc) => !d.dated || !r.validTo || r.validTo >= new Date().toISOString().slice(0, r.validTo.length);

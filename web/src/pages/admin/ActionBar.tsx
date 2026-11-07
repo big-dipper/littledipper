@@ -1,7 +1,7 @@
 /**
- * The action bar: the right-hand side is for doing, as the left is for going. Closed, it's a quiet rail with counts;
- * open, it holds Add (an event or a task, typed as you'd say it), Needs you, your tasks and updates. On a phone
- * it's a button that opens a sheet from the bottom.
+ * The action bar: the right-hand side is for doing, as the left is for going. Actions and notifications only: Add (an
+ * event, a task or a note, typed as you'd say it), your tasks with requests waiting on top, and notifications.
+ * "Needs you" stays on Home. Closed, it's a quiet rail; on a phone, a button that opens a sheet from the bottom.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -10,10 +10,11 @@ import { Pills, useAction, useAsync, useToast } from '../../ui';
 import { Select } from '../../life';
 import { Icon } from '../../icons';
 import { readWhen, sayWhen } from '../../quickAdd';
-import { NeedsYouRow, useNeedsYou, useUpdates } from '../../needsYou';
+import { useUpdates } from '../../needsYou';
 import { useAdmin } from './Layout';
 
 export type Notice = { id: string; kind: string; title: string; text: string; href: string; at: string };
+type Ask = { messageId: string; party: { id: string; name: string }; title: string; due: string | null; at: string };
 type Task = {
   id: string; title: string; due: string | null; done: boolean; doneAt: string | null;
   who: { id: string; name: string } | null; from: { id: string; name: string } | null; answer: 'asked' | 'accepted' | 'not_now' | null;
@@ -27,10 +28,10 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function ActionBar({ notices, onDismiss, onGo }: { notices: Notice[]; onDismiss: (id: string) => void; onGo: (href: string) => void }) {
   const { version } = useAdmin();
   const [open, setOpen] = useState(readOpen);
-  const { items: needs } = useNeedsYou();
   const updates = useUpdates(8);
   const { data: tasks } = useAsync(() => get<{ open: Task[]; done: Task[] }>('/api/tasks'), [version]);
-  const addRef = useRef<HTMLInputElement>(null);
+  const { data: asks } = useAsync(() => get<{ items: Ask[] }>('/api/tasks/requests'), [version]);
+  const addRef = useRef<HTMLTextAreaElement>(null);
   const set = (v: boolean) => { setOpen(v); try { localStorage.setItem(OPEN_KEY, v ? '1' : '0'); } catch { /* just not remembered */ } };
   const openTo = (focusAdd: boolean) => { set(true); if (focusAdd) setTimeout(() => addRef.current?.focus(), 60); };
   useEffect(() => {
@@ -40,23 +41,23 @@ export default function ActionBar({ notices, onDismiss, onGo }: { notices: Notic
     return () => window.removeEventListener('keydown', esc);
   }, [open]);
 
-  const waiting = needs?.length ?? 0;
-  const openTasks = tasks?.open.length ?? 0;
+  const waiting = asks?.items.length ?? 0;
+  const openTasks = (tasks?.open.length ?? 0) + waiting;
 
   if (!open) {
     return (
       <aside className="actionbar" data-open="0" aria-label="Actions">
-        <button type="button" className="bare ab-rail-btn ab-main" onClick={() => openTo(true)} title="Add an event or task" aria-label="Add an event or task">
+        <button type="button" className="bare ab-rail-btn ab-main" onClick={() => openTo(true)} title="Add an event, task or note" aria-label="Add an event, task or note">
           <Icon name="plus" size={22} />
-          {waiting > 0 && <span className="nav-badge ab-count">{waiting}</span>}
-        </button>
-        <button type="button" className="bare ab-rail-btn" onClick={() => openTo(false)} title={`Needs you${waiting ? ` (${waiting})` : ''}`} aria-label={`Needs you${waiting ? ` (${waiting})` : ''}`}>
-          <Icon name="bell" size={20} />
           {waiting > 0 && <span className="nav-badge ab-count">{waiting}</span>}
         </button>
         <button type="button" className="bare ab-rail-btn" onClick={() => openTo(false)} title={`Your tasks${openTasks ? ` (${openTasks})` : ''}`} aria-label={`Your tasks${openTasks ? ` (${openTasks})` : ''}`}>
           <Icon name="tasks" size={20} />
-          {openTasks > 0 && <span className="nav-badge ab-count ab-count-soft">{openTasks}</span>}
+          {openTasks > 0 && <span className={`nav-badge ab-count${waiting ? '' : ' ab-count-soft'}`}>{openTasks}</span>}
+        </button>
+        <button type="button" className="bare ab-rail-btn" onClick={() => openTo(false)} title={`Notifications${notices.length ? ` (${notices.length})` : ''}`} aria-label={`Notifications${notices.length ? ` (${notices.length})` : ''}`}>
+          <Icon name="bell" size={20} />
+          {notices.length > 0 && <span className="nav-badge ab-count ab-count-soft">{notices.length}</span>}
         </button>
       </aside>
     );
@@ -74,17 +75,10 @@ export default function ActionBar({ notices, onDismiss, onGo }: { notices: Notic
 
         <QuickAdd inputRef={addRef} />
 
-        {needs && needs.length > 0 && (
-          <section className="ab-section">
-            <div className="card-kicker">Needs you</div>
-            {needs.map((it) => <NeedsYouRow key={it.key} item={it} compact />)}
-          </section>
-        )}
-
-        <Tasks tasks={tasks ?? null} />
+        <Tasks tasks={tasks ?? null} asks={asks?.items ?? []} />
 
         <section className="ab-section">
-          <div className="card-kicker">Updates</div>
+          <div className="card-kicker">Notifications</div>
           {updates && !updates.length && <div className="text-muted" style={{ fontSize: 13 }}>Nothing new from anyone.</div>}
           {updates?.map((u) => {
             const n = u.notice ? notices.find((x) => x.id === u.id) : null;
@@ -105,25 +99,29 @@ export default function ActionBar({ notices, onDismiss, onGo }: { notices: Notic
   );
 }
 
+type Kind = 'event' | 'task' | 'note';
+const PLACEHOLDER: Record<Kind, string> = { event: 'Pick up kids at 3 on Saturday', task: 'Test software on Saturday', note: 'Anything you want to remember' };
+
 /**
- * Add, the way you'd say it: "Pick up kids at 3 on Saturday". What it understood shows underneath, ready to fix,
- * and nothing is saved until you press Add.
+ * Add, the way you'd say it: "Pick up kids at 3 on Saturday". For events and tasks, what it understood shows
+ * underneath, ready to fix; a note is kept just as written. Nothing is saved until you press Add.
+ * (A message will be the fourth kind.)
  */
-function QuickAdd({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | null> }) {
+function QuickAdd({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement | null> }) {
   const { refresh } = useAdmin();
   const toast = useToast();
   const { run, busy } = useAction();
-  const [kind, setKind] = useState<'event' | 'task'>('event');
+  const [kind, setKind] = useState<Kind>('event');
   const [text, setText] = useState('');
   const [fix, setFix] = useState<{ date?: string | null; time?: string | null }>({});
   const [who, setWho] = useState('');
   const { data: people } = useAsync(() => get<{ items: Party[] }>('/api/parties'), []);
   const read = useMemo(() => readWhen(text), [text]);
   const date = fix.date !== undefined ? fix.date : read.date;
-  const time = kind === 'task' ? null : fix.time !== undefined ? fix.time : read.time;
+  const time = kind !== 'event' ? null : fix.time !== undefined ? fix.time : read.time;
   const person = people?.items.find((p) => p.id === who);
   const asks = !!person?.node && person.status === 'active';
-  const ready = !!read.title && (kind === 'task' || !!date);
+  const ready = kind === 'note' ? !!text.trim() : !!read.title && (kind === 'task' || !!date);
 
   const reset = () => { setText(''); setFix({}); setWho(''); };
   const add = async () => {
@@ -133,6 +131,8 @@ function QuickAdd({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | n
       const end = time && read.endTime && fix.time === undefined ? { at: `${date}T${read.endTime}`, tz } : undefined;
       const ok = await run(() => post('/api/data/events', { data: { title: read.title, start: { at: `${date}T${time ?? '00:00'}`, tz }, ...(end ? { end } : {}), allDay: !time } }));
       if (ok) { toast(`${read.title} · ${sayWhen(date, time)}`); reset(); refresh(); }
+    } else if (kind === 'note') {
+      if (await run(() => post('/api/data/notes', { data: { text: text.trim() } }))) { toast('Note saved in My data'); reset(); refresh(); }
     } else {
       const r = await run(() => post<{ asked: boolean }>('/api/tasks', { title: read.title, due: date, who: who || null }));
       if (r) { toast(r.asked ? `Asked ${first(person!.name)}. Their answer shows here and in your messages.` : 'Added to your tasks'); reset(); refresh(); }
@@ -141,10 +141,13 @@ function QuickAdd({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | n
 
   return (
     <section className="ab-section">
-      <Pills value={kind} size={12} options={[['event', 'Event'], ['task', 'Task']]} onChange={(v) => { setKind(v as 'event' | 'task'); setFix({}); }} />
-      <input ref={inputRef} className="input" value={text} onChange={(e) => { setText(e.target.value); setFix({}); }} onKeyDown={(e) => e.key === 'Enter' && add()}
-        placeholder={kind === 'event' ? 'Pick up kids at 3 on Saturday' : 'Test software on Saturday'} aria-label={kind === 'event' ? 'New event' : 'New task'} />
-      {text.trim() && (
+      <Pills value={kind} size={13} options={[['event', 'Event'], ['task', 'Task'], ['note', 'Note']]} onChange={(v) => { setKind(v); setFix({}); }} />
+      <textarea ref={inputRef} className="input ab-input" value={text} rows={kind === 'note' ? 5 : 2} onChange={(e) => { setText(e.target.value); setFix({}); }}
+        // Enter adds an event or task; in a note it starts a new line (⌘/Ctrl+Enter saves).
+        onKeyDown={(e) => { if (e.key === 'Enter' && (kind !== 'note' ? !e.shiftKey : e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); } }}
+        placeholder={PLACEHOLDER[kind]} aria-label={`New ${kind}`} />
+      {kind === 'note' && text.trim() && <button className="btn btn-primary" disabled={busy} onClick={add} style={{ justifySelf: 'start', fontSize: 13 }}>Save note</button>}
+      {kind !== 'note' && text.trim() && (
         <div className="ab-preview">
           <div style={{ fontWeight: 600, fontSize: 14 }}>{read.title || '…'}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -168,11 +171,12 @@ function QuickAdd({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | n
 const ANSWER: Record<NonNullable<Task['answer']>, string> = { asked: 'asked', accepted: 'taking care of it', not_now: 'can’t take this one' };
 
 /** Your tasks: tick to finish. Ones you asked of someone show their answer; ones asked of you say by whom. */
-function Tasks({ tasks }: { tasks: { open: Task[]; done: Task[] } | null }) {
+function Tasks({ tasks, asks }: { tasks: { open: Task[]; done: Task[] } | null; asks: Ask[] }) {
   const { refresh } = useAdmin();
-  const { run } = useAction();
+  const { run, busy } = useAction();
   const [showDone, setShowDone] = useState(false);
   if (!tasks) return null;
+  const answer = (a: Ask, ans: 'accepted' | 'not_now') => run(() => post(`/api/tasks/requests/${a.messageId}`, { answer: ans }), ans === 'accepted' ? 'Added to your tasks' : `${first(a.party.name)} will see you can’t take this one`).then(refresh);
   const toggle = (t: Task) => run(() => post(`/api/tasks/${t.id}/done`, { done: !t.done }), t.done ? undefined : t.from ? `Done. ${first(t.from.name)} will see it.` : 'Done').then(refresh);
   const row = (t: Task) => {
     const late = !t.done && t.due && t.due < today();
@@ -198,7 +202,19 @@ function Tasks({ tasks }: { tasks: { open: Task[]; done: Task[] } | null }) {
   return (
     <section className="ab-section">
       <div className="card-kicker">Your tasks</div>
-      {tasks.open.length ? tasks.open.map(row) : <div className="text-muted" style={{ fontSize: 13 }}>Nothing to do. Add one above.</div>}
+      {/* Asked of you and not answered yet: on top, answered right here (or in your conversation). */}
+      {asks.map((a) => (
+        <div key={a.messageId} className="ab-ask">
+          <div style={{ fontSize: 12 }} className="text-muted">{first(a.party.name)} asked you</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{a.title}</div>
+          {a.due && <div className="text-muted" style={{ fontSize: 12 }}>{sayWhen(a.due, null)}</div>}
+          <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+            <button className="btn btn-primary" disabled={busy} onClick={() => answer(a, 'accepted')} style={{ fontSize: 12, padding: '5px 12px' }}>Accept</button>
+            <button className="btn btn-ghost" disabled={busy} onClick={() => answer(a, 'not_now')} style={{ fontSize: 12 }}>Not now</button>
+          </div>
+        </div>
+      ))}
+      {tasks.open.length ? tasks.open.map(row) : !asks.length && <div className="text-muted" style={{ fontSize: 13 }}>Nothing to do. Add one above.</div>}
       {tasks.done.length > 0 && (
         <>
           <button type="button" className="btn btn-ghost" onClick={() => setShowDone(!showDone)} style={{ fontSize: 12, justifySelf: 'start', padding: '2px 0' }}>{showDone ? 'Hide done' : `Done this week (${tasks.done.length})`}</button>

@@ -573,6 +573,13 @@ const DEFS: Def[] = [
   },
   // ── personal ─────────────────────────────────────────────────────────
   {
+    // Anything worth remembering, in your own words: the action bar's third kind of thing to add.
+    id: 'notes', label: 'Notes', noun: 'note', group: 'personal', sensitivity: 'sensitive', dated: false, publicable: false,
+    description: 'Anything you want to remember, in your own words.',
+    title: '{text}',
+    parts: [{ key: 'text', label: 'Note', type: 'longtext', required: true }],
+  },
+  {
     // Free-form on purpose: preferences are open-ended, and interpreting them is what assistants are for.
     id: 'preferences', label: 'Preferences', noun: 'preference', group: 'personal', sensitivity: 'standard', dated: false, publicable: true,
     sensitivityBy: { part: 'category', values: { accessibility: 'sensitive' } },

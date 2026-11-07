@@ -126,7 +126,7 @@ pre.code { margin: 0; background: var(--color-neutral-900); color: var(--color-n
 
 /* ── Action bar: the right side is for doing, as the left is for going ─────────────── */
 .actionbar { --icon-fill: var(--color-accent-200); width: 64px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 10px; overflow-y: auto; border-left: 1px solid var(--color-divider); transition: width .18s ease, padding .18s ease; }
-.actionbar[data-open='1'] { width: 360px; align-items: stretch; gap: 22px; padding: 16px 20px 28px; }
+.actionbar[data-open='1'] { width: 380px; align-items: stretch; gap: 22px; padding: 16px 20px 28px; }
 .ab-rail-btn { position: relative; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; cursor: pointer; color: var(--color-text); }
 .ab-rail-btn:hover { background: var(--color-surface); }
 .ab-main { color: var(--color-accent-700); margin-bottom: 6px; }
@@ -151,3 +151,5 @@ pre.code { margin: 0; background: var(--color-neutral-900); color: var(--color-n
   .actionbar[data-open='1'] { position: fixed; left: 0; right: 0; bottom: 0; width: auto; max-height: 85dvh; z-index: 41; border: none; border-radius: 24px 24px 0 0; background: var(--color-bg); box-shadow: 0 -12px 40px rgba(0,0,0,.15); }
   .ab-scrim { display: block; position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.2); }
 }
+.ab-input { font-size: 16px; line-height: 1.45; padding: 14px 16px; border-radius: 18px; resize: vertical; min-height: 64px; font-family: inherit; }
+.ab-ask { display: grid; gap: 2px; padding: 12px 14px; border-radius: 18px; background: #fff; border: 1px solid var(--color-accent-200); }

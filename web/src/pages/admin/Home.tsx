@@ -50,7 +50,7 @@ export default function Home() {
 
       <div style={{ marginTop: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <h4>Updates</h4>
+          <h4>Notifications</h4>
           <Link to="/admin/activity" className="text-muted" style={{ fontSize: 13 }}>Activity log</Link>
         </div>
         {updates?.map((u) => (
