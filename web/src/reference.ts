@@ -142,6 +142,11 @@ export const ENDPOINTS: Endpoint[] = ([
   ['Documents', 'GET', '/api/export/documents', 'owner', 'Every document’s pages, decrypted, as a .tar with a manifest.json.', 'export'],
   ['Keys', 'DELETE', '/api/keys/{id}', 'owner', 'Revoke key. Revoking a peer token disconnects that contact.', 'keys:manage'],
   ['Audit', 'GET', '/api/audit', 'owner', 'Activity log: who read or changed what. ?limit=&before=&action=', 'audit:read'],
+  ['Tasks', 'GET', '/api/tasks', 'owner', 'Open tasks (soonest first) and those done in the last week, with who it’s for or from and their answer.', 'tasks:read'],
+  ['Tasks', 'POST', '/api/tasks', 'owner', 'A new task {title, due?, who?}. For someone connected, they’re asked in your conversation (message kinds task.assign / task.reply / task.done).', 'tasks:write'],
+  ['Tasks', 'POST', '/api/tasks/:id/done', 'owner', 'Tick a task off {done}. If someone asked it of you, they’re told.', 'tasks:write'],
+  ['Tasks', 'GET', '/api/tasks/requests', 'owner', 'Tasks people asked of you that you haven’t answered.', 'tasks:read'],
+  ['Tasks', 'POST', '/api/tasks/requests/:messageId', 'owner', 'Answer {answer: accepted | not_now}. Accepting makes it your task, linked to theirs.', 'tasks:write'],
 ] as [string, Endpoint['m'], string, Endpoint['auth'], string, string?][]).map(([g, m, p, auth, d, scope]) => ({ g, m, p, auth, d, scope }));
 
 export const SCHEMAS: { name: string; coll: string; desc: string; json: string }[] = ([

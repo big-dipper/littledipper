@@ -123,3 +123,31 @@ pre.code { margin: 0; background: var(--color-neutral-900); color: var(--color-n
   .cal-dow { padding: 0 0 4px; text-align: center; }
 }
 @media (prefers-reduced-motion: reduce) { .cal-day, .cal-entry { transition: none; } }
+
+/* ── Action bar: the right side is for doing, as the left is for going ─────────────── */
+.actionbar { --icon-fill: var(--color-accent-200); width: 64px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 10px; overflow-y: auto; border-left: 1px solid var(--color-divider); transition: width .18s ease, padding .18s ease; }
+.actionbar[data-open='1'] { width: 360px; align-items: stretch; gap: 22px; padding: 16px 20px 28px; }
+.ab-rail-btn { position: relative; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; cursor: pointer; color: var(--color-text); }
+.ab-rail-btn:hover { background: var(--color-surface); }
+.ab-main { color: var(--color-accent-700); margin-bottom: 6px; }
+.ab-main .ab-count { display: none; }
+.ab-count { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; font-size: 10px; padding: 0 4px; box-shadow: 0 0 0 2px var(--color-bg); }
+.ab-count-soft { background: var(--color-neutral-300); color: var(--color-text); }
+.ab-section { display: grid; gap: 12px; }
+.ab-preview { display: grid; gap: 10px; padding: 12px 14px; border-radius: 18px; background: var(--color-accent-100); }
+.ab-mini { padding: 6px 10px; font-size: 13px; width: auto; }
+.ab-check { all: unset; flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; border: 1.5px solid var(--color-neutral-500); display: grid; place-items: center; font-size: 12px; cursor: pointer; color: #fff; }
+.ab-check[data-on='1'] { background: var(--color-accent-2-600); border-color: var(--color-accent-2-600); }
+.ab-check:disabled { cursor: default; border-style: dashed; }
+.ab-check:focus-visible { outline: 2px solid var(--color-accent-500); outline-offset: 2px; }
+.ab-scrim { display: none; }
+@media (prefers-reduced-motion: reduce) { .actionbar { transition: none; } }
+/* On a phone: one round button; open, a sheet from the bottom. */
+@media (max-width: 760px) {
+  .actionbar[data-open='0'] { position: fixed; right: 16px; bottom: 16px; width: auto; padding: 0; border: none; z-index: 30; overflow: visible; }
+  .actionbar[data-open='0'] .ab-rail-btn:not(.ab-main) { display: none; }
+  .actionbar[data-open='0'] .ab-main { width: 56px; height: 56px; border-radius: 50%; margin: 0; background: var(--color-accent-700); color: #fff; --icon-fill: var(--color-accent-500); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  .actionbar[data-open='0'] .ab-main .ab-count { display: grid; }
+  .actionbar[data-open='1'] { position: fixed; left: 0; right: 0; bottom: 0; width: auto; max-height: 85dvh; z-index: 41; border: none; border-radius: 24px 24px 0 0; background: var(--color-bg); box-shadow: 0 -12px 40px rgba(0,0,0,.15); }
+  .ab-scrim { display: block; position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.2); }
+}

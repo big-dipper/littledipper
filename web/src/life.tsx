@@ -6,7 +6,7 @@ import { Confirm, Pills, Toggle, useAction, useToast, type ConfirmCfg } from './
 
 // ── types ──────────────────────────────────────────────────────────────
 export type Part = {
-  key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean; deprecated?: boolean;
+  key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean; deprecated?: boolean; system?: boolean;
   /** money: per what (hour, week, month, year, once). */ periodic?: boolean;
   /** record: the categories it may point to, and whether it holds several. */ to?: string[]; many?: boolean;
   /** Only applies when another part holds one of these values. */ when?: { part: string; in: string[] };
@@ -26,7 +26,7 @@ export type Domain = {
   parts: Part[]; title: string; count: number; currentCount: number; sharedWith: number;
   /** The profile reads this category (names, birth, where you live…). */
   feedsProfile?: boolean;
-  onParty?: boolean;
+  livesOn?: 'party' | 'actions';
   /** What this category invites once an entry is saved (a car: its title, insurance, loan). Never required. */
   companions?: { domain?: string; document?: string; label: string; when?: { part: string; in: string[] } }[];
   single?: boolean;
@@ -631,7 +631,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
 
   const tKeys = titleKeys(d);
   // Deprecated parts stay editable on records that already use them, but aren't offered otherwise.
-  const offered = d.parts.filter((p) => applies(p, vals) && (!p.deprecated || (vals[p.key] !== undefined && vals[p.key] !== '') || rec?.masked.includes(p.key)));
+  const offered = d.parts.filter((p) => !p.system && applies(p, vals) && (!p.deprecated || (vals[p.key] !== undefined && vals[p.key] !== '') || rec?.masked.includes(p.key)));
   const essential = offered.filter((p, i) => p.required || tKeys.includes(p.key) || i < 4);
   const extra = offered.filter((p) => !essential.includes(p));
   const extraFilled = extra.some((p) => vals[p.key] !== undefined && vals[p.key] !== '' || rec?.masked.includes(p.key));

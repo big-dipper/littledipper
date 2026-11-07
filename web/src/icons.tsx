@@ -85,6 +85,14 @@ const PATHS: Record<string, ReactNode> = {
   </>,
   /** Points left; the folded sidebar mirrors it to point right. */
   collapse: <path {...N} d="M14.5 6 8.5 12l6 6" strokeWidth={2} />,
+  plus: <>
+    <circle {...F} cx="12" cy="12" r="8.5" />
+    <path {...N} d="M12 8v8M8 12h8" strokeWidth={1.8} />
+  </>,
+  tasks: <>
+    <rect {...F} x="4" y="4" width="16" height="16" rx="5" />
+    <path {...N} d="m8.5 12.3 2.4 2.4 4.8-5.2" strokeWidth={1.8} />
+  </>,
   signout: <>
     <path {...F} d="M5 4h8v16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
     <path {...N} d="M13 4h1.5a1 1 0 0 1 1 1v2M15.5 17v2a1 1 0 0 1-1 1H13M12 12h9M18.5 9.5 21 12l-2.5 2.5" />

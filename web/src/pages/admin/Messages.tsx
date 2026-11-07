@@ -20,8 +20,42 @@ function statusLine(m: Message) {
   return `Not delivered · ${FAILURE[m.lastError || ''] || "Couldn't reach their Little Dipper"}`;
 }
 
-/** Text today. Other kinds are shown as a placeholder until this version learns them. */
+/** Text and tasks. Other kinds are shown as a placeholder until this version learns them. */
 const bodyText = (m: Message) => (m.kind === 'text' ? String(m.body) : `This message (${m.kind}) can't be shown in this version of Little Dipper.`);
+
+type TaskBody = { taskId?: string; title?: string; due?: string | null; answer?: 'accepted' | 'not_now'; done?: boolean };
+
+/**
+ * A step in a task you two share, as a card in the conversation: asked, answered, done. A request waiting for your
+ * answer can be answered right here, the same as from Needs you.
+ */
+function TaskCard({ m, items, name, onAnswer, busy }: { m: Message; items: Message[]; name: string; onAnswer: (m: Message, a: 'accepted' | 'not_now') => void; busy: boolean }) {
+  const mine = m.direction === 'out';
+  const b = (m.body ?? {}) as TaskBody;
+  const first = name.split(' ')[0];
+  // Replies point at the request; done names the asker's task. Either way, find the request for its title.
+  const ask = m.kind === 'task.assign' ? m : items.find((x) => x.kind === 'task.assign' && (x.id === m.inReplyTo || (x.body as TaskBody)?.taskId === b.taskId));
+  const title = (ask?.body as TaskBody | undefined)?.title ?? 'a task';
+  const due = (ask?.body as TaskBody | undefined)?.due;
+  const waiting = m.kind === 'task.assign' && !mine && !items.some((x) => x.kind === 'task.reply' && x.inReplyTo === m.id);
+  const [kicker, line] =
+    m.kind === 'task.assign' ? [mine ? `You asked ${first}` : `${first} asked you`, title]
+      : m.kind === 'task.reply' ? [mine ? 'You answered' : `${first} answered`, b.answer === 'accepted' ? `Taking care of it: ${title}` : `Can’t take this one right now: ${title}`]
+        : [mine ? 'You finished' : `${first} finished`, b.done === false ? `Not done after all: ${title}` : `✓ ${title}`];
+  return (
+    <div style={{ maxWidth: 'min(420px, 85%)', padding: '12px 16px', borderRadius: 18, background: '#fff', border: '1px solid var(--color-accent-200)', display: 'grid', gap: 4, fontSize: 14 }}>
+      <div className="card-kicker">{kicker}</div>
+      <div style={{ fontWeight: m.kind === 'task.assign' ? 600 : 400 }}>{line}</div>
+      {m.kind === 'task.assign' && due && <div className="text-muted" style={{ fontSize: 12 }}>{new Date(`${due}T12:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</div>}
+      {waiting && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+          <button className="btn btn-primary" disabled={busy} style={{ fontSize: 12, padding: '5px 12px' }} onClick={() => onAnswer(m, 'accepted')}>Accept</button>
+          <button className="btn btn-ghost" disabled={busy} style={{ fontSize: 12 }} onClick={() => onAnswer(m, 'not_now')}>Not now</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const Avatar = ({ name, size = 36 }: { name: string; size?: number }) => (
   <span style={{ width: size, height: size, borderRadius: '50%', background: 'var(--color-accent-2-200)', display: 'grid', placeItems: 'center', fontSize: 12, flex: 'none' }}>{initials(name)}</span>
@@ -113,6 +147,9 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
     const m = await run(() => post<Message>(`/api/messages/conversations/${contactId}`, { body }));
     if (m) { setText(''); reload(); onChange(); }
   };
+  const answer = async (m: Message, a: 'accepted' | 'not_now') => {
+    if (await run(() => post(`/api/tasks/requests/${m.id}`, { answer: a }), a === 'accepted' ? 'Added to your tasks' : undefined)) { reload(); onChange(); refresh(); }
+  };
   const retry = async (m: Message) => { if (await run(() => post(`/api/messages/${m.id}/retry`))) { reload(); onChange(); } };
 
   return (
@@ -130,6 +167,14 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
         {data.items.length === 0 && <p className="text-muted" style={{ fontSize: 14, margin: 0 }}>No messages yet. Say hello to {name}.</p>}
         {data.items.map((m) => {
           const mine = m.direction === 'out';
+          if (m.kind.startsWith('task.')) {
+            return (
+              <div key={m.id} style={{ display: 'grid', justifyItems: mine ? 'end' : 'start', gap: 3 }}>
+                <TaskCard m={m} items={data.items} name={name} busy={busy} onAnswer={answer} />
+                <div className="text-muted" style={{ fontSize: 11 }}>{statusLine(m)}</div>
+              </div>
+            );
+          }
           return (
             <div key={m.id} style={{ display: 'grid', justifyItems: mine ? 'end' : 'start', gap: 3 }}>
               <div style={{ maxWidth: 'min(520px, 85%)', padding: '10px 14px', borderRadius: 20, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 14,

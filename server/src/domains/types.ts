@@ -52,6 +52,8 @@ export type PartDef = {
   expects?: 'person' | 'organisation';
   /** Replaced by another part. It keeps working (old records and clients use it), but new UIs shouldn't offer it. Parts are never removed. */
   deprecated?: boolean;
+  /** Kept up to date by Little Dipper itself (who asked you, their answer), never typed: editors don't offer it. */
+  system?: boolean;
 };
 
 export type DomainDef = {
@@ -73,8 +75,8 @@ export type DomainDef = {
   confirmShare?: boolean;
   /** At most one entry (Birth, Health basics). */
   single?: boolean;
-  /** Lives on each person's page (Relationships), not as a My data category. Still records: dated, sensitive, shareable. */
-  onParty?: boolean;
+  /** Shown somewhere other than My data: on each person's page (relationships) or in the action bar (tasks). Still records. */
+  livesOn?: 'party' | 'actions';
   /** Related entries and documents this category invites, e.g. a vehicle invites its title, insurance and loan. Never required. */
   companions?: { domain?: string; document?: string; label: string; when?: { part: string; in: string[] } }[];
   parts: PartDef[];

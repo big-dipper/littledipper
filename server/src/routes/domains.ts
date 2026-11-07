@@ -6,7 +6,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ctx } from '../ctx.js';
 import { PROFILE_DOMAINS } from '../profile.js';
 import type { ShareDoc } from '../shares.js';
-import { audit, ownerActor } from '../audit.js';
+import { audit, ownerActor, systemActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner, requireSession, type ApiKeyDoc } from '../auth.js';
 import { isIdentityChange, pendingReply, propose, reviewInput, type ReviewDoc } from '../reviews.js';
 import { mask } from '../fields.js';
@@ -109,7 +109,9 @@ export async function updateRecord(d: DomainDef, existing: RecordDoc, input: Rec
   await demoteOtherPrimaries(rec);
   const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
   nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id, [_id]));
-  await audit({ actor: ownerActor(by.id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${who} updated ${out.title} in ${d.label}`, tone: 'owner' });
+  // Little Dipper itself (a task's answer arriving) is logged as the system, never as the owner.
+  const sys = by.type === 'system';
+  await audit({ actor: sys ? systemActor : ownerActor(by.id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${who} updated ${out.title} in ${d.label}`, tone: sys ? 'system' : 'owner' });
   return out;
 }
 

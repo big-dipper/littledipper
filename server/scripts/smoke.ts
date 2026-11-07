@@ -736,6 +736,28 @@ async function main() {
     const answer = await b.call('POST', `/api/messages/conversations/${cB.id}`, { body: 'Got it', inReplyTo: msg1.id });
     const convA = await a.call('GET', `/api/messages/conversations/${cA.id}`);
     ok(convA.items.length === 2 && convA.items[1].id === answer.id && convA.items[1].inReplyTo === msg1.id, 'B replies and A sees the thread in order');
+    // Tasks travel as messages: asked, answered, done, all in the conversation on both sides.
+    const task = await a.call('POST', '/api/tasks', { title: 'Test software', due: '2026-11-14', who: cA.id });
+    ok(task.asked && task.answer === 'asked', 'A asks B (connected) to do a task');
+    const asks = (await b.call('GET', '/api/tasks/requests')).items;
+    ok(asks.length === 1 && asks[0].title === 'Test software' && asks[0].due === '2026-11-14' && asks[0].party.id === cB.id, 'B sees the request waiting, from A');
+    await b.call('POST', `/api/tasks/requests/${asks[0].messageId}`, { answer: 'accepted' });
+    ok((await b.call('GET', '/api/tasks/requests')).items.length === 0, 'once B accepts, nothing is waiting');
+    const mineB = (await b.call('GET', '/api/tasks')).open.find((t: any) => t.title === 'Test software');
+    ok(mineB && mineB.from?.id === cB.id && mineB.due === '2026-11-14', "it becomes B's own task, asked by A");
+    ok((await a.call('GET', '/api/tasks')).open.find((t: any) => t.id === task.id)?.answer === 'accepted', 'A sees B is taking care of it');
+    await b.call('POST', `/api/tasks/${mineB.id}/done`, { done: true });
+    ok((await a.call('GET', '/api/tasks')).done.some((t: any) => t.id === task.id && t.done), 'B ticks it off and A sees it done');
+    const second = await a.call('POST', '/api/tasks', { title: 'Water the plants', who: cA.id });
+    const ask2 = (await b.call('GET', '/api/tasks/requests')).items[0];
+    await b.call('POST', `/api/tasks/requests/${ask2.messageId}`, { answer: 'not_now' });
+    ok((await a.call('GET', '/api/tasks')).open.find((t: any) => t.id === second.id)?.answer === 'not_now' && !(await b.call('GET', '/api/tasks')).open.some((t: any) => t.title === 'Water the plants'), "B says not now: A sees it, and B doesn't get the task");
+    const kindsOf = async (who: Client, id: string) => (await who.call('GET', `/api/messages/conversations/${id}`)).items.map((m: any) => m.kind).filter((k: string) => k.startsWith('task.'));
+    ok(JSON.stringify(await kindsOf(a, cA.id)) === JSON.stringify(['task.assign', 'task.reply', 'task.done', 'task.assign', 'task.reply']) && JSON.stringify(await kindsOf(b, cB.id)) === JSON.stringify(await kindsOf(a, cA.id)), 'the whole exchange is in the conversation on both nodes');
+    ok((await a.call('GET', '/api/messages/conversations')).items[0].last.preview === 'Can’t take this one', 'the inbox shows it in words');
+    const own = await a.call('POST', '/api/tasks', { title: 'Call the bank' });
+    ok(!own.asked && own.who === null, 'a task with no one else is just yours');
+    await a.call('POST', `/api/messages/conversations/${cA.id}/read`, {});
     // Offline recipient: queued now, delivered by the outbox once B is back.
     // B comes back as a node from before SQLite, so everything after this also runs on a migrated node.
     await new Promise((r) => { B.proc.once('exit', r); B.proc.kill(); });
@@ -753,7 +775,7 @@ async function main() {
     }
     ok(arrived, 'the outbox delivers it once the node is back');
     const inboxA = await a.call('GET', '/api/messages/conversations');
-    ok(inboxA.items[0].party.id === cA.id && inboxA.items[0].unread === 1, "A's inbox lists the conversation with one unread");
+    ok(inboxA.items[0].party.id === cA.id && inboxA.items[0].unread === 0, "A's inbox lists the conversation, already read");
     await a.call('POST', `/api/messages/conversations/${cA.id}`, { body: '   ' }, [400]);
     ok(true, 'empty messages are refused');
     const msgKey = await a.call('POST', '/api/keys', { name: 'Reader', scopes: ['owner:read'] });
@@ -774,7 +796,7 @@ async function main() {
     const afterBDetail = await b.call('GET', `/api/parties/${afterB.id}`);
     ok(afterBDetail.sharedIn.length > 0 && afterBDetail.methods.some((m: any) => m.kind === 'website' && m.label === 'Little Dipper'), 'what they last shared is kept, and their Little Dipper address stays as a website');
     await a.call('POST', `/api/messages/conversations/${cA.id}`, { body: 'Still there?' }, [409]);
-    ok((await a.call('GET', `/api/messages/conversations/${cA.id}`)).items.length === 3, 'after disconnect: sending is refused, history is kept');
+    ok((await a.call('GET', `/api/messages/conversations/${cA.id}`)).items.filter((m: any) => m.kind === 'text').length === 3, 'after disconnect: sending is refused, history is kept');
 
     console.log('big dipper');
     let bdv = await a.call('GET', '/api/big-dipper');

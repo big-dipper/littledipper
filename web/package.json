@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
+    "chrono-node": "^2.10.3",
     "qrcode": "1.5",
     "react": "19.2",
     "react-dom": "19.2",

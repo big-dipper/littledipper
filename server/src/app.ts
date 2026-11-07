@@ -14,6 +14,7 @@ import miscRoutes from './routes/misc.js';
 import mcpRoutes from './routes/mcp.js';
 import oauthRoutes from './routes/oauth.js';
 import notificationRoutes from './routes/notifications.js';
+import taskRoutes from './routes/tasks.js';
 import domainRoutes from './routes/domains.js';
 import messageRoutes from './routes/messages.js';
 import documentRoutes from './routes/documents.js';
@@ -88,6 +89,7 @@ export async function buildApp(opts: { onRoute?: (method: string, url: string) =
   await app.register(mcpRoutes);
   await app.register(oauthRoutes);
   await app.register(notificationRoutes);
+  await app.register(taskRoutes);
 
   // The React app: built files from web/dist; every other non-API GET gets index.html.
   const root = config.webDist;

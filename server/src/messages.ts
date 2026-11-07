@@ -175,5 +175,9 @@ export async function receiveMessage(link: LinkDoc, p: WireMessage) {
     inReplyTo, attachments: [], transport: 'peer', status: 'received', attempts: 0, nextAttemptAt: null, lastError: null,
     queuedAt: null, createdAt: t, sentAt: typeof p.createdAt === 'string' ? p.createdAt.slice(0, 40) : null, deliveredAt: t, readAt: null,
   });
+  // Tasks travel as messages: let the tasks module record the answer or the finish. The message is kept either way.
+  if (kind.startsWith('task.')) {
+    try { await (await import('./tasks.js')).onTaskMessage(link, kind, p.body); } catch { /* the conversation still shows it */ }
+  }
   return { duplicate: false };
 }

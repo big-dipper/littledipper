@@ -118,7 +118,7 @@ const DEFS: Def[] = [
   },
   {
     // Each entry is a relationship between you and a party. Their name, phone, email and birthday live on the party.
-    id: 'relationships', label: 'Relationships', noun: 'relationship', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false, onParty: true,
+    id: 'relationships', label: 'Relationships', noun: 'relationship', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false, livesOn: 'party',
     description: 'Family, partners and the people you work with: spouse, children, parents, references, mentors. Each points to the person.',
     title: '{party} ({relation})',
     parts: [
@@ -166,6 +166,23 @@ const DEFS: Def[] = [
       { key: 'allDay', label: 'All day', type: 'boolean' },
       { key: 'location', label: 'Where', type: 'text' },
       { key: 'repeat', label: 'Repeats', type: 'repeat' },
+    ],
+  },
+  {
+    // A task for you, or one you ask of someone. Asked of a connected Little Dipper, it travels as a message: they
+    // accept or say not now, and tell you when it's done. The system parts are that conversation's state.
+    id: 'tasks', label: 'Tasks', noun: 'task', group: 'life', sensitivity: 'sensitive', dated: false, publicable: false, livesOn: 'actions', sortBy: 'due',
+    description: 'Things to do: yours, and ones you ask of people you’re connected with.',
+    title: '{title}',
+    parts: [
+      { key: 'title', label: 'What', type: 'text', required: true },
+      { key: 'due', label: 'When', type: 'date' },
+      { key: 'who', label: 'For', type: 'party', hint: 'Someone else doing it. If they’re on Little Dipper, they’re asked.' },
+      { key: 'done', label: 'Done', type: 'boolean' },
+      { key: 'doneAt', label: 'Done on', type: 'date', system: true },
+      { key: 'from', label: 'Asked by', type: 'party', system: true },
+      { key: 'answer', label: 'Their answer', type: 'enum', options: o('asked', 'accepted', 'not_now=Not now'), system: true },
+      { key: 'ref', label: 'Their task', type: 'text', system: true },
     ],
   },
   // ── work ─────────────────────────────────────────────────────────────

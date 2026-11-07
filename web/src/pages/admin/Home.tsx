@@ -1,9 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { addr, ago, firstName, get, initials, whenLabel, type AuditEvent } from '../../api';
-import { useAction, useAsync } from '../../ui';
-import { fetchCatalog, fmtDate } from '../../life';
+import { addr, ago, firstName, get } from '../../api';
+import { useAsync } from '../../ui';
 import { useAdmin } from './Layout';
-import { useDeviceBackup } from '../../deviceBackup';
+import { NeedsYouRow, useNeedsYou, useUpdates } from '../../needsYou';
 import { addDays, daysOf, lookOf, timeOf, ymd, type CalItem } from './Calendar';
 
 const greeting = () => {
@@ -13,35 +12,11 @@ const greeting = () => {
 const TONE = { peer: 'var(--color-accent-2)', request: 'var(--color-accent)', owner: 'var(--color-neutral-500)', system: 'var(--color-neutral-500)' };
 
 export default function Home() {
-  const { owner, node, refresh } = useAdmin();
+  const { owner, node } = useAdmin();
   const nav = useNavigate();
-  const { run } = useAction();
-  const device = useDeviceBackup(refresh);
-  const { data: reqs } = useAsync(() => get('/api/federation/requests?status=pending&direction=in'), []);
-  const { data: reviews } = useAsync(() => get<{ items: { id: string; by: string; keyId: string }[] }>('/api/reviews'), []);
-  const { data: audit } = useAsync(() => get<{ items: AuditEvent[] }>('/api/audit?limit=6'), []);
-  const { data: catalog } = useAsync(fetchCatalog, []);
-  const { data: attention } = useAsync(() => get<{ items: { domain: string; id: string; title: string; part: string; kind?: 'expiry' | 'deadline'; date: string; expired: boolean }[] }>('/api/attention?days=90'), []);
+  const { items: needs } = useNeedsYou();
+  const updates = useUpdates();
 
-  const inbox = [
-    ...(reqs?.items || []).filter((r: { quiet: boolean }) => !r.quiet).map((r: { _id: string; contactId: string; fromNode: string; peerName: string }) => ({
-      key: r._id, initials: initials(r.peerName), title: `${r.peerName} wants to connect`, sub: r.fromNode, cta: 'Review', go: () => nav(`/admin/relationships/${r.contactId}`),
-    })),
-    // Changes an assistant proposed, waiting for your approval: one line per assistant.
-    ...[...new Map((reviews?.items || []).map((r) => [r.keyId, r])).values()].map((r) => {
-      const n = (reviews?.items || []).filter((x) => x.keyId === r.keyId).length;
-      return { key: `review-${r.keyId}`, initials: initials(r.by), title: `${r.by} suggested ${n === 1 ? 'a change' : `${n} changes`}`, sub: 'Nothing is saved until you approve it', cta: 'Review', go: () => nav('/admin/review') };
-    }),
-    ...(attention?.items || []).slice(0, 3).map((a) => ({
-      key: a.id + a.part, initials: initials(catalog?.find((d) => d.id === a.domain)?.label.replace('&', '') || a.domain), title: a.kind === 'deadline' ? `${a.part}: ${a.title}` : `${a.title} ${a.expired ? 'has expired' : 'expires soon'}`, sub: a.kind === 'deadline' && a.expired ? `Passed ${fmtDate(a.date)}` : `${a.part} ${fmtDate(a.date)}`, cta: 'Open', go: () => nav(`/admin/life/${a.domain}`),
-    })),
-    // The recovery kit first: without it, no backup can be restored anywhere else.
-    ...(node.recoveryKit.due ? [{ key: 'recovery-kit', initials: 'K', title: 'Save your recovery kit', sub: node.recoveryKit.reason === 'key-changed' ? 'Your key changed since you saved one' : 'Without it, no backup can be restored', cta: 'Save', go: () => nav('/admin/settings/address?kit=1') }] : []),
-    // A backup on this device: asked for weekly, or when the browser paused saving to the chosen folder.
-    ...(device.needsPermission ? [{ key: 'device-allow', initials: '⤓', title: `Allow saving backups to ${device.folderName}`, sub: 'Your browser paused it after a restart', cta: 'Allow', go: () => run(device.allow, 'Saving backups again') }]
-      : node.deviceBackup.due ? [{ key: 'device-backup', initials: '⤓', title: node.deviceBackup.lastAt ? 'Save a fresh backup to this device' : 'Keep a backup on this device', sub: node.deviceBackup.lastAt ? `Last saved here ${whenLabel(node.deviceBackup.lastAt)}` : 'So far your backups are only on your Little Dipper', cta: 'Save', go: () => run(device.download, 'Backup saved to this device') }] : []),
-    ...(node.update.available ? [{ key: 'update', initials: '↑', title: `Update ${node.update.latest} is ready`, sub: 'Release notes in Settings', cta: 'View', go: () => nav('/admin/settings/hosting') }] : []),
-  ];
   return (
     <div data-screen-label="Dashboard" style={{ maxWidth: 760, display: 'grid', gap: 18 }}>
       <div>
@@ -54,8 +29,8 @@ export default function Home() {
 
       <div className="card" style={{ padding: '22px 24px', gap: 12, background: 'var(--color-accent-100)' }}>
         <div className="card-kicker">Needs you</div>
-        {inbox.map((ib) => <InboxRow key={ib.key} {...ib} />)}
-        {reqs && inbox.length === 0 && <div className="text-muted" style={{ fontSize: 14 }}>Nothing waiting.</div>}
+        {needs?.map((it) => <NeedsYouRow key={it.key} item={it} />)}
+        {needs && needs.length === 0 && <div className="text-muted" style={{ fontSize: 14 }}>Nothing waiting.</div>}
       </div>
 
       <ThisWeek />
@@ -74,12 +49,15 @@ export default function Home() {
       </div>
 
       <div style={{ marginTop: 14 }}>
-        <h4>Recent activity</h4>
-        {audit?.items.map((a) => (
-          <div key={a._id} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'flex-start' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 7, flex: 'none', background: TONE[a.tone] }} />
-            <div style={{ flex: 1, fontSize: 14 }}>{a.text}</div>
-            <span className="text-muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{ago(a.at)}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <h4>Updates</h4>
+          <Link to="/admin/activity" className="text-muted" style={{ fontSize: 13 }}>Activity log</Link>
+        </div>
+        {updates?.map((u) => (
+          <div key={u.id} onClick={u.href ? () => nav(u.href!) : undefined} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'flex-start', cursor: u.href ? 'pointer' : 'default' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 7, flex: 'none', background: TONE[u.tone] }} />
+            <div style={{ flex: 1, fontSize: 14 }}>{u.text}</div>
+            <span className="text-muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{ago(u.at)}</span>
           </div>
         ))}
         {node.publicViewsToday > 0 && (
@@ -89,7 +67,7 @@ export default function Home() {
             <span className="text-muted" style={{ fontSize: 12 }}>today</span>
           </div>
         )}
-        {audit && audit.items.length === 0 && <p className="text-muted" style={{ fontSize: 14 }}>Nothing yet.</p>}
+        {updates && updates.length === 0 && !node.publicViewsToday && <p className="text-muted" style={{ fontSize: 14 }}>Nothing new from anyone yet.</p>}
       </div>
     </div>
   );
@@ -98,7 +76,9 @@ export default function Home() {
 /** The next seven days from the calendar, at a glance. */
 function ThisWeek() {
   const today = ymd(new Date());
-  const { data } = useAsync(() => get<{ items: CalItem[] }>(`/api/calendar?from=${today}&to=${addDays(today, 6)}`), [today]);
+  const { version } = useAdmin();
+  // Reloads with `version`, so an event added in the action bar shows here straight away.
+  const { data } = useAsync(() => get<{ items: CalItem[] }>(`/api/calendar?from=${today}&to=${addDays(today, 6)}`), [today, version]);
   const next = (data?.items ?? []).filter((i) => daysOf(i)[1] >= today).slice(0, 4);
   const dayLabel = (d: string) => (d <= today ? 'Today' : d === addDays(today, 1) ? 'Tomorrow' : new Date(`${d}T12:00`).toLocaleDateString(undefined, { weekday: 'short' }));
   return (
@@ -121,16 +101,6 @@ function ThisWeek() {
       })}
       {data && !next.length && <div className="text-muted" style={{ fontSize: 14 }}>A clear week.</div>}
       <Link className="btn btn-secondary" to="/admin/calendar" style={{ alignSelf: 'flex-start' }}>Open calendar</Link>
-    </div>
-  );
-}
-
-function InboxRow({ initials: ini, title, sub, cta, go }: { initials: string; title: string; sub: string; cta: string; go: () => void }) {
-  return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-      <span style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--color-accent-300)', display: 'grid', placeItems: 'center', fontSize: 13, flex: 'none' }}>{ini}</span>
-      <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{title}</div><div className="text-muted" style={{ fontSize: 12 }}>{sub}</div></div>
-      <button className="btn btn-primary" onClick={go} style={{ fontSize: 13 }}>{cta}</button>
     </div>
   );
 }

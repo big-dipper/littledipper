@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { addr, ApiError, copy, get, initials, patch, post, type NodeInfo, type Owner } from '../../api';
 import { Loading, useToast } from '../../ui';
 import { Icon, type IconName } from '../../icons';
 import { autoSave } from '../../deviceBackup';
+import ActionBar, { type Notice } from './ActionBar';
 
 type Admin = {
   owner: Owner;
@@ -15,6 +16,9 @@ type Admin = {
   inboxDocs: number;
   pendingReview: number;
   refresh: () => void;
+  /** Bumps whenever anything changes, so lists shown in two places (Home and the action bar) reload together. */
+  version: number;
+  notices: Notice[];
 };
 const AdminCtx = createContext<Admin>(null as never);
 export const useAdmin = () => useContext(AdminCtx);
@@ -27,34 +31,6 @@ const NAV: [string, string, IconName][] = [
 const DOCS: [string, string, IconName][] = [['/admin/reference/model', 'Data model', 'model'], ['/admin/reference/endpoints', 'Endpoints', 'endpoints']];
 
 const Badge = ({ n }: { n: number }) => <span className="nav-badge">{n}</span>;
-
-type Notice = { id: string; kind: string; title: string; text: string; href: string; at: string };
-
-/** What to know about while you weren't looking: Review waiting, assistants' months, ended connections. */
-function NoticePanel({ items, left, onClose, onGo, onDismiss }: { items: Notice[]; left: number; onClose: () => void; onGo: (href: string) => void; onDismiss: (id: string) => void }) {
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', esc);
-    return () => window.removeEventListener('keydown', esc);
-  }, [onClose]);
-  return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 40 }} aria-hidden />
-      <div role="dialog" aria-label="Notifications" className="card" style={{ position: 'fixed', top: 16, left, width: 'min(380px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflow: 'auto', zIndex: 41, padding: '16px 18px', gap: 10, boxShadow: '0 12px 40px rgba(0,0,0,.12)' }}>
-        <div style={{ fontWeight: 600 }}>Notifications</div>
-        {!items.length ? <div className="text-muted" style={{ fontSize: 13.5 }}>You’re all caught up.</div> : items.map((n) => (
-          <div key={n.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', borderRadius: 14, background: 'var(--color-neutral-100)' }}>
-            <button type="button" className="bare" onClick={() => onGo(n.href)} style={{ all: 'unset', cursor: 'pointer', flex: 1, display: 'grid', gap: 2 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{n.title}</span>
-              <span className="text-muted" style={{ fontSize: 12.5 }}>{n.text}</span>
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => onDismiss(n.id)} aria-label="Dismiss" title="Dismiss" style={{ fontSize: 14, padding: '0 8px' }}>×</button>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
 
 /** Whether the sidebar is folded to icons: a per-device convenience, so browser storage. */
 const RAIL_KEY = 'ld.sidebar.rail';
@@ -73,8 +49,6 @@ export default function AdminLayout() {
   const [inboxDocs, setInboxDocs] = useState(0);
   const [pendingReview, setPendingReview] = useState(0);
   const [notices, setNotices] = useState<Notice[]>([]);
-  const [noticesOpen, setNoticesOpen] = useState(false);
-  const asideRef = useRef<HTMLElement>(null);
   const [authError, setAuthError] = useState(false);
   const [n, setN] = useState(0);
   const [rail, setRail] = useState(readRail);
@@ -124,9 +98,9 @@ export default function AdminLayout() {
   const isOn = (to: string) => (to === '/admin' ? loc.pathname === '/admin' : loc.pathname.startsWith(to));
 
   return (
-    <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, pendingReview, refresh: () => setN((x) => x + 1) }}>
+    <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, pendingReview, refresh: () => setN((x) => x + 1), version: n, notices }}>
       <div className="shell">
-        <aside ref={asideRef} className="sidebar" aria-label="Main" data-rail={rail ? '1' : '0'}>
+        <aside className="sidebar" aria-label="Main" data-rail={rail ? '1' : '0'}>
           <div className="side-head">
             <span className="side-avatar" title={rail ? owner.name : undefined}>{initials(owner.name)}</span>
             <span className="side-name">{owner.name}</span>
@@ -139,13 +113,6 @@ export default function AdminLayout() {
             <button type="button" title={`${node.id} · click to copy`} onClick={async () => toast((await copy(node.id)) ? 'Node ID copied' : node.id)}
               style={{ all: 'unset', cursor: 'pointer', fontSize: 11, opacity: 0.75 }}>{node.id.slice(0, 8)}…{node.id.slice(-4)}</button>
           </div>
-          <button type="button" className="nav-pill bare" onClick={() => setNoticesOpen(!noticesOpen)} aria-expanded={noticesOpen}
-            title={rail ? `Notifications${notices.length ? ` (${notices.length})` : ''}` : undefined} aria-label={`Notifications${notices.length ? ` (${notices.length})` : ''}`}
-            style={{ width: '100%', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
-            <Icon name="bell" className="nav-ico" />
-            <span className="nav-label">Notifications</span>
-            {notices.length > 0 && <Badge n={notices.length} />}
-          </button>
           {NAV.map(([to, label, icon]) => {
             const count = to === '/admin/relationships' ? pendingIn : to === '/admin/messages' ? unreadMessages : to === '/admin/documents' ? inboxDocs : to === '/admin/review' ? pendingReview : 0;
             return (
@@ -176,17 +143,10 @@ export default function AdminLayout() {
             </button>
           </div>
         </aside>
-        {noticesOpen && (
-          <NoticePanel
-            items={notices} left={(asideRef.current?.getBoundingClientRect().right ?? 260) + 8}
-            onClose={() => setNoticesOpen(false)}
-            onGo={(href) => { setNoticesOpen(false); nav(href); }}
-            onDismiss={async (id) => { await post(`/api/notifications/${encodeURIComponent(id)}/dismiss`); setN((x) => x + 1); }}
-          />
-        )}
         <main className="main">
           <Outlet />
         </main>
+        <ActionBar notices={notices} onGo={(href) => nav(href)} onDismiss={async (id) => { await post(`/api/notifications/${encodeURIComponent(id)}/dismiss`); setN((v) => v + 1); }} />
       </div>
     </AdminCtx.Provider>
   );

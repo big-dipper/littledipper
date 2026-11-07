@@ -97,7 +97,7 @@ export type Conversation = {
   unread: number; canMessage: boolean;
 };
 export type Owner = { id: string; name: string; email: string; prefs: { showTechnical: boolean }; role: string };
-export type AuditEvent = { _id: string; at: string; action: string; text: string; tone: 'peer' | 'request' | 'owner' | 'system' };
+export type AuditEvent = { _id: string; at: string; action: string; text: string; tone: 'peer' | 'request' | 'owner' | 'system'; actor?: { type: string; id: string } };
 
 // ── formatting ─────────────────────────────────────────────────────────
 export const addr = (url: string) => url.replace(/^https?:\/\//, '');

@@ -24,7 +24,10 @@ export default function Settings() {
   const tab: Tab = TABS.some(([k]) => k === tabParam) ? (tabParam as Tab) : 'address';
   return (
     <div data-screen-label="Node settings" style={{ maxWidth: 960 }}>
-      <h1>Settings</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+        <h1>Settings</h1>
+        <Link to="/admin/activity" className="btn btn-secondary">Activity log</Link>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6 }}>
         <Toggle on={tech} label="Show technical details" onChange={() => setTech(!tech)} />
         <div><div style={{ fontSize: 14, fontWeight: 600 }}>Show technical details</div><div className="text-muted" style={{ fontSize: 12 }}>Keys, endpoints, DNS records and the build reference pages.</div></div>

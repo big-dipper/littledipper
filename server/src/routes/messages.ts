@@ -14,7 +14,12 @@ async function getContact(id: string) {
 
 const preview = (m: MessageDoc) => {
   const o = messageOut(m);
-  return o.kind === 'text' ? String(o.body).slice(0, 140) : `[${o.kind}]`;
+  const b = (o.body ?? {}) as { title?: string; answer?: string; done?: boolean };
+  if (o.kind === 'text') return String(o.body).slice(0, 140);
+  if (o.kind === 'task.assign') return `${o.direction === 'out' ? 'You asked' : 'Asked you'}: ${b.title ?? 'a task'}`;
+  if (o.kind === 'task.reply') return b.answer === 'accepted' ? 'Taking care of it' : 'Can’t take this one';
+  if (o.kind === 'task.done') return b.done === false ? 'Not done after all' : 'Done ✓';
+  return `[${o.kind}]`;
 };
 
 export default async function messageRoutes(app: FastifyInstance) {
