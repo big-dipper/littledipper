@@ -301,7 +301,8 @@ function ConnectCard({ c, first, sub, sharing, choice, setChoice, relation, setR
   relation: Relation | ''; setRelation: (r: Relation | '') => void; busy: boolean; onConnect: () => void; onDecline: () => void;
 }) {
   const give = giveList(sharing, choice);
-  const panel = { padding: '14px 18px', borderRadius: 20, background: 'var(--color-bg)', display: 'grid', gap: 6, alignContent: 'start' } as const;
+  // The two sides of the exchange are white cards that stand off the blue; the note is a blue speech bubble, so neither blends.
+  const panel = { padding: '14px 18px', borderRadius: 20, background: '#fff', border: '1px solid var(--color-accent-200)', display: 'grid', gap: 6, alignContent: 'start' } as const;
   return (
     <div className="card" style={{ marginTop: 22, padding: '26px 28px', gap: 26, background: 'var(--color-accent-100)', maxWidth: 720 }}>
       <div style={{ display: 'grid', gap: 10 }}>
@@ -309,7 +310,7 @@ function ConnectCard({ c, first, sub, sharing, choice, setChoice, relation, setR
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: 24 }}>{c.name} wants to connect</div>
           <div style={{ fontSize: 13, color: 'var(--color-accent-800)' }}><span className="mono">{sub}</span> · Little Dipper ✓ (it’s really them)</div>
         </div>
-        {c.request?.note && <div style={{ ...panel, borderRadius: '20px 20px 20px 6px', fontSize: 15 }}>{c.request.note}</div>}
+        {c.request?.note && <div style={{ padding: '12px 18px', borderRadius: '20px 20px 20px 6px', background: 'var(--color-accent-200)', color: 'var(--color-accent-900)', fontSize: 15, justifySelf: 'start', maxWidth: '100%' }}>{c.request.note}</div>}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,240px),1fr))', gap: 12 }}>
