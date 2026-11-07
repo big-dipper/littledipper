@@ -157,11 +157,19 @@ export async function syncContact(c: PartyDoc) {
       domain: id, label: String(d.label).slice(0, 80), scope: d.scope === 'current' ? 'current' : 'all',
       records: d.records.slice(0, 500).map((r) => ({
         id: String(r.id), title: String(r.title).slice(0, 200),
-        fields: (r.fields || []).slice(0, 60).map((f) => ({ key: String(f.key), label: String(f.label).slice(0, 80), value: String(f.value).slice(0, 2000) })),
+        fields: (r.fields || []).slice(0, 60).map((f) => ({
+          key: String(f.key), label: String(f.label).slice(0, 80), value: String(f.value).slice(0, 2000),
+          ...(typeof f.type === 'string' ? { type: f.type.slice(0, 20) } : {}),
+          ...(Array.isArray(f.rows) ? { rows: f.rows.slice(0, 100).map((x) => String(x).slice(0, 300)) } : {}),
+          ...(Array.isArray(f.links) ? { links: f.links.slice(0, 20).map((l) => ({ id: String(l?.id), domain: String(l?.domain).slice(0, 40), title: String(l?.title).slice(0, 200) })) } : {}),
+        })),
         data: typeof r.data === 'object' && r.data ? r.data : {}, validFrom: r.validFrom ?? null, validTo: r.validTo ?? null, current: !!r.current, updatedAt: String(r.updatedAt || ''),
       })),
     });
   }
+  // A link is only kept if it points at an entry we were actually sent: never a dangling id.
+  const got = new Set(sharedDomains.flatMap((d) => d.records.map((r) => r.id)));
+  for (const d of sharedDomains) for (const r of d.records) for (const f of r.fields) if (f.links) f.links = f.links.filter((l) => got.has(l.id));
   const t = now();
   await ctx.store.update('parties', c._id, { sharedIn, sharedDomains, sharedInFetchedAt: t });
   await ctx.store.update('nodeLinks', link._id, { lastSyncAt: t, tokenFromPeerLastUsedAt: t });

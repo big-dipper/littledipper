@@ -771,6 +771,9 @@ async function main() {
       prev = await a.call('GET', `/api/parties/${cA.id}/preview`);
       const job = prev.domains.find((x: any) => x.domain === 'relationships')?.records.find((r: any) => r.id === ref.id)?.fields.find((f: any) => f.key === 'job');
       ok(job?.links?.[0]?.id === gig.id && job.value.includes('Designer') && job.type === 'record', 'a link to an entry they can see comes with its title, ready to open');
+      const theirs = (await b.call('GET', `/api/parties/${cB.id}?sync=1`)).sharedDomains;
+      const kept = theirs.find((x: any) => x.domain === 'relationships')?.records.find((r: any) => r.id === ref.id)?.fields.find((f: any) => f.key === 'job');
+      ok(kept?.links?.[0]?.id === gig.id && theirs.some((x: any) => x.records.some((r: any) => r.id === gig.id)), "B's node keeps the link, and the entry it opens is there");
       await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { relationships: false, employment: false } });
     }
     await a.call('POST', `/api/messages/conversations/${cA.id}/read`, {});
