@@ -52,9 +52,9 @@ export function toShare(choice: Choice) {
  * "You'll share with Theo": the basic profile in words, "Who is Theo to you?" (optional; it only pre-ticks), the extras
  * as a short checklist, and any requests they made as their own called-out, unticked lines.
  */
-export function ShareChooser({ data, first, choice, onChange, requested = [], relation, onRelation }: {
+export function ShareChooser({ data, first, choice, onChange, requested = [], relation, onRelation, showBasic = true }: {
   data: SharingData; first: string; choice: Choice; onChange: (c: Choice) => void; requested?: string[];
-  relation: Relation | ''; onRelation: (r: Relation | '') => void;
+  relation: Relation | ''; onRelation: (r: Relation | '') => void; showBasic?: boolean;
 }) {
   const basic = data.profile.basic.filter((k) => data.profile.items.some((l) => l.key === k));
   const has = (item: string) => item.startsWith('category:') ? data.catalog.some((d) => d.id === item.split(':')[1] && d.count > 0) : !!valueOf(item, data);
@@ -71,10 +71,12 @@ export function ShareChooser({ data, first, choice, onChange, requested = [], re
   };
   return (
     <div style={{ display: 'grid', gap: 14 }}>
-      <div>
-        <div style={{ fontWeight: 600 }}>You’ll share with {first}</div>
-        <div className="text-muted" style={{ fontSize: 14 }}>{basic.map((k) => data.profile.items.find((l) => l.key === k)?.label).filter(Boolean).join(' · ')}</div>
-      </div>
+      {showBasic && (
+        <div>
+          <div style={{ fontWeight: 600 }}>You’ll share with {first}</div>
+          <div className="text-muted" style={{ fontSize: 14 }}>{giveList(data, { extras: [] }).map((g) => g.value || g.label).join(' · ')}</div>
+        </div>
+      )}
       <div>
         <div style={{ fontSize: 14, marginBottom: 6 }}>Who is {first} to you? <span className="text-muted" style={{ fontSize: 12 }}>(optional)</span></div>
         <Pills value={relation} size={12} onChange={(v) => pickRelation(v === relation ? '' : (v as Relation))} options={Object.entries(RELATION_LABEL) as [string, string][]} />
@@ -102,6 +104,17 @@ function Tick({ on, label, value, onChange }: { on: boolean; label: string; valu
       <span>{label}{value && <span className="text-muted" style={{ fontSize: 12 }}> · {value}</span>}</span>
     </label>
   );
+}
+
+/** What you'd give, in values ("Maya Lindqvist", "Portland, OR"): the basic profile plus ticked extras. */
+export function giveList(data: SharingData, choice: Choice): { key: string; label: string; value: string }[] {
+  const val = (k: string) => {
+    const v = data.profile.items.find((l) => l.key === k)?.value ?? '';
+    return k === 'little_dipper' ? v.split(' · ')[0] : v; // your address, not the Node ID, at a glance
+  };
+  const basic = data.profile.basic.filter((k) => data.profile.items.some((l) => l.key === k));
+  const extras = choice.extras.filter((x) => !basic.includes(x));
+  return [...basic, ...extras].map((k) => ({ key: k, label: k.startsWith('category:') ? itemLabel(k, data) : (k === 'little_dipper' ? 'Little Dipper' : data.profile.lines.find((l) => l.key === k)?.label ?? k), value: k.startsWith('category:') ? '' : val(k) }));
 }
 
 /** "Ask Theo for anything else?": things on a person's card only. No reasons between people. */

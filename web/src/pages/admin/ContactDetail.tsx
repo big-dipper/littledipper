@@ -6,7 +6,7 @@ import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
 import { fetchCatalog, fmtRange, PartialDate, Select } from '../../life';
 import { CopyList, SendCopy } from './Copies';
-import { itemLabel, ShareChooser, toShare, useSharing, type Choice, type Relation, type SharingData } from '../../sharing';
+import { giveList, itemLabel, ShareChooser, toShare, useSharing, type Choice, type Relation, type SharingData } from '../../sharing';
 
 export default function ContactDetail() {
   const { id = '' } = useParams();
@@ -70,12 +70,6 @@ export default function ContactDetail() {
     toast(r.to ? `Invite message copied. Paste it into an email to ${r.to}.` : 'Invite message copied with your invite link');
   };
 
-  const theirTitle = s === 'active' ? `What ${first} shares with you` : s === 'pending_in' ? `${first} offers to share` : 'They share';
-  const theirRows: { label: string; value: string }[] = s === 'active' ? c.sharedIn : s === 'pending_in' ? (c.request?.offeredLabels ?? []).map((l) => ({ label: l, value: 'After you accept' })) : [];
-  const syncNote = s === 'active'
-    ? (c.syncError ? `Couldn't reach their Little Dipper just now · showing what was fetched ${ago(c.sharedInFetchedAt)}` : c.sharedInFetchedAt ? `Fetched from their Little Dipper ${ago(c.sharedInFetchedAt)} · cached locally` : 'Not fetched yet')
-    : s === 'pending_in' ? 'From their signed request. Values become available after you accept.' : 'Available once they approve.';
-
   return (
     <div data-screen-label="Contact detail" style={{ maxWidth: 1040 }}>
       <Link className="btn btn-ghost" to="/admin/contacts" style={{ marginBottom: 14 }}>← All contacts</Link>
@@ -99,138 +93,131 @@ export default function ContactDetail() {
         {isNode && s === 'active' && <Link className="btn btn-primary" to={`/admin/messages/${c.id}`}>Message</Link>}
       </div>
 
-      {s === 'pending_in' && (
-        <div className="card" style={{ marginTop: 22, padding: '22px 26px', gap: 16, background: 'var(--color-accent-100)', maxWidth: 640 }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22 }}>{c.name} wants to connect</div>
-            <div style={{ fontSize: 13, color: 'var(--color-accent-800)' }}><span className="mono">{sub}</span> · Little Dipper ✓ (it’s really them)</div>
-            {c.request?.note && <div style={{ marginTop: 8, fontStyle: 'italic' }}>“{c.request.note}”</div>}
-          </div>
-          <div>
-            <div style={{ fontWeight: 600 }}>{first} will share with you</div>
-            <div className="text-muted" style={{ fontSize: 14 }}>{(c.request?.offeredLabels ?? []).join(' · ') || 'Nothing yet'}</div>
-          </div>
-          {sharing ? <ShareChooser data={sharing} first={first} choice={choice} onChange={setChoice} requested={c.request?.requestedFields ?? []} relation={relation} onRelation={setRelation} /> : <Loading />}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary" disabled={busy} onClick={accept}>Connect</button>
-            <button className="btn btn-ghost" disabled={busy} onClick={decline}>Not now</button>
-          </div>
-        </div>
-      )}
-      {s === 'pending_out' && (
-        <div style={{ marginTop: 22, borderRadius: 32, background: 'var(--color-neutral-100)', padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--color-accent)', animation: 'ldpulse 1.6s infinite', flex: 'none' }} />
-          <div style={{ flex: 1, minWidth: 240 }}>
-            <div style={{ fontWeight: 600 }}>Waiting for {first} to approve</div>
-            <div className="text-muted" style={{ fontSize: 13 }}>Request delivered to {sub}.{c.request ? ` Expires in ${Math.max(0, Math.ceil((new Date(c.request.expiresAt).getTime() - Date.now()) / 86400_000))} days.` : ''}</div>
-          </div>
-          <button className="btn btn-secondary" disabled={busy} onClick={resend}>Resend</button>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,400px),1fr))', gap: 22, marginTop: 26, alignItems: 'start' }}>
-        <div style={{ display: 'grid', gap: 22 }}>
-          <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="card-kicker">Contact info</div>
-              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, birthDate: c.birthDate ?? '', notes: c.notes, methods: c.methods.length ? c.methods : [{ kind: 'email', value: '' }] })}>Edit</button>
+      {s === 'pending_in' ? (
+        sharing ? <ConnectCard c={c} first={first} sub={sub} sharing={sharing} choice={choice} setChoice={setChoice} relation={relation} setRelation={setRelation} busy={busy} onConnect={accept} onDecline={decline} /> : <Loading />
+      ) : (
+        <>
+          {s === 'pending_out' && (
+            <div style={{ marginTop: 22, borderRadius: 32, background: 'var(--color-neutral-100)', padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--color-accent)', animation: 'ldpulse 1.6s infinite', flex: 'none' }} />
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <div style={{ fontWeight: 600 }}>Waiting for {first} to approve</div>
+                <div className="text-muted" style={{ fontSize: 13 }}>Request delivered to {sub}.{c.request ? ` Expires in ${Math.max(0, Math.ceil((new Date(c.request.expiresAt).getTime() - Date.now()) / 86400_000))} days.` : ''}</div>
+              </div>
+              <button className="btn btn-secondary" disabled={busy} onClick={resend}>Resend</button>
             </div>
-            {c.methods.map((m, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}><span className="text-muted" style={{ fontSize: 13 }}>{m.label || KIND_LABEL[m.kind]}{m.primary ? ' · main' : ''}</span><span style={{ fontSize: 14, overflowWrap: 'anywhere' }}>{displayMethod(m)}</span></div>
-            ))}
-            {c.methods.length === 0 && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>{isNode ? `Nothing saved yet. Whatever ${first} shares appears below.` : 'No details yet.'}</div>}
-            {c.notes && <p className="text-muted" style={{ fontSize: 13, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
-          </div>
+          )}
 
-          <div className="card" style={{ padding: '20px 24px', gap: 6 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-              <div className="card-kicker">Copies you’ve sent</div>
-              <button className="btn btn-ghost" style={{ fontSize: 12 }} disabled={!catalog} onClick={() => setSending(true)}>Send a copy</button>
+          {/* What they see: first, under their name, at any width. */}
+          {isNode && s === 'active' && sharing && (
+            <div className="card" style={{ padding: '20px 24px', gap: 12, marginTop: 22 }}>
+              <div className="card-kicker">What {first} sees</div>
+              <div style={{ fontSize: 16 }}>{seesSentence(c, sharing)}</div>
+              {c.asked.length > 0 && <div className="text-muted" style={{ fontSize: 13 }}>You asked {first} for {c.asked.map((x) => `${x.label.toLowerCase()} (${x.shared ? 'shared' : 'not shared'})`).join(', ')}.</div>}
+              {!changing ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-secondary" onClick={() => { setChoice({ extras: currentExtras(c) }); setChanging(true); }}>Change</button>
+                  <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setWeeds(!weeds)}>{weeds ? 'Fewer options' : 'More options'}</button>
+                </div>
+              ) : (
+                <>
+                  <ShareChooser data={sharing} first={first} choice={choice} onChange={setChoice} relation={relation} onRelation={setRelation} showBasic={false} />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-primary" disabled={busy} onClick={async () => { if (await saveChoice(c, choice, run, put)) { setChanging(false); reload(); } }}>Save</button>
+                    <button className="btn btn-ghost" onClick={() => setChanging(false)}>Cancel</button>
+                  </div>
+                </>
+              )}
             </div>
-            <CopyList query={`contactId=${c.id}`} showContact={false} version={sent} />
-            <div className="text-muted" style={{ fontSize: 12 }}>{isNode ? `A one-time snapshot as a link or a file, separate from what you share with ${first} here.` : `Send ${first} a snapshot of entries from My data as a link, a file or an email.`}</div>
-          </div>
+          )}
+          {isNode && s === 'active' && weeds && <div style={{ marginTop: 18 }}><ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} /></div>}
 
-          {isNode && (
-            <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
-              <div className="card-kicker">{theirTitle}</div>
-              {theirRows.map((m) => (
-                <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}><span className="text-muted" style={{ fontSize: 13 }}>{m.label}</span><span style={{ fontSize: 14, overflowWrap: 'anywhere' }}>{m.value}</span></div>
-              ))}
-              {s === 'active' && (c.sharedDomains || []).map((sd) => (
-                <div key={sd.domain} style={{ marginTop: 14 }}>
-                  <div className="text-muted" style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase' }}>{sd.label}{sd.scope === 'current' ? ' · current' : ''}</div>
-                  {sd.records.map((r) => (
-                    <div key={r.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--color-divider)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 14, fontWeight: 600 }}>{r.title}</span>
-                        {(r.validFrom || r.validTo) && <span className="text-muted" style={{ fontSize: 12 }}>{fmtRange(r.validFrom, r.validTo)}</span>}
-                      </div>
-                      <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>{r.fields.map((f) => `${f.label}: ${f.value}`).join(' · ')}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,400px),1fr))', gap: 22, marginTop: 22, alignItems: 'start' }}>
+            <div style={{ display: 'grid', gap: 22 }}>
+              {/* One contact card: what they share (kept up to date by them), plus anything you added yourself. */}
+              <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="card-kicker">Contact info</div>
+                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, birthDate: c.birthDate ?? '', notes: c.notes, methods: c.methods.length ? c.methods : [{ kind: 'email', value: '' }] })}>{isNode ? 'Add a detail' : 'Edit'}</button>
+                </div>
+                {isNode && c.sharedIn.map((m) => (
+                  <Row key={m.key} label={m.label} value={m.key === 'little_dipper' ? m.value.split(' · ')[0] : m.value} />
+                ))}
+                {c.methods.map((m, i) => <Row key={i} label={`${m.label || KIND_LABEL[m.kind]}${m.primary ? ' · main' : ''}`} value={displayMethod(m)} note={isNode ? 'added by you' : undefined} />)}
+                {!c.sharedIn.length && !c.methods.length && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>{isNode ? (s === 'active' ? `${first} isn’t sharing contact details yet.` : 'Details arrive once you’re connected.') : 'No details yet.'}</div>}
+                {isNode && c.sharedIn.length > 0 && (
+                  <div className="card-meta" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                    {s === 'active'
+                      ? (c.syncError ? `Couldn’t reach ${first}’s Little Dipper just now · last fetched ${ago(c.sharedInFetchedAt)}` : `Kept up to date by ${first} · fetched ${ago(c.sharedInFetchedAt)}`)
+                      : `Last known · ${first} no longer shares this`}
+                    {s === 'active' && <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} disabled={busy} onClick={() => run(() => get<CD>(`/api/parties/${c.id}?sync=1`)).then((x) => x && setData(x))}>Refresh</button>}
+                  </div>
+                )}
+                {c.notes && <p className="text-muted" style={{ fontSize: 13, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
+              </div>
+
+              {isNode && (c.sharedDomains || []).length > 0 && (
+                <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
+                  <div className="card-kicker">Also shared with you</div>
+                  {(c.sharedDomains || []).map((sd) => (
+                    <div key={sd.domain} style={{ marginTop: 10 }}>
+                      <div className="text-muted" style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase' }}>{sd.label}{sd.scope === 'current' ? ' · current' : ''}</div>
+                      {sd.records.map((r) => (
+                        <div key={r.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--color-divider)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 14, fontWeight: 600 }}>{r.title}</span>
+                            {(r.validFrom || r.validTo) && <span className="text-muted" style={{ fontSize: 12 }}>{fmtRange(r.validFrom, r.validTo)}</span>}
+                          </div>
+                          <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>{r.fields.map((f) => `${f.label}: ${f.value}`).join(' · ')}</div>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
-              ))}
-              {s === 'active' && theirRows.length === 0 && !(c.sharedDomains || []).length && !c.syncError && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>{first} isn't sharing anything with you yet.</div>}
-              <div className="card-meta" style={{ marginTop: 10, flexWrap: 'wrap' }}>
-                {syncNote}
-                {s === 'active' && <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} disabled={busy} onClick={() => run(() => get<CD>(`/api/parties/${c.id}?sync=1`)).then((x) => x && setData(x))}>Refresh</button>}
-              </div>
+              )}
             </div>
-          )}
 
-          {s === 'active' && c.keys && (
-            <div className="card" style={{ padding: '20px 24px', gap: 12 }}>
-              <div className="card-kicker">Secure connection</div>
-              <div style={{ display: 'grid', gap: 6 }}>
-                {c.timeline.map((t, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-accent-2)', flex: 'none' }} /><span style={{ flex: 1 }}>{t.label}</span><span className="text-muted">{shortDate(t.at)}</span></div>
-                ))}
-                {c.keys.tokenIssued?.lastUsedAt && <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-accent-2)', flex: 'none' }} /><span style={{ flex: 1 }}>Last read of your data</span><span className="text-muted">{ago(c.keys.tokenIssued.lastUsedAt)}</span></div>}
-              </div>
-              {tech && [
-                ['Their signing key', `${c.keys.peerSigningKey}${c.keys.peerVersion ? ` · v${c.keys.peerVersion}` : ''}`],
-                ['Token you issued them', c.keys.tokenIssued ? `${c.keys.tokenIssued.prefix} · scope ${c.keys.tokenIssued.scopes.join(' ')}` : 'none'],
-                ['Token they issued you', c.keys.tokenFromPeer ? `stored encrypted · last used ${ago(c.keys.tokenFromPeer.lastUsedAt)}` : 'none'],
-                ['Their ID', c.node?.nodeId || ''],
-              ].map(([label, value]) => (
-                <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '10px 16px', borderRadius: 18, background: 'var(--color-neutral-100)' }}>
-                  <span className="text-muted" style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase' }}>{label}</span>
-                  <span className="mono" style={{ fontSize: 12.5, overflowWrap: 'anywhere' }}>{value}</span>
+            <div style={{ display: 'grid', gap: 22 }}>
+              <div className="card" style={{ padding: '20px 24px', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <div className="card-kicker">Copies you’ve sent</div>
+                  <button className="btn btn-ghost" style={{ fontSize: 12 }} disabled={!catalog} onClick={() => setSending(true)}>Send a copy</button>
                 </div>
-              ))}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button className="btn btn-secondary" disabled={busy} onClick={rotate}>Refresh connection</button>
-                <button className="btn btn-ghost" onClick={disconnect} style={{ color: 'var(--color-accent-700)' }}>Disconnect</button>
+                <CopyList query={`contactId=${c.id}`} showContact={false} version={sent} />
+                <div className="text-muted" style={{ fontSize: 12 }}>{isNode ? `A one-time snapshot as a link or a file, separate from what ${first} sees above.` : `Send ${first} a snapshot of entries from My data as a link, a file or an email.`}</div>
               </div>
+
+              {s === 'active' && c.keys && (
+                <div className="card" style={{ padding: '20px 24px', gap: 12 }}>
+                  <div className="card-kicker">Secure connection</div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {c.timeline.map((t, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-accent-2)', flex: 'none' }} /><span style={{ flex: 1 }}>{t.label}</span><span className="text-muted">{shortDate(t.at)}</span></div>
+                    ))}
+                    {c.keys.tokenIssued?.lastUsedAt && <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-accent-2)', flex: 'none' }} /><span style={{ flex: 1 }}>Last read of your data</span><span className="text-muted">{ago(c.keys.tokenIssued.lastUsedAt)}</span></div>}
+                  </div>
+                  {tech && [
+                    ['Their signing key', `${c.keys.peerSigningKey}${c.keys.peerVersion ? ` · v${c.keys.peerVersion}` : ''}`],
+                    ['Token you issued them', c.keys.tokenIssued ? `${c.keys.tokenIssued.prefix} · scope ${c.keys.tokenIssued.scopes.join(' ')}` : 'none'],
+                    ['Token they issued you', c.keys.tokenFromPeer ? `stored encrypted · last used ${ago(c.keys.tokenFromPeer.lastUsedAt)}` : 'none'],
+                    ['Their ID', c.node?.nodeId || ''],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '10px 16px', borderRadius: 18, background: 'var(--color-neutral-100)' }}>
+                      <span className="text-muted" style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase' }}>{label}</span>
+                      <span className="mono" style={{ fontSize: 12.5, overflowWrap: 'anywhere' }}>{value}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn btn-secondary" disabled={busy} onClick={rotate}>Refresh connection</button>
+                    <button className="btn btn-ghost" onClick={disconnect} style={{ color: 'var(--color-accent-700)' }}>Disconnect</button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          <button className="btn btn-ghost" onClick={remove} style={{ justifySelf: 'start', fontSize: 13, color: 'var(--color-accent-700)' }}>Delete contact</button>
-        </div>
-
-        {isNode && s === 'active' && sharing && (
-          <div className="card" style={{ padding: '20px 24px', gap: 12 }}>
-            <div className="card-kicker">What {first} sees</div>
-            <div style={{ fontSize: 16 }}>{seesSentence(c, sharing)}</div>
-            {c.asked.length > 0 && <div className="text-muted" style={{ fontSize: 13 }}>You asked for {c.asked.map((a) => `${a.label.toLowerCase()} (${a.shared ? 'shared' : 'not shared'})`).join(', ')}.</div>}
-            {!changing ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-secondary" onClick={() => { setChoice({ extras: currentExtras(c) }); setChanging(true); }}>Change</button>
-                <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setWeeds(!weeds)}>{weeds ? 'Fewer options' : 'More options'}</button>
-              </div>
-            ) : (
-              <>
-                <ShareChooser data={sharing} first={first} choice={choice} onChange={setChoice} relation={relation} onRelation={setRelation} />
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-primary" disabled={busy} onClick={async () => { if (await saveChoice(c, choice, run, put)) { setChanging(false); reload(); } }}>Save</button>
-                  <button className="btn btn-ghost" onClick={() => setChanging(false)}>Cancel</button>
-                </div>
-              </>
-            )}
           </div>
-        )}
-        {isNode && s === 'active' && weeds && <ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} />}
-      </div>
+          <button className="btn btn-ghost" onClick={remove} style={{ marginTop: 18, fontSize: 13, color: 'var(--color-accent-700)' }}>Delete contact</button>
+        </>
+      )}
 
       {edit && (
         <Dialog title={`Edit ${c.name}`} onClose={() => setEdit(null)} width={520} actions={<>
@@ -284,4 +271,59 @@ async function saveChoice(c: CD, choice: Choice, run: ReturnType<typeof useActio
   const lines = Object.fromEntries([...new Set([...c.share.lines, ...want.lines])].map((k) => [k, want.lines.includes(k)]));
   const cats = Object.fromEntries([...new Set([...Object.keys(c.share.categories), ...Object.keys(want.categories)])].map((d) => [d, want.categories[d] ?? false]));
   return run(() => putFn(`/api/parties/${c.id}/share`, { basic: true, lines, categories: cats }), 'Saved');
+}
+
+/** Their side of the exchange, in words: "Where they live", not "Their lives in". */
+const THEIRS: Record<string, string> = { 'Little Dipper': 'Their Little Dipper address', 'Preferred name': 'Their name', 'Lives in': 'Where they live', 'Home address': 'Their home address', Email: 'Their email', Phone: 'Their phone', Born: 'Their birthday', 'Legal name': 'Their legal name', 'Mailing address': 'Their mailing address' };
+const theirs = (label: string) => THEIRS[label] ?? `Their ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+
+const Row = ({ label, value, note }: { label: string; value: string; note?: string }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}>
+    <span className="text-muted" style={{ fontSize: 13 }}>{label}{note && <span style={{ fontSize: 11 }}> · {note}</span>}</span>
+    <span style={{ fontSize: 14, overflowWrap: 'anywhere' }}>{value}</span>
+  </div>
+);
+
+/**
+ * Someone asks to connect: the whole page is this card, in three zones. Who and why (their note in its own box);
+ * the exchange side by side (their side as labels, since their details only travel once you both agree; yours as
+ * values); your choice (who they are, suggestions, their requests) and Connect / Decline.
+ */
+function ConnectCard({ c, first, sub, sharing, choice, setChoice, relation, setRelation, busy, onConnect, onDecline }: {
+  c: CD; first: string; sub: string; sharing: SharingData; choice: Choice; setChoice: (x: Choice) => void;
+  relation: Relation | ''; setRelation: (r: Relation | '') => void; busy: boolean; onConnect: () => void; onDecline: () => void;
+}) {
+  const give = giveList(sharing, choice);
+  const panel = { padding: '14px 18px', borderRadius: 20, background: 'var(--color-bg)', display: 'grid', gap: 6, alignContent: 'start' } as const;
+  return (
+    <div className="card" style={{ marginTop: 22, padding: '26px 28px', gap: 26, background: 'var(--color-accent-100)', maxWidth: 720 }}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div>
+          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 24 }}>{c.name} wants to connect</div>
+          <div style={{ fontSize: 13, color: 'var(--color-accent-800)' }}><span className="mono">{sub}</span> · Little Dipper ✓ (it’s really them)</div>
+        </div>
+        {c.request?.note && <div style={{ ...panel, borderRadius: '20px 20px 20px 6px', fontSize: 15 }}>{c.request.note}</div>}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,240px),1fr))', gap: 12 }}>
+        <div style={panel}>
+          <div className="card-kicker">{first} gives you</div>
+          {(c.request?.offeredLabels ?? []).map((l) => <div key={l} style={{ fontSize: 14 }}>{theirs(l)}</div>)}
+          <div className="text-muted" style={{ fontSize: 12 }}>The details arrive once you connect.</div>
+        </div>
+        <div style={panel}>
+          <div className="card-kicker">You give {first}</div>
+          {give.map((g) => <div key={g.key} style={{ fontSize: 14 }}>{g.value || g.label}</div>)}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 14 }}>
+        <ShareChooser data={sharing} first={first} choice={choice} onChange={setChoice} requested={c.request?.requestedFields ?? []} relation={relation} onRelation={setRelation} showBasic={false} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary" disabled={busy} onClick={onConnect}>Connect</button>
+          <button className="btn btn-ghost" disabled={busy} onClick={onDecline}>Decline</button>
+        </div>
+      </div>
+    </div>
+  );
 }
