@@ -73,7 +73,7 @@ export default function ContactDetail() {
   };
 
   return (
-    <div data-screen-label="Contact detail" style={{ maxWidth: 1040 }}>
+    <div data-screen-label="Contact detail" style={{ maxWidth: 760 }}>
       <Link className="btn btn-ghost" to="/admin/relationships" style={{ marginBottom: 14 }}>← Relationships</Link>
       <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ width: 72, height: 72, borderRadius: '50%', background: isNode ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', display: 'grid', placeItems: 'center', fontSize: 22, fontFamily: 'var(--font-heading)', flex: 'none' }}>{initials(c.name)}</span>
@@ -136,7 +136,8 @@ export default function ContactDetail() {
           {preview && catalog && <AsTheySee partyId={c.id} first={first} catalog={catalog} onClose={() => setPreview(false)} />}
           {isNode && s === 'active' && weeds && <div style={{ marginTop: 18 }}><ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} /></div>}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,400px),1fr))', gap: 22, marginTop: 22, alignItems: 'start' }}>
+          {/* One column, top to bottom, like Home: what they see, how you know them, their details, what they share, then the rest. */}
+          <div style={{ display: 'grid', gap: 22, marginTop: 22 }}>
             <div style={{ display: 'grid', gap: 22 }}>
               {catalog && <HowYouKnow partyId={c.id} first={first} catalog={catalog} />}
               {/* One contact card: what they share (kept up to date by them), plus anything you added yourself. */}
