@@ -497,11 +497,11 @@ async function main() {
     ok(rtok.scope === 'records:read documents:read' && rtok.expires_in <= 1800, 'an answer-only assistant gets read scopes only');
     // Notifications: background work has somewhere to report
     const notes = (await a.call('GET', '/api/notifications')).items;
-    const reviewNote = notes.find((n: any) => n.kind === 'review');
-    ok(reviewNote && /needs? your approval/.test(reviewNote.title) && reviewNote.href === '/admin/review', 'a suggestion waiting in Review shows up as a notification');
-    ok(notes.some((n: any) => n.kind === 'digest' && n.title.startsWith('This month Muse')), "a connected assistant's month shows up as a digest");
-    await a.call('POST', `/api/notifications/${encodeURIComponent(reviewNote.id)}/dismiss`);
-    ok(!(await a.call('GET', '/api/notifications')).items.some((n: any) => n.id === reviewNote.id), 'a dismissed notification stays hidden');
+    ok(!notes.some((n: any) => /approval/.test(n.title)) && (await a.call('GET', '/api/reviews')).items.length > 0, 'a suggestion waiting in Review is an action (Needs you), not a notification');
+    const digest = notes.find((n: any) => n.kind === 'digest' && n.title.startsWith('This month Muse'));
+    ok(digest, "a connected assistant's month shows up as a digest");
+    await a.call('POST', `/api/notifications/${encodeURIComponent(digest.id)}/dismiss`);
+    ok(!(await a.call('GET', '/api/notifications')).items.some((n: any) => n.id === digest.id), 'a dismissed notification stays hidden');
     for (const r of (await a.call('GET', '/api/reviews')).items) await a.call('POST', `/api/reviews/${r.id}/reject`);
     // Sharing a domain with a connection
     await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { employment: { scope: 'current' } } });

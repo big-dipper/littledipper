@@ -1,16 +1,15 @@
 /**
- * Notifications: what the owner should know when they're not watching. Background work by an assistant has
- * somewhere to report, without email. They're worked out from what's already stored (Review, keys, the activity
+ * Notifications: updates worth knowing, not actions. Anything waiting for you (an assistant's change to approve, a
+ * connection request) is in "Needs you" instead. Background work by an assistant has somewhere to report, without email. They're worked out from what's already stored (Review, keys, the activity
  * log), so there's nothing to keep in sync. Dismissing one hides it; a new event with a new id shows again.
  */
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { requireSession, type ApiKeyDoc } from '../auth.js';
 import type { AuditDoc } from '../audit.js';
-import type { ReviewDoc } from '../reviews.js';
 import type { Doc } from '../store/index.js';
 
-type Notice = { id: string; kind: 'review' | 'ended' | 'safety' | 'digest'; title: string; text: string; href: string; at: string };
+type Notice = { id: string; kind: 'ended' | 'safety' | 'digest'; title: string; text: string; href: string; at: string };
 type Seen = Doc & { dismissedAt: string };
 
 const WEEK = 7 * 86400_000;
@@ -19,19 +18,6 @@ async function notices(): Promise<Notice[]> {
   const out: Notice[] = [];
   const now = Date.now();
   const month = new Date().toISOString().slice(0, 7);
-
-  // Changes waiting for approval, grouped by assistant.
-  const pending = await ctx.store.find<ReviewDoc>('reviews', { status: 'pending' }, { sort: { createdAt: -1 } });
-  const byKey = new Map<string, ReviewDoc[]>();
-  for (const r of pending) byKey.set(r.keyId, [...(byKey.get(r.keyId) ?? []), r]);
-  for (const [, rs] of byKey) {
-    const n = rs.length;
-    out.push({
-      id: `review:${rs[0]._id}`, kind: 'review', at: rs[0].createdAt, href: '/admin/review',
-      title: `${rs[0].by} made ${n === 1 ? 'a change' : `${n} changes`} that ${n === 1 ? 'needs' : 'need'} your approval`,
-      text: rs.some((r) => r.reason === 'secret' || r.reason === 'identity') ? 'Including secret or identity details, which always wait for you.' : 'Nothing is saved until you approve it.',
-    });
-  }
 
   const keys = await ctx.store.find<ApiKeyDoc>('apiKeys', { kind: 'app' });
   for (const k of keys.filter((x) => x.assistant)) {
