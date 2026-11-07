@@ -48,7 +48,7 @@ export type Party = {
 export type Reference = { domain: string; domainLabel: string; recordId: string; title: string; part: string; partLabel: string };
 export type PartyDetail = Party & {
   notes: string; sharedIn: { key: string; label: string; value: string }[]; sharedInFetchedAt: string | null;
-  request: { id: string; direction: 'in' | 'out'; note: string; quiet: boolean; viaInvite: boolean; expiresAt: string; requestedFields: string[]; offeredLabels: string[] } | null;
+  request: { id: string; direction: 'in' | 'out'; note: string; quiet: boolean; viaInvite: boolean; expiresAt: string; requestedFields: string[]; offeredLabels: string[]; offeredDetails: { label: string; value: string }[] } | null;
   timeline: { label: string; at: string }[];
   sharedDomains?: { domain: string; label: string; scope: 'all' | 'current'; records: { id: string; title: string; fields: { key: string; label: string; value: string }[]; validFrom: string | null; validTo: string | null; current: boolean }[] }[];
   keys: { peerSigningKey: string; peerVersion: string | null; tokenIssued: { prefix: string; scopes: string[]; lastUsedAt: string | null } | null; tokenFromPeer: { stored: boolean; lastUsedAt: string | null } | null; lastSyncAt: string | null; rotatedAt: string | null } | null;

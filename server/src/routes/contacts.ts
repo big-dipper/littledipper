@@ -113,19 +113,20 @@ async function offerable(keys: string[]) {
   const lines = await profileLines();
   return keys.filter((k) => lines.some((l) => l.key === k && l.sensitivity === 'sensitive'));
 }
-const labelsFor = (keys: string[]) => keys.map((k) => PROFILE_LINES.find(([x]) => x === k)?.[1]).filter(Boolean) as string[];
 
 /** What a request tells them we'll share: the basic profile's lines (if shared) and the extras, by label. */
-async function offerLabels(basic: boolean, extra: string[]) {
-  const have = new Set((await profileLines()).filter((l) => l.sensitivity !== 'secret').map((l) => l.key));
-  const keys = [...(basic ? await basicLines() : []), ...extra].filter((k, i, all) => have.has(k) && all.indexOf(k) === i);
-  return labelsFor(keys);
+/** What a request offers, with the values: the other side decides on the real details, not labels. Never secret lines. */
+async function offerDetails(basic: boolean, extra: string[]) {
+  const lines = new Map((await profileLines()).filter((l) => l.sensitivity !== 'secret').map((l) => [l.key, l]));
+  const keys = [...(basic ? await basicLines() : []), ...extra].filter((k, i, all) => lines.has(k) && all.indexOf(k) === i);
+  // Your Little Dipper as its address; the Node ID is already in the signed envelope.
+  return keys.map((k) => ({ label: lines.get(k)!.label, value: k === 'little_dipper' ? lines.get(k)!.value.split(' · ')[0] : lines.get(k)!.value }));
 }
 
-async function sendRequest(link: LinkDoc, offeredFields: string[], offeredLabels: string[], requestedFields: string[], note: string, invite: string | null) {
+async function sendRequest(link: LinkDoc, offeredFields: string[], offered: { label: string; value: string }[], requestedFields: string[], note: string, invite: string | null) {
   await sendSigned(link.peerUrl, '/peer/requests', {
     type: 'connect.request', requestId: link.requestId, to: link.peerNodeId, fromNode: await selfIntro(),
-    offeredFields, offeredLabels, requestedFields, note, invite, mutualHints: await mutualHints(link.peerNodeId),
+    offeredFields, offeredLabels: offered.map((o) => o.label), offeredDetails: offered, requestedFields, note, invite, mutualHints: await mutualHints(link.peerNodeId),
   });
 }
 
@@ -152,7 +153,7 @@ export async function requestConnection(keyId: string, address: string, choice: 
   const name = d.displayName || displayAddr(d.address);
   const { contact, link } = await newNodeParty({ name, address: d.address, nodeId: d.nodeId, signingKey: d.signingKey, version: d.version, status: 'pending_out', requestId });
   try {
-    await sendRequest(link, offered, await offerLabels(shareProfile, offered), requested, note.slice(0, 500), invite);
+    await sendRequest(link, offered, await offerDetails(shareProfile, offered), requested, note.slice(0, 500), invite);
   } catch (e) {
     await ctx.store.remove('parties', contact._id);
     await ctx.store.remove('nodeLinks', link._id);
@@ -341,7 +342,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     if (!r || r.direction !== 'out' || r.status !== 'pending') throw notFound('request_not_found');
     const link = (await ctx.store.get<LinkDoc>('nodeLinks', r.linkId))!;
     const share = await whatTheyGet(r.contactId);
-    await sendRequest(link, r.offeredFields, await offerLabels(share.basic, r.offeredFields), r.requestedFields, r.note, null);
+    await sendRequest(link, r.offeredFields, await offerDetails(share.basic, r.offeredFields), r.requestedFields, r.note, null);
     await ctx.store.update('connectionRequests', r._id, { expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString() });
     return { delivered: true };
   });

@@ -71,6 +71,8 @@ export type RequestDoc = Doc & {
   toNode: string;
   offeredFields: string[];
   offeredLabels: string[];
+  /** What they offer, with the values, so you decide on the real details (older nodes send labels only). */
+  offeredDetails?: { label: string; value: string }[];
   requestedFields: string[];
   note: string;
   nonce: string;

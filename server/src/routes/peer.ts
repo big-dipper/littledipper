@@ -50,7 +50,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     const intro = body?.payload?.fromNode;
     if (!intro?.signingKey || !intro.nodeId || !intro.address) throw bad('bad_request');
     if (nodeIdFromPublicKey(intro.signingKey) !== intro.nodeId || peerFrom(body) !== intro.nodeId) throw new HttpError(401, 'identity_mismatch');
-    const p = openEnvelope<{ type: string; requestId: string; to: string; offeredFields?: string[]; offeredLabels?: string[]; requestedFields?: string[]; note?: string; invite?: string | null; mutualHints?: string[] }>(body, intro.signingKey);
+    const p = openEnvelope<{ type: string; requestId: string; to: string; offeredFields?: string[]; offeredLabels?: string[]; offeredDetails?: { label?: unknown; value?: unknown }[]; requestedFields?: string[]; note?: string; invite?: string | null; mutualHints?: string[] }>(body, intro.signingKey);
     const n = await getNode();
     if (p.type !== 'connect.request' || p.to !== n._id) throw bad('wrong_recipient');
     if (!n.claimed) throw new HttpError(409, 'unclaimed');
@@ -85,6 +85,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     if (existing?.link.status === 'active') throw new HttpError(409, 'already_connected');
     const requested = (p.requestedFields || []).map(String).slice(0, 50);
     const offered = (p.offeredLabels || []).map(String).slice(0, 50);
+    const details = (Array.isArray(p.offeredDetails) ? p.offeredDetails : []).slice(0, 50).map((d) => ({ label: String(d?.label ?? '').slice(0, 80), value: String(d?.value ?? '').slice(0, 300) })).filter((d) => d.label && d.value);
     const name = String(intro.displayName || displayAddr(intro.address)).slice(0, 120);
     let contact: PartyDoc, link: LinkDoc;
     if (existing) {
@@ -101,7 +102,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     const t = now();
     await ctx.store.insert<RequestDoc>('connectionRequests', {
       _id: newId('req'), direction: 'in', requestId: p.requestId, fromNodeId: intro.nodeId, peerName: name, fromNode: displayAddr(origin), toNode: displayAddr(canonicalUrl(n)),
-      offeredFields: (p.offeredFields || []).map(String), offeredLabels: offered, requestedFields: requested, note: String(p.note || '').slice(0, 500),
+      offeredFields: (p.offeredFields || []).map(String), offeredLabels: offered, offeredDetails: details, requestedFields: requested, note: String(p.note || '').slice(0, 500),
       nonce: (body as { payload: { nonce: string } }).payload.nonce, signature: (body as unknown as { signature: string }).signature, inviteId, quiet,
       status: 'pending', contactId: contact._id, linkId: link._id, createdAt: t, expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString(),
     });

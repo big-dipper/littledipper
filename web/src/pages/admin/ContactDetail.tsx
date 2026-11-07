@@ -308,8 +308,9 @@ function ConnectCard({ c, first, sub, sharing, choice, setChoice, relation, setR
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,240px),1fr))', gap: 12 }}>
         <div style={panel}>
           <div className="card-kicker">{first} gives you</div>
-          {(c.request?.offeredLabels ?? []).map((l) => <div key={l} style={{ fontSize: 14 }}>{theirs(l)}</div>)}
-          <div className="text-muted" style={{ fontSize: 12 }}>The details arrive once you connect.</div>
+          {c.request?.offeredDetails.length
+            ? c.request.offeredDetails.map((d) => <div key={d.label} style={{ fontSize: 14 }}>{d.value}</div>)
+            : (c.request?.offeredLabels ?? []).map((l) => <div key={l} style={{ fontSize: 14 }}>{theirs(l)}</div>)}
         </div>
         <div style={panel}>
           <div className="card-kicker">You give {first}</div>
