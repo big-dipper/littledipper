@@ -10,6 +10,7 @@
  * `npm run build -w web` first after changing the web app.
  */
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,11 +53,12 @@ process.on('SIGTERM', stop);
 /** Start a fresh node, claim it as `name` with a software passkey, and set a password and authenticator. */
 async function node(port: number, name: string, who: string) {
   const base = `http://localhost:${port}`;
+  const signin = randomBytes(16).toString('hex');
   const dir = mkdtempSync(path.join(os.tmpdir(), 'ld-demo-'));
   dirs.push(dir);
   const proc = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], {
     cwd: path.resolve(import.meta.dirname, '..'),
-    env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: base, LD_COOKIE_SUFFIX: String(port) },
+    env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: base, LD_COOKIE_SUFFIX: String(port), LD_DEMO_SIGNIN: signin },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   procs.push(proc);
@@ -80,7 +82,7 @@ async function node(port: number, name: string, who: string) {
   const { secret } = await call('POST', '/api/auth/totp/setup', {});
   await call('POST', '/api/auth/totp/enable', { code: authenticator.generate(secret) });
   writeFileSync(secretFile(who), secret);
-  return { base, call };
+  return { base, call, link: `${base}/api/auth/demo?t=${signin}` };
 }
 
 const maya = await node(PORT, 'Maya Lindqvist', 'maya');
@@ -130,8 +132,9 @@ await theo.call('POST', '/api/federation/requests', { address: invite.url, note:
 
 console.log(`
 Little Dipper demo is running, two nodes. Theo has asked to connect: see Contacts on Maya's node.
-  Maya:  ${maya.base}   code: npm run demo -w server -- code
-  Theo:  ${theo.base}   code: npm run demo -w server -- code theo
+  Maya, one click:  ${maya.link}
+  Theo, one click:  ${theo.link}
+  (Or sign in normally; codes: npm run demo -w server -- code [theo])
   Password for both:  ${PASSWORD}
 Stop with Ctrl-C (the demo's data is deleted).
 `);

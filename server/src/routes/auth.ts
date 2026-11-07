@@ -195,6 +195,13 @@ export default async function authRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // The demo only: a one-click sign-in link it prints (LD_DEMO_SIGNIN is never set on a real node).
+  if (process.env.LD_DEMO_SIGNIN) app.get('/api/auth/demo', async (req, reply) => {
+    if ((req.query as { t?: string }).t !== process.env.LD_DEMO_SIGNIN) throw new HttpError(401, 'bad_link', 'That link isn’t right');
+    await startSession(reply, 'Demo link');
+    return reply.redirect('/admin');
+  });
+
   app.post('/api/auth/password', async (req, reply) => {
     rateLimit(req, 'signin', 30, 15 * 60_000);
     const { password } = (req.body || {}) as { password?: string };
