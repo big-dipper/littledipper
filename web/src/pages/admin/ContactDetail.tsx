@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, put, SENS, shortDate, STATUS, type ContactMethod, type PartyDetail as CD, type ProfileLine as Field } from '../../api';
+import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, put, SENS, shortDate, STATUS, type ContactMethod, type PartyDetail as CD, type ProfileLine as Field, type SharedDomain } from '../../api';
 import { Confirm, Dialog, ErrorNote, Loading, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
 import { fetchCatalog, fmtRange, PartialDate, RecordEditor, Select, useContactsLite, type Rec } from '../../life';
 import { CopyList, SendCopy } from './Copies';
+import SharedWithYou from './SharedWithYou';
 import { giveList, itemLabel, ShareChooser, toShare, useSharing, type Choice, type Relation, type SharingData } from '../../sharing';
 
 export default function ContactDetail() {
@@ -26,6 +27,7 @@ export default function ContactDetail() {
   const [relation, setRelation] = useState<Relation | ''>('');
   const [changing, setChanging] = useState(false);
   const [weeds, setWeeds] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   if (error) return <div><Link className="btn btn-ghost" to="/admin/relationships">← Relationships</Link><ErrorNote error={error} /></div>;
   if (!c || !fieldsResp) return <Loading />;
@@ -117,6 +119,7 @@ export default function ContactDetail() {
               {!changing ? (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-secondary" onClick={() => { setChoice({ extras: currentExtras(c) }); setChanging(true); }}>Change</button>
+                  <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setPreview(true)}>See it as {first} does</button>
                   <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setWeeds(!weeds)}>{weeds ? 'Fewer options' : 'More options'}</button>
                 </div>
               ) : (
@@ -130,6 +133,7 @@ export default function ContactDetail() {
               )}
             </div>
           )}
+          {preview && catalog && <AsTheySee partyId={c.id} first={first} catalog={catalog} onClose={() => setPreview(false)} />}
           {isNode && s === 'active' && weeds && <div style={{ marginTop: 18 }}><ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} /></div>}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,400px),1fr))', gap: 22, marginTop: 22, alignItems: 'start' }}>
@@ -157,25 +161,7 @@ export default function ContactDetail() {
                 {c.notes && <p className="text-muted" style={{ fontSize: 13, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
               </div>
 
-              {isNode && (c.sharedDomains || []).length > 0 && (
-                <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
-                  <div className="card-kicker">Also shared with you</div>
-                  {(c.sharedDomains || []).map((sd) => (
-                    <div key={sd.domain} style={{ marginTop: 10 }}>
-                      <div className="text-muted" style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase' }}>{sd.label}{sd.scope === 'current' ? ' · current' : ''}</div>
-                      {sd.records.map((r) => (
-                        <div key={r.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--color-divider)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 14, fontWeight: 600 }}>{r.title}</span>
-                            {(r.validFrom || r.validTo) && <span className="text-muted" style={{ fontSize: 12 }}>{fmtRange(r.validFrom, r.validTo)}</span>}
-                          </div>
-                          <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>{r.fields.map((f) => `${f.label}: ${f.value}`).join(' · ')}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
+              {isNode && catalog && <SharedWithYou domains={c.sharedDomains || []} catalog={catalog} first={first} />}
             </div>
 
             <div style={{ display: 'grid', gap: 22 }}>
@@ -284,6 +270,27 @@ const Given = ({ label, value }: { label: string; value: string }) => {
   const [addr, id] = value.split(' · ');
   return <div style={{ fontSize: 14 }}>{addr}{id && <div className="mono text-muted" style={{ fontSize: 11, overflowWrap: 'anywhere' }}>{id}</div>}</div>;
 };
+
+/**
+ * "See it as Theo does": exactly what Theo's Little Dipper receives from you, from the same code it calls, in the
+ * same cards Theo sees. Secret details appear only if you shared them on purpose.
+ */
+function AsTheySee({ partyId, first, catalog, onClose }: { partyId: string; first: string; catalog: Awaited<ReturnType<typeof fetchCatalog>>; onClose: () => void }) {
+  const { data } = useAsync(() => get<{ lines: Field[]; domains: SharedDomain[] }>(`/api/parties/${partyId}/preview`), [partyId]);
+  return (
+    <Dialog title={`What ${first} sees`} onClose={onClose} width={720} actions={<button className="btn btn-secondary" onClick={onClose}>Done</button>}>
+      {!data ? <Loading /> : (
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div className="card" style={{ padding: '16px 22px', gap: 0 }}>
+            <div className="card-kicker">Contact info</div>
+            {data.lines.map((l) => <Row key={l.key} label={l.label} value={l.key === 'little_dipper' ? l.value.split(' · ')[0] : l.value} />)}
+          </div>
+          <SharedWithYou domains={data.domains} catalog={catalog} first={first} heading="Also shared" note={`${first} can read these, not change them. They stay up to date as you change them.`} />
+        </div>
+      )}
+    </Dialog>
+  );
+}
 
 /**
  * "How you know Theo": your relationships with this person (spouse, reference, landlord…). They're entries in the

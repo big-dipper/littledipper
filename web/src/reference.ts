@@ -56,6 +56,7 @@ export const ENDPOINTS: Endpoint[] = ([
   ['Contacts', 'POST', '/api/parties', 'owner', 'Add a person or organisation: { type, name, methods?, notes?, affiliations? }.', 'parties:write'],
   ['Contacts', 'GET', '/api/parties/{id}', 'owner', 'Contact with methods, link and shared-in data (refreshes from the peer when stale).', 'parties:read'],
   ['Contacts', 'PATCH', '/api/parties/{id}', 'owner', 'Edit contact info and notes.', 'parties:write'],
+  ['Contacts', 'GET', '/api/parties/{id}/preview', 'owner', 'Exactly what this person’s Little Dipper receives from you now ({ lines, domains }), from the same code their node calls. Links appear only to entries they can also see.', 'parties:read'],
   ['Contacts', 'DELETE', '/api/parties/{id}', 'owner', 'Delete a party; revokes any link. If entries point to them, answers 409 with usedBy unless ?confirm=true.', 'parties:write'],
   ['Contacts', 'GET', '/api/parties/{id}/grants', 'owner', 'What this contact may read.', 'parties:read'],
   ['Contacts', 'PUT', '/api/parties/{id}/grants', 'owner', '{ profile?, fields?: { key: bool }, domains?: { domain: false | { scope: all|current, includeSecret } } }. Secret fields/domains need confirm:true.', 'parties:write'],

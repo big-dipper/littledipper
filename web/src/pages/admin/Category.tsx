@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { get, longDate, post, SENS } from '../../api';
 import { ErrorNote, Loading, useAction, useAsync } from '../../ui';
-import { byWhom, Details, duration, fetchCatalog, fmtRange, groupOf, Lock, Mono, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec, type Version } from '../../life';
+import { byWhom, Details, duration, EntryCard, fetchCatalog, fmtRange, groupOf, Lock, Mono, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec, type Version } from '../../life';
 import { plural } from './LifeHub';
 import { CopyList, SendCopy } from './Copies';
 
@@ -135,20 +135,16 @@ function RecordCard({ d, r, contacts, onEdit, quiet }: { d: Domain; r: Rec; cont
   };
   const range = fmtRange(r.validFrom, r.validTo);
   return (
-    <div className="card" style={{ padding: '20px 24px', gap: 0, background: quiet ? 'var(--color-neutral-100)' : 'var(--color-surface)' }}>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ fontFamily: 'var(--font-heading)', fontSize: quiet ? 17 : 20, lineHeight: 1.2 }}>{revealed ? r.title.replace(/•+/g, '…') : r.title}</div>
-          {range && <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>{range}{r.validFrom ? ` · ${duration(r.validFrom, r.validTo)}` : ''}</div>}
-        </div>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {r.masked.length > 0 && <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={reveal}>{revealed ? 'Hide' : 'Reveal'}</button>}
-          <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={onEdit}>Edit</button>
-        </div>
-      </div>
+    <EntryCard
+      title={revealed ? r.title.replace(/•+/g, '…') : r.title} quiet={quiet} fields={[]}
+      range={range ? `${range}${r.validFrom ? ` · ${duration(r.validFrom, r.validTo)}` : ''}` : undefined}
+      actions={<>
+        {r.masked.length > 0 && <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={reveal}>{revealed ? 'Hide' : 'Reveal'}</button>}
+        <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={onEdit}>Edit</button>
+      </>}>
       <Details d={d} rec={r} revealed={revealed ?? undefined} contacts={contacts} />
       {r.notes && <p className="text-muted" style={{ fontSize: 13, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{r.notes}</p>}
-    </div>
+    </EntryCard>
   );
 }
 

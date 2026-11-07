@@ -273,6 +273,21 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   /**
+   * Exactly what this person's Little Dipper receives from you right now: the same code their node calls, so what
+   * you see here is what they see. Nothing is sent and nothing is logged as a read.
+   */
+  app.get('/api/parties/:id/preview', async (req) => {
+    await requireOwner(req, 'parties:read');
+    const c = await getContact((req.params as { id: string }).id);
+    const { sharedOut } = await import('../contacts.js');
+    const { sharedDomainIds, sharedDomainOut } = await import('../domains/sharing.js');
+    const lines = [...(await sharedOut(c._id, 'profile')), ...(await sharedOut(c._id, 'fields'))];
+    const domains = [];
+    for (const id of await sharedDomainIds(c._id)) { const sd = await sharedDomainOut(c._id, id); if (sd) domains.push(sd); }
+    return { lines, domains };
+  });
+
+  /**
    * Change what a party gets. Body: { basic?: boolean, lines?: { [key]: boolean },
    * categories?: { [domain]: false | true | { scope?: 'all'|'current', includeSecret?: boolean } },
    * entries?: { [recordId]: false | true | { includeSecret?: boolean } }, confirm?: boolean }.

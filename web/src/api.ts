@@ -50,7 +50,7 @@ export type PartyDetail = Party & {
   notes: string; sharedIn: { key: string; label: string; value: string }[]; sharedInFetchedAt: string | null;
   request: { id: string; direction: 'in' | 'out'; note: string; quiet: boolean; viaInvite: boolean; expiresAt: string; requestedFields: string[]; offeredLabels: string[]; offeredDetails: { label: string; value: string }[] } | null;
   timeline: { label: string; at: string }[];
-  sharedDomains?: { domain: string; label: string; scope: 'all' | 'current'; records: { id: string; title: string; fields: { key: string; label: string; value: string }[]; validFrom: string | null; validTo: string | null; current: boolean }[] }[];
+  sharedDomains?: SharedDomain[];
   keys: { peerSigningKey: string; peerVersion: string | null; tokenIssued: { prefix: string; scopes: string[]; lastUsedAt: string | null } | null; tokenFromPeer: { stored: boolean; lastUsedAt: string | null } | null; lastSyncAt: string | null; rotatedAt: string | null } | null;
   usedBy: Reference[];
   /** What you asked them for when you connected, and whether it came. */
@@ -196,3 +196,8 @@ export type Share = { id: string; expiresAt: string; revokedAt: string | null; v
 export async function copy(text: string) {
   try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
 }
+
+/** Entries someone shares with you, as their Little Dipper sends them: already in words, no ids, no secrets unless shared. */
+export type SharedField = { key: string; label: string; value: string; type?: string; rows?: string[]; links?: { id: string; domain: string; title: string }[] };
+export type SharedRecord = { id: string; title: string; fields: SharedField[]; validFrom: string | null; validTo: string | null; current: boolean };
+export type SharedDomain = { domain: string; label: string; scope: 'all' | 'current'; records: SharedRecord[] };

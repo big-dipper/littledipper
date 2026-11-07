@@ -759,6 +759,20 @@ async function main() {
     ok(!own.asked && own.who === null, 'a task with no one else is just yours');
     const note = await a.call('POST', '/api/data/notes', { data: { text: 'Ideas for the garden\nMore tomatoes this year, fewer zucchini.' } });
     ok(note.title === 'Ideas for the garden…', 'a note is kept as written, and its title is its first line');
+    // Shared entries: a link shows only entries they can also see, by title; anything else is left out.
+    const gig = await a.call('POST', '/api/data/employment', { data: { employer: await org('Linkline Co'), title: 'Designer' } });
+    {
+      const ref = await a.call('POST', '/api/data/relationships', { data: { party: cA.id, relation: 'reference', job: gig.id } });
+      await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { relationships: { scope: 'all' }, employment: false } });
+      let prev = await a.call('GET', `/api/parties/${cA.id}/preview`);
+      const refOut = prev.domains.find((x: any) => x.domain === 'relationships')?.records.find((r: any) => r.id === ref.id);
+      ok(refOut && !refOut.fields.some((f: any) => f.key === 'job'), "a link to an entry they can't see isn't sent at all");
+      await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { employment: { scope: 'all' } } });
+      prev = await a.call('GET', `/api/parties/${cA.id}/preview`);
+      const job = prev.domains.find((x: any) => x.domain === 'relationships')?.records.find((r: any) => r.id === ref.id)?.fields.find((f: any) => f.key === 'job');
+      ok(job?.links?.[0]?.id === gig.id && job.value.includes('Designer') && job.type === 'record', 'a link to an entry they can see comes with its title, ready to open');
+      await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { relationships: false, employment: false } });
+    }
     await a.call('POST', `/api/messages/conversations/${cA.id}/read`, {});
     // Offline recipient: queued now, delivered by the outbox once B is back.
     // B comes back as a node from before SQLite, so everything after this also runs on a migrated node.

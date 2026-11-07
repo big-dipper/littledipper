@@ -803,16 +803,7 @@ export function Details({ d, rec, revealed, contacts, skip = [] }: { d: Domain; 
   if (!rows.length && !docs.length && !lists.length) return null;
   return (
     <>
-      {rows.length > 0 && (
-        <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: '10px 18px', margin: '12px 0 0' }}>
-          {rows.map(({ p, text, masked }) => (
-            <div key={p.key} style={{ minWidth: 0 }}>
-              <dt className="text-muted" style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>{p.label}{p.sensitivity === 'secret' && <Lock style={{ width: 8, height: 9 }} />}</dt>
-              <dd style={{ margin: 0, fontSize: 14, overflowWrap: 'anywhere', whiteSpace: p.type === 'longtext' ? 'pre-wrap' : undefined, fontFamily: masked || p.type === 'last4' ? 'var(--mono)' : undefined, color: masked ? 'var(--color-neutral-500)' : undefined }}>{text}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <FieldGrid fields={rows.map(({ p, text, masked }) => ({ key: p.key, label: p.label, text, type: p.type, secret: p.sensitivity === 'secret', masked }))} />
       {lists.map((p) => <ListTable key={p.key} p={p} rows={(revealed?.[p.key] ?? rec.data[p.key]) as Row[]} contacts={contacts} />)}
       {docs.length > 0 && <div style={{ marginTop: 14 }}><DocTiles docs={docs} /></div>}
     </>
@@ -858,3 +849,49 @@ export const Section = ({ title, blurb, ink, right, children }: { title: string;
     {children}
   </section>
 );
+
+// ── one way to show an entry ───────────────────────────────────────────
+/** A field as every entry card shows it: label above value. `links` are entries you can open; `rows` a list's lines. */
+export type CardField = { key: string; label: string; text: string; type?: string; secret?: boolean; masked?: boolean; rows?: string[]; links?: { id: string; title: string }[] };
+
+/** The label-over-value grid, the same for your own entries and ones shared with you. */
+export function FieldGrid({ fields, onLink }: { fields: CardField[]; onLink?: (id: string) => void }) {
+  if (!fields.length) return null;
+  return (
+    <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: '10px 18px', margin: '12px 0 0' }}>
+      {fields.map((f) => (
+        <div key={f.key} style={{ minWidth: 0, gridColumn: f.type === 'longtext' || f.rows?.length ? '1 / -1' : undefined }}>
+          <dt className="text-muted" style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>{f.label}{f.secret && <Lock style={{ width: 8, height: 9 }} />}</dt>
+          <dd style={{ margin: 0, fontSize: 14, overflowWrap: 'anywhere', whiteSpace: f.type === 'longtext' ? 'pre-wrap' : undefined, fontFamily: f.masked || f.type === 'last4' ? 'var(--mono)' : undefined, color: f.masked ? 'var(--color-neutral-500)' : undefined }}>
+            {f.links?.length && onLink
+              ? f.links.map((l, i) => <span key={l.id}>{i > 0 && ', '}<button type="button" className="link-btn" onClick={() => onLink(l.id)}>{l.title}</button></span>)
+              : f.text}
+            {f.rows?.map((r, i) => <div key={i} className="text-muted" style={{ fontSize: 13 }}>{r}</div>)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * An entry card: title, when, then its fields. The same card for your own entries (with actions such as Edit) and
+ * for entries someone shares with you (read-only, marked as theirs), so shared data always looks like data.
+ */
+export function EntryCard({ id, title, range, fields, onLink, actions, theirs, quiet, children }: {
+  id?: string; title: string; range?: string; fields: CardField[]; onLink?: (id: string) => void; actions?: ReactNode; theirs?: boolean; quiet?: boolean; children?: ReactNode;
+}) {
+  return (
+    <div id={id} className={`card entry-card${theirs ? ' entry-theirs' : ''}`} style={{ padding: '20px 24px', gap: 0, background: quiet || theirs ? 'var(--color-neutral-100)' : 'var(--color-surface)' }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontFamily: 'var(--font-heading)', fontSize: quiet || theirs ? 17 : 20, lineHeight: 1.2 }}>{title}</div>
+          {range && <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>{range}</div>}
+        </div>
+        {actions && <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>{actions}</div>}
+      </div>
+      <FieldGrid fields={fields} onLink={onLink} />
+      {children}
+    </div>
+  );
+}

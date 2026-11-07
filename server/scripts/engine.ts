@@ -78,7 +78,10 @@ try {
   await rejects(() => buildRecord(cit, { data: { country: 'US', provenBy: [passport._id, passport._id] } }, null, owner), 'invalid_value', 'the same entry can’t be linked twice');
   const shared = await shapeRecords(cit, [c], false);
   const proof = shared[0].fields.find((f) => f.key === 'provenBy');
-  ok(proof?.value === '1 entry in Government IDs' && !JSON.stringify(shared).includes(passport._id) && !JSON.stringify(shared).includes('X1234567'), 'sharing a citizenship shows that a proof exists, never the passport');
+  ok(!proof && !JSON.stringify(shared).includes(passport._id) && !JSON.stringify(shared).includes('X1234567'), "sharing a citizenship without the passport leaves the link out entirely: no hint, no passport");
+  const both = await shapeRecords(cit, [c], false, new Map([[passport._id, { d: ids, r: passport }]]));
+  const linked = both[0].fields.find((f) => f.key === 'provenBy');
+  ok(linked?.links?.[0]?.id === passport._id && !JSON.stringify(both).includes('X1234567'), 'shared alongside the passport, the link names it (its secret number still masked)');
 
   console.log('per-entry sensitivity');
   const names = domain('names', [{ key: 'kind', label: 'Kind', type: 'text', sensitivity: 'sensitive' }, { key: 'full', label: 'Full name', type: 'text' }],
