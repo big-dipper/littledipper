@@ -23,7 +23,7 @@ export const byWhom = (label: string) => (label === 'You' ? 'you' : label);
 
 export type Domain = {
   id: string; label: string; noun: string; group: string; description: string; sensitivity: Sensitivity; dated: boolean; builtIn: boolean;
-  parts: Part[]; title: string; count: number; currentCount: number; preview: string[]; sharedWith: number;
+  parts: Part[]; title: string; count: number; currentCount: number; sharedWith: number;
   /** The profile reads this category (names, birth, where you live…). */
   feedsProfile?: boolean;
   /** What this category invites once an entry is saved (a car: its title, insurance, loan). Never required. */

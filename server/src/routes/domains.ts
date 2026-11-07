@@ -44,9 +44,9 @@ function inRange(r: RecordDoc, from?: string, to?: string) {
   return true;
 }
 
-type Summary = { count: number; currentCount: number; preview: string[]; sharedWith: number };
+type Summary = { count: number; currentCount: number; sharedWith: number };
 
-/** Count, current count, a few masked titles and how many connections can read it: what the hub shows per category. */
+/** Count, current count and how many connections can read it: what the hub shows per category. No contents: the overview is for finding your way, not for showing your details. */
 async function summarize(domains: DomainDef[]): Promise<Record<string, Summary>> {
   const shares = await ctx.store.find<ShareDoc>('shares', { mode: 'live' });
   const activeContacts = new Set((await ctx.store.find<{ _id: string; contactId: string; status: string }>('nodeLinks', { status: 'active' })).map((l) => l.contactId));
@@ -56,7 +56,6 @@ async function summarize(domains: DomainDef[]): Promise<Record<string, Summary>>
     out[d.id] = {
       count: recs.length,
       currentCount: recs.filter((r) => isCurrent(d, r)).length,
-      preview: recs.slice(0, 3).map((r) => recordOut(d, r).title),
       sharedWith: shares.filter((s) => s.party && activeContacts.has(s.party) && s.categories.some((c) => c.domain === d.id)).length,
     };
   }

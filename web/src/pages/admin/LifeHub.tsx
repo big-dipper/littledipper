@@ -41,9 +41,6 @@ export default function LifeHub() {
             <div className="card-kicker">Profile basics</div>
             <div className="card-title" style={{ fontSize: 22 }}>{core.find((f) => f.key === 'preferred_name')?.value || core.find((f) => f.key === 'legal_name')?.value || 'Your name'}</div>
             <div className="card-body">{filled} core facts · your basic profile and public page are built from these</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {core.filter((f) => !['preferred_name', 'legal_name'].includes(f.key)).map((f) => <span key={f.key} className="tag tag-neutral">{f.label}: {f.value || '—'}</span>)}
-            </div>
           </Link>
           <Link to="/admin/lifestream" className="card" style={{ padding: '22px 24px', gap: 10, textDecoration: 'none', color: 'inherit', background: 'var(--color-accent-2-100)', position: 'relative', overflow: 'hidden' }}>
             <div className="card-kicker" style={{ color: 'var(--color-accent-2-800)' }}>Lifestream</div>
@@ -107,9 +104,9 @@ function Tile({ d }: { d: Domain }) {
           <div className="text-muted" style={{ fontSize: 12 }}>{empty ? 'Not started' : `${d.count} ${d.count === 1 ? d.noun : plural(d.noun)}${d.currentCount && d.currentCount !== d.count ? ` · ${d.currentCount} current` : ''}`}</div>
         </div>
       </div>
-      <div style={{ fontSize: 13, color: empty ? 'var(--color-neutral-600)' : 'var(--color-text)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-        {empty ? d.description : d.preview?.[0]}
-      </div>
+      {empty && (
+        <div style={{ fontSize: 13, color: 'var(--color-neutral-600)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{d.description}</div>
+      )}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto' }}>
         {d.sharedWith > 0 && <span className="tag tag-accent-2">Shared with {d.sharedWith}</span>}
         {empty && <span style={{ fontSize: 12, color: g.ink, fontWeight: 600 }}>Add {/^[aeiou]/i.test(d.noun) ? 'an' : 'a'} {d.noun} →</span>}
