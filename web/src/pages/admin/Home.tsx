@@ -24,7 +24,7 @@ export default function Home() {
 
   const inbox = [
     ...(reqs?.items || []).filter((r: { quiet: boolean }) => !r.quiet).map((r: { _id: string; contactId: string; fromNode: string; peerName: string }) => ({
-      key: r._id, initials: initials(r.peerName), title: `${r.peerName} wants to connect`, sub: r.fromNode, cta: 'Review', go: () => nav(`/admin/contacts/${r.contactId}`),
+      key: r._id, initials: initials(r.peerName), title: `${r.peerName} wants to connect`, sub: r.fromNode, cta: 'Review', go: () => nav(`/admin/relationships/${r.contactId}`),
     })),
     ...(attention?.items || []).slice(0, 3).map((a) => ({
       key: a.id + a.part, initials: initials(catalog?.find((d) => d.id === a.domain)?.label.replace('&', '') || a.domain), title: a.kind === 'deadline' ? `${a.part}: ${a.title}` : `${a.title} ${a.expired ? 'has expired' : 'expires soon'}`, sub: a.kind === 'deadline' && a.expired ? `Passed ${fmtDate(a.date)}` : `${a.part} ${fmtDate(a.date)}`, cta: 'Open', go: () => nav(`/admin/life/${a.domain}`),

@@ -8,7 +8,8 @@ type Attention = { domain: string; domainLabel: string; id: string; title: strin
 
 export default function LifeHub() {
   const nav = useNavigate();
-  const { data: domains, error, reload } = useAsync(fetchCatalog, []);
+  // Relationships live on each person's page, not here.
+  const { data: domains, error, reload } = useAsync(() => fetchCatalog().then((ds) => ds.filter((d) => !d.onParty)), []);
   const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/profile'), []);
   const { data: attention } = useAsync(() => get<{ items: Attention[] }>('/api/attention'), []);
   const { data: timeline } = useAsync(() => get<{ items: { validFrom: string }[] }>('/api/timeline'), []);

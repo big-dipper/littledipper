@@ -26,6 +26,7 @@ export type Domain = {
   parts: Part[]; title: string; count: number; currentCount: number; sharedWith: number;
   /** The profile reads this category (names, birth, where you live…). */
   feedsProfile?: boolean;
+  onParty?: boolean;
   /** What this category invites once an entry is saved (a car: its title, insurance, loan). Never required. */
   companions?: { domain?: string; document?: string; label: string; when?: { part: string; in: string[] } }[];
   single?: boolean;

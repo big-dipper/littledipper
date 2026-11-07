@@ -199,7 +199,7 @@ function CopyDone({ done, onClose }: { done: Created; onClose: () => void }) {
   return (
     <Dialog title={c.delivery === 'link' ? 'Your link is ready' : 'Your copy is ready'} onClose={onClose} width={560} actions={<button className="btn btn-primary" onClick={onClose}>Done</button>}>
       <div className="dialog-body" style={{ opacity: 1, display: 'grid', gap: 16 }}>
-        {contact?.created && <div style={{ fontSize: 14 }}><Link to={`/admin/contacts/${contact.id}`}>{contact.name}</Link> was added to your contacts.</div>}
+        {contact?.created && <div style={{ fontSize: 14 }}><Link to={`/admin/relationships/${contact.id}`}>{contact.name}</Link> was added to your contacts.</div>}
         {url && (
           <div className="field">
             <label>Link{c.link?.expiresAt ? ` · works until ${longDate(c.link.expiresAt)}` : ' · works until you turn it off'}</label>
@@ -251,7 +251,7 @@ export function CopyList({ query, heading, showContact = true, version = 0 }: { 
         <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 0', borderBottom: '1px solid var(--color-divider)' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ fontSize: 14 }}>
-              {c.title}{showContact && c.contact ? <> · <Link to={`/admin/contacts/${c.contact.id}`}>{c.contact.name}</Link></> : null}
+              {c.title}{showContact && c.contact ? <> · <Link to={`/admin/relationships/${c.contact.id}`}>{c.contact.name}</Link></> : null}
             </div>
             <div className="text-muted" style={{ fontSize: 12 }}>
               {longDate(c.createdAt)} · {status(c)}{c.link ? ` · opened ${c.views} time${c.views === 1 ? '' : 's'}` : ''}{c.downloads ? ` · saved ${c.downloads}×` : ''}

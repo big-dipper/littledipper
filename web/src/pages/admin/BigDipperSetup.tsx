@@ -73,7 +73,7 @@ export default function BigDipperSetup() {
   const save = async () => { if (await run(() => put('/api/big-dipper', body), 'Choices saved')) reload(); };
   const connect = async () => {
     const r = await run(() => post<{ contactId: string }>('/api/big-dipper/connect', body), 'Request sent to Big Dipper');
-    if (r) { reload(); nav(`/admin/contacts/${r.contactId}`); }
+    if (r) { reload(); nav(`/admin/relationships/${r.contactId}`); }
   };
 
   const status = connected ? ['Connected', 'var(--color-accent-2-300)'] : pending ? ['Request sent', 'var(--color-accent-300)'] : bd.available ? ['Not connected', 'var(--color-neutral-400)'] : ['Opening soon', 'var(--color-accent-300)'];
@@ -210,7 +210,7 @@ export default function BigDipperSetup() {
                 : 'Big Dipper isn’t open yet. Your choices stay on your Little Dipper, and nothing is sent.'}
             </div>
           </div>
-          {pending && <button className="btn btn-secondary" onClick={() => nav(`/admin/contacts/${bd.contact!.contactId}`)}>View request</button>}
+          {pending && <button className="btn btn-secondary" onClick={() => nav(`/admin/relationships/${bd.contact!.contactId}`)}>View request</button>}
           {(dirty || !bd.available || connected || pending) && <button className="btn btn-secondary" disabled={busy || !dirty} onClick={save}>Save choices</button>}
           {bd.available && !bd.contact && <button className="btn btn-primary" style={{ background: 'var(--color-accent-2-600)' }} disabled={busy || !chosen.length} onClick={connect}>Connect with Big Dipper</button>}
         </div>

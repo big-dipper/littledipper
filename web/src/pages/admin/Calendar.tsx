@@ -92,7 +92,7 @@ export default function Calendar() {
   const saved = () => { setEditing(null); setVersion((v) => v + 1); reloadCatalog(); };
 
   const open = async (i: CalItem) => {
-    if (i.contact) return navigate(`/admin/contacts/${i.contact.id}`);
+    if (i.contact) return navigate(`/admin/relationships/${i.contact.id}`);
     if (i.domain !== 'events') return navigate(`/admin/life/${i.domain}`);
     const rec = await run(() => get<Rec>(`/api/data/events/${i.recordId}`));
     if (rec) setEditing(rec);

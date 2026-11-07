@@ -21,7 +21,7 @@ export const useAdmin = () => useContext(AdminCtx);
 
 const NAV: [string, string, IconName][] = [
   ['/admin', 'Home', 'home'], ['/admin/calendar', 'Calendar', 'calendar'], ['/admin/life', 'My data', 'data'], ['/admin/documents', 'Documents', 'documents'], ['/admin/lifestream', 'Lifestream', 'lifestream'],
-  ['/admin/receipts', 'Receipts', 'receipts'], ['/admin/contacts', 'Contacts', 'contacts'], ['/admin/messages', 'Messages', 'messages'], ['/admin/review', 'Review', 'review'],
+  ['/admin/receipts', 'Receipts', 'receipts'], ['/admin/relationships', 'Relationships', 'contacts'], ['/admin/messages', 'Messages', 'messages'], ['/admin/review', 'Review', 'review'],
   ['/admin/public', 'Public profile', 'profile'], ['/admin/apps', 'Apps and access', 'apps'], ['/admin/settings', 'Settings', 'settings'],
 ];
 const DOCS: [string, string, IconName][] = [['/admin/reference/model', 'Data model', 'model'], ['/admin/reference/endpoints', 'Endpoints', 'endpoints']];
@@ -147,7 +147,7 @@ export default function AdminLayout() {
             {notices.length > 0 && <Badge n={notices.length} />}
           </button>
           {NAV.map(([to, label, icon]) => {
-            const count = to === '/admin/contacts' ? pendingIn : to === '/admin/messages' ? unreadMessages : to === '/admin/documents' ? inboxDocs : to === '/admin/review' ? pendingReview : 0;
+            const count = to === '/admin/relationships' ? pendingIn : to === '/admin/messages' ? unreadMessages : to === '/admin/documents' ? inboxDocs : to === '/admin/review' ? pendingReview : 0;
             return (
               <NavLink key={to} to={to} end={to === '/admin'} className="nav-pill" aria-current={isOn(to) ? 'page' : undefined}
                 title={rail ? (count ? `${label} (${count})` : label) : undefined} aria-label={rail ? (count ? `${label} (${count})` : label) : undefined}>

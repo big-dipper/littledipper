@@ -121,7 +121,7 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
         <Link className="btn btn-ghost inbox-back" to="/admin/messages" aria-label="All conversations" style={{ padding: '6px 10px' }}>←</Link>
         <Avatar name={name} size={40} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Link to={`/admin/contacts/${data.party.id}`} style={{ fontWeight: 600, color: 'inherit', textDecoration: 'none' }}>{name}</Link>
+          <Link to={`/admin/relationships/${data.party.id}`} style={{ fontWeight: 600, color: 'inherit', textDecoration: 'none' }}>{name}</Link>
           {data.party.node && <div className="text-muted mono" style={{ fontSize: 12 }}>{data.party.node.url}</div>}
         </div>
       </div>
@@ -156,7 +156,7 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
             <button className="btn btn-primary" type="submit" disabled={busy || !text.trim()}>Send</button>
           </form>
         ) : (
-          <div className="text-muted" style={{ fontSize: 13 }}>You can message {name} while you're connected. <Link to={`/admin/contacts/${data.party.id}`}>View contact</Link></div>
+          <div className="text-muted" style={{ fontSize: 13 }}>You can message {name} while you're connected. <Link to={`/admin/relationships/${data.party.id}`}>View contact</Link></div>
         )}
       </div>
     </div>
@@ -169,7 +169,7 @@ function PickContact({ onClose, onPick }: { onClose: () => void; onPick: (id: st
   return (
     <Dialog title="New message" onClose={onClose} width={440}>
       {error ? <ErrorNote error={error} /> : !data ? <Loading /> : connected.length === 0 ? (
-        <p className="text-muted" style={{ fontSize: 14 }}>You can message people you're connected to on Little Dipper. Connect with someone from <Link to="/admin/contacts" onClick={onClose}>Contacts</Link> first.</p>
+        <p className="text-muted" style={{ fontSize: 14 }}>You can message people you're connected to on Little Dipper. Connect with someone from <Link to="/admin/relationships" onClick={onClose}>Contacts</Link> first.</p>
       ) : (
         <div style={{ display: 'grid', gap: 4 }}>
           {connected.map((c) => (

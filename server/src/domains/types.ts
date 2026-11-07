@@ -73,6 +73,8 @@ export type DomainDef = {
   confirmShare?: boolean;
   /** At most one entry (Birth, Health basics). */
   single?: boolean;
+  /** Lives on each person's page (Relationships), not as a My data category. Still records: dated, sensitive, shareable. */
+  onParty?: boolean;
   /** Related entries and documents this category invites, e.g. a vehicle invites its title, insurance and loan. Never required. */
   companions?: { domain?: string; document?: string; label: string; when?: { part: string; in: string[] } }[];
   parts: PartDef[];

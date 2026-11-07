@@ -118,7 +118,7 @@ const DEFS: Def[] = [
   },
   {
     // Each entry is a relationship between you and a party. Their name, phone, email and birthday live on the party.
-    id: 'relationships', label: 'Relationships', noun: 'relationship', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false,
+    id: 'relationships', label: 'Relationships', noun: 'relationship', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false, onParty: true,
     description: 'Family, partners and the people you work with: spouse, children, parents, references, mentors. Each points to the person.',
     title: '{party} ({relation})',
     parts: [

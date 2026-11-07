@@ -4,7 +4,7 @@ import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, p
 import { Confirm, Dialog, ErrorNote, Loading, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
-import { fetchCatalog, fmtRange, PartialDate, Select } from '../../life';
+import { fetchCatalog, fmtRange, PartialDate, RecordEditor, Select, useContactsLite, type Rec } from '../../life';
 import { CopyList, SendCopy } from './Copies';
 import { giveList, itemLabel, ShareChooser, toShare, useSharing, type Choice, type Relation, type SharingData } from '../../sharing';
 
@@ -27,7 +27,7 @@ export default function ContactDetail() {
   const [changing, setChanging] = useState(false);
   const [weeds, setWeeds] = useState(false);
 
-  if (error) return <div><Link className="btn btn-ghost" to="/admin/contacts">← All contacts</Link><ErrorNote error={error} /></div>;
+  if (error) return <div><Link className="btn btn-ghost" to="/admin/relationships">← Relationships</Link><ErrorNote error={error} /></div>;
   if (!c || !fieldsResp) return <Loading />;
   const fields = fieldsResp.items;
   const first = firstName(c.name);
@@ -42,14 +42,14 @@ export default function ContactDetail() {
   };
   const decline = async () => {
     if (!c.request) return;
-    if (await run(() => post(`/api/federation/requests/${c.request!.id}/decline`), 'Request declined')) { refresh(); nav('/admin/contacts'); }
+    if (await run(() => post(`/api/federation/requests/${c.request!.id}/decline`), 'Request declined')) { refresh(); nav('/admin/relationships'); }
   };
   const resend = () => c.request && run(() => post(`/api/federation/requests/${c.request!.id}/resend`), 'Request re-sent');
   const rotate = async () => {
     if (await run(() => post(`/api/federation/links/${c.node!.linkId}/rotate`), 'Keys rotated. Their Little Dipper was notified.')) reload();
   };
   const disconnect = () => setConfirm({
-    title: `Disconnect ${c.name}?`, body: 'They will no longer see anything you shared. They stay in your contacts.', cta: 'Disconnect',
+    title: `Disconnect ${c.name}?`, body: 'They will no longer see anything you shared. They stay in your relationships.', cta: 'Disconnect',
     onConfirm: async () => {
       const r = await run(() => del<{ peerNotified: boolean }>(`/api/federation/links/${c.node!.linkId}`), (r) => (r.peerNotified ? 'Disconnected' : "Disconnected. Their Little Dipper couldn't be reached; it'll find out next time it asks."));
       setConfirm(null);
@@ -58,10 +58,10 @@ export default function ContactDetail() {
   });
   const remove = () => setConfirm({
     title: `Delete ${c.name}?`,
-    body: [isNode ? 'This disconnects you and removes them from your contacts.' : 'This removes them and everything you noted about them.',
+    body: [isNode ? 'This disconnects you and removes them from your relationships.' : 'This removes them and everything you noted about them.',
       c.usedBy.length ? ` ${c.usedBy.length === 1 ? 'One entry points' : `${c.usedBy.length} entries point`} to them (${c.usedBy.map((u) => `${u.title} in ${u.domainLabel}`).join('; ')}); ${c.usedBy.length === 1 ? 'it' : 'they'} will no longer name them.` : ''].join(''),
     cta: 'Delete',
-    onConfirm: async () => { if (await run(() => del(`/api/parties/${c.id}${c.usedBy.length ? '?confirm=true' : ''}`), `${c.name} deleted`)) nav('/admin/contacts'); setConfirm(null); },
+    onConfirm: async () => { if (await run(() => del(`/api/parties/${c.id}${c.usedBy.length ? '?confirm=true' : ''}`), `${c.name} deleted`)) nav('/admin/relationships'); setConfirm(null); },
   });
   const invite = async () => {
     const r = await run(() => post<{ url: string; to: string; subject: string; body: string }>(`/api/parties/${c.id}/invite`));
@@ -72,7 +72,7 @@ export default function ContactDetail() {
 
   return (
     <div data-screen-label="Contact detail" style={{ maxWidth: 1040 }}>
-      <Link className="btn btn-ghost" to="/admin/contacts" style={{ marginBottom: 14 }}>← All contacts</Link>
+      <Link className="btn btn-ghost" to="/admin/relationships" style={{ marginBottom: 14 }}>← Relationships</Link>
       <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ width: 72, height: 72, borderRadius: '50%', background: isNode ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', display: 'grid', placeItems: 'center', fontSize: 22, fontFamily: 'var(--font-heading)', flex: 'none' }}>{initials(c.name)}</span>
         <div style={{ flex: 1, minWidth: 220 }}>
@@ -134,6 +134,7 @@ export default function ContactDetail() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,400px),1fr))', gap: 22, marginTop: 22, alignItems: 'start' }}>
             <div style={{ display: 'grid', gap: 22 }}>
+              {catalog && <HowYouKnow partyId={c.id} first={first} catalog={catalog} />}
               {/* One contact card: what they share (kept up to date by them), plus anything you added yourself. */}
               <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -215,7 +216,7 @@ export default function ContactDetail() {
               )}
             </div>
           </div>
-          <button className="btn btn-ghost" onClick={remove} style={{ marginTop: 18, fontSize: 13, color: 'var(--color-accent-700)' }}>Delete contact</button>
+          <button className="btn btn-ghost" onClick={remove} style={{ marginTop: 18, fontSize: 13, color: 'var(--color-accent-700)' }}>Remove {first}</button>
         </>
       )}
 
@@ -283,6 +284,37 @@ const Given = ({ label, value }: { label: string; value: string }) => {
   const [addr, id] = value.split(' · ');
   return <div style={{ fontSize: 14 }}>{addr}{id && <div className="mono text-muted" style={{ fontSize: 11, overflowWrap: 'anywhere' }}>{id}</div>}</div>;
 };
+
+/**
+ * "How you know Theo": your relationships with this person (spouse, reference, landlord…). They're entries in the
+ * Relationships category, dated and sensitive like any other, shown here on the person rather than in My data.
+ */
+function HowYouKnow({ partyId, first, catalog }: { partyId: string; first: string; catalog: Awaited<ReturnType<typeof fetchCatalog>> }) {
+  const d = catalog.find((x) => x.id === 'relationships');
+  const { data, reload } = useAsync(() => get<{ items: Rec[] }>('/api/data/relationships'), []);
+  const contacts = useContactsLite();
+  const [editing, setEditing] = useState<{ rec: Rec | null } | null>(null);
+  if (!d) return null;
+  const mine = (data?.items ?? []).filter((r) => r.data.party === partyId);
+  const relation = d.parts.find((p) => p.key === 'relation');
+  const label = (r: Rec) => relation?.options?.find(([k]) => k === r.data.relation)?.[1] ?? String(r.data.relation ?? '');
+  return (
+    <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="card-kicker">How you know {first}</div>
+        <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEditing({ rec: null })}>Add</button>
+      </div>
+      {mine.map((r) => (
+        <button key={r.id} className="bare" onClick={() => setEditing({ rec: r })} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', textAlign: 'left', cursor: 'pointer', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14 }}>{label(r)}{r.data.emergencyContact === true && <span className="tag tag-accent" style={{ marginLeft: 8 }}>Emergency contact</span>}</span>
+          <span className="text-muted" style={{ fontSize: 13 }}>{fmtRange(r.validFrom, r.validTo)}</span>
+        </button>
+      ))}
+      {data && !mine.length && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>Spouse, family, a reference, a mentor… Add how you know {first} if it helps.</div>}
+      {editing && <RecordEditor d={d} rec={editing.rec} contacts={contacts} defaults={{ party: partyId }} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+    </div>
+  );
+}
 
 const Row = ({ label, value, note }: { label: string; value: string; note?: string }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}>

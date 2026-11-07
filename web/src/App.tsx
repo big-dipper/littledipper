@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { get } from './api';
 import { ToastProvider, useAsync, Loading } from './ui';
 import Setup from './pages/Setup';
@@ -58,8 +58,10 @@ export default function App() {
             <Route path="receipts" element={<Receipts />} />
             <Route path="documents" element={<Documents />} />
             <Route path="documents/:id" element={<Documents />} />
-            <Route path="contacts" element={<Contacts />} />
-            <Route path="contacts/:id" element={<ContactDetail />} />
+            <Route path="relationships" element={<Contacts />} />
+            <Route path="relationships/:id" element={<ContactDetail />} />
+            <Route path="contacts" element={<Navigate to="/admin/relationships" replace />} />
+            <Route path="contacts/:id" element={<ContactRedirect />} />
             <Route path="messages" element={<Messages />} />
             <Route path="review" element={<Review />} />
             <Route path="messages/:contactId" element={<Messages />} />
@@ -75,4 +77,10 @@ export default function App() {
       </BrowserRouter>
     </ToastProvider>
   );
+}
+
+/** Contacts became Relationships: old links still land on the person. */
+function ContactRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/admin/relationships/${id}`} replace />;
 }

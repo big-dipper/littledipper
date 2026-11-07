@@ -55,7 +55,7 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
     <Dialog title="Add a contact" onClose={onClose} width={560} actions={
       tab === 'person' ? <>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" disabled={busy} onClick={savePerson}>Save contact</button>
+        <button className="btn btn-primary" disabled={busy} onClick={savePerson}>Save</button>
       </> : tab === 'node' ? <>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" disabled={busy || !found || !found.acceptsRequests || !!found.existing} onClick={send}>Send connection request</button>
@@ -99,7 +99,7 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
                 </div>
               </div>
               {found.existing ? (
-                <div style={{ fontSize: 13 }}>{firstName(name)} is already in your contacts. <button className="btn btn-ghost" onClick={() => onDone(found.existing!.contactId)}>Open their page</button></div>
+                <div style={{ fontSize: 13 }}>{firstName(name)} is already in your relationships. <button className="btn btn-ghost" onClick={() => onDone(found.existing!.contactId)}>Open their page</button></div>
               ) : !found.acceptsRequests ? (
                 <div style={{ fontSize: 13, color: 'var(--color-accent-800)' }}>{firstName(name)} isn't accepting connection requests right now. Ask them for an invite link and paste it above.</div>
               ) : (

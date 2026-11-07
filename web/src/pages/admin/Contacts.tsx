@@ -4,6 +4,7 @@ import { ago, displayMethod, get, initials, post, STATUS, type Party as Contact 
 import { ErrorNote, Loading, Pills, useAction, useAsync } from '../../ui';
 import { useAdmin } from './Layout';
 import AddContact from './AddContact';
+import { fetchCatalog, type Rec } from '../../life';
 import BigDipperBanner from './BigDipperBanner';
 
 type Req = { _id: string; contactId: string; peerName: string; fromNode: string; requestedFields: string[]; inviteId: string | null; quiet: boolean };
@@ -23,6 +24,14 @@ export default function Contacts() {
   const [filter, setFilter] = useState<'all' | 'node' | 'person' | 'organisation'>('all');
   const [modal, setModal] = useState<null | 'person' | 'invite'>(null);
   const { data, error, reload } = useAsync(() => get<{ items: Contact[] }>('/api/parties'), []);
+  // How you know each person (spouse, reference…), from the Relationships entries that point to them.
+  const { data: rels } = useAsync(async () => {
+    const [{ items }, catalog] = await Promise.all([get<{ items: Rec[] }>('/api/data/relationships'), fetchCatalog()]);
+    const opts = catalog.find((d) => d.id === 'relationships')?.parts.find((p) => p.key === 'relation')?.options ?? [];
+    const by = new Map<string, string[]>();
+    for (const r of items) if (r.current) by.set(String(r.data.party), [...(by.get(String(r.data.party)) ?? []), opts.find(([k]) => k === r.data.relation)?.[1] ?? String(r.data.relation)]);
+    return by;
+  }, []);
   const { data: reqs, reload: reloadReqs } = useAsync(() => get<{ items: Req[] }>('/api/federation/requests?status=pending&direction=in'), []);
 
   if (error) return <ErrorNote error={error} />;
@@ -38,12 +47,12 @@ export default function Contacts() {
   };
 
   return (
-    <div data-screen-label="Contacts" style={{ maxWidth: 1040 }}>
+    <div data-screen-label="Relationships" style={{ maxWidth: 1040 }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div><h1>Contacts</h1><p className="text-muted" style={{ margin: 0 }}>People who also run Little Dipper can connect with you securely. You choose exactly what each of them can see.</p></div>
+        <div><h1>Relationships</h1><p className="text-muted" style={{ margin: 0 }}>People who also run Little Dipper can connect with you securely. You choose exactly what each of them can see.</p></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => setModal('invite')}>Invite link</button>
-          <button className="btn btn-primary" onClick={() => setModal('person')}>Add contact</button>
+          <button className="btn btn-primary" onClick={() => setModal('person')}>Add someone</button>
         </div>
       </div>
 
@@ -61,40 +70,43 @@ export default function Contacts() {
             </div>
           </div>
           <button className="btn btn-secondary" onClick={() => decline(r)}>Decline</button>
-          <button className="btn btn-primary" onClick={() => nav(`/admin/contacts/${r.contactId}`)}>Review request</button>
+          <button className="btn btn-primary" onClick={() => nav(`/admin/relationships/${r.contactId}`)}>Review request</button>
         </div>
       ))}
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '24px 0 12px', flexWrap: 'wrap' }}>
-        <input className="input" aria-label="Search contacts" placeholder="Search contacts" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 320 }} />
+        <input className="input" aria-label="Search relationships" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 320 }} />
         <Pills value={filter} options={[['all', 'All'], ['node', 'On Little Dipper'], ['person', 'People'], ['organisation', 'Organisations']]} onChange={setFilter} />
       </div>
       {!data ? <Loading /> : (
         <div style={{ overflowX: 'auto' }}>
           <table className="table">
-            <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>You share</th><th>Last activity</th></tr></thead>
+            <thead><tr><th>Name</th><th>Relationship</th><th>Status</th><th>You share</th><th>Last activity</th></tr></thead>
             <tbody>
               {rows.map((c) => {
                 const sub = c.node ? c.node.url : worksAt(c) || (c.methods[0] ? displayMethod(c.methods[0]) : '');
                 return (
-                  <tr key={c.id} className="row-btn" tabIndex={0} onClick={() => nav(`/admin/contacts/${c.id}`)} onKeyDown={(e) => e.key === 'Enter' && nav(`/admin/contacts/${c.id}`)}>
+                  <tr key={c.id} className="row-btn" tabIndex={0} onClick={() => nav(`/admin/relationships/${c.id}`)} onKeyDown={(e) => e.key === 'Enter' && nav(`/admin/relationships/${c.id}`)}>
                     <td><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <span style={{ width: 34, height: 34, borderRadius: '50%', background: c.node ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', display: 'grid', placeItems: 'center', fontSize: 12, flex: 'none' }}>{initials(c.name)}</span>
                       <div><div style={{ fontWeight: 600 }}>{c.name}</div><div className="text-muted" style={{ fontSize: 12, fontFamily: c.node ? 'var(--mono)' : 'inherit' }}>{sub}</div></div>
                     </div></td>
-                    <td><span className="tag tag-neutral">{c.type === 'organisation' ? 'Organisation' : 'Person'}</span>{c.node && <span className="tag tag-accent-2" style={{ marginLeft: 6 }}>Little Dipper</span>}</td>
+                    <td><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {(rels?.get(c.id) ?? [c.type === 'organisation' ? 'Organisation' : 'Person']).map((l) => <span key={l} className="tag tag-neutral">{l}</span>)}
+                      {c.node && <span className="tag tag-accent-2">Little Dipper</span>}
+                    </div></td>
                     <td><span className={`tag ${STATUS[c.status][1]}`}>{STATUS[c.status][0]}</span></td>
                     <td style={{ fontSize: 13 }}>{shareSummary(c)}</td>
                     <td className="text-muted" style={{ fontSize: 13 }}>{c.lastActivity.text} · {ago(c.lastActivity.at)}</td>
                   </tr>
                 );
               })}
-              {rows.length === 0 && <tr><td colSpan={5} className="text-muted" style={{ fontSize: 14, padding: '18px 8px' }}>{data.items.length ? 'No contacts match.' : 'No contacts yet. Add someone, or send an invite link.'}</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={5} className="text-muted" style={{ fontSize: 14, padding: '18px 8px' }}>{data.items.length ? 'No one matches.' : 'No one here yet. Add someone, or send an invite link.'}</td></tr>}
             </tbody>
           </table>
         </div>
       )}
-      {modal && <AddContact initialTab={modal} onClose={() => setModal(null)} onDone={(id) => { setModal(null); reload(); if (id) nav(`/admin/contacts/${id}`); }} />}
+      {modal && <AddContact initialTab={modal} onClose={() => setModal(null)} onDone={(id) => { setModal(null); reload(); if (id) nav(`/admin/relationships/${id}`); }} />}
     </div>
   );
 }
