@@ -153,3 +153,7 @@ pre.code { margin: 0; background: var(--color-neutral-900); color: var(--color-n
 }
 .ab-input { font-size: 16px; line-height: 1.45; padding: 14px 16px; border-radius: 18px; resize: vertical; min-height: 64px; font-family: inherit; }
 .ab-ask { display: grid; gap: 2px; padding: 12px 14px; border-radius: 18px; background: #fff; border: 1px solid var(--color-accent-200); }
+/* The Tasks page: the new-task box stays at the top while the list scrolls. */
+.tasks-head { position: sticky; top: 0; z-index: 5; background: var(--color-bg); padding: 8px 0 16px; border-bottom: 1px solid var(--color-divider); }
+.actionbar[data-open='1'] .ab-main { margin: 0; }
+.ab-rail-btn[data-on='1'] { background: var(--color-surface); }

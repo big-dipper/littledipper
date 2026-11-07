@@ -1,7 +1,8 @@
 /**
- * The action bar: the right-hand side is for doing, as the left is for going. Actions and notifications only: Add (an
- * event, a task or a note, typed as you'd say it), your tasks with requests waiting on top, and notifications.
- * "Needs you" stays on Home. Closed, it's a quiet rail; on a phone, a button that opens a sheet from the bottom.
+ * The action bar: the right-hand side is for doing, as the left is for going. Two views, one at a time:
+ *  + Add: an event, a task or a note, typed as you'd say it, with your tasks underneath (requests waiting on top).
+ *  🔔 Notifications: only that.
+ * "Needs you" stays on Home; all tasks have their own page. Closed, it's a quiet rail; on a phone, a sheet.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -14,88 +15,106 @@ import { useUpdates } from '../../needsYou';
 import { useAdmin } from './Layout';
 
 export type Notice = { id: string; kind: string; title: string; text: string; href: string; at: string };
-type Ask = { messageId: string; party: { id: string; name: string }; title: string; due: string | null; at: string };
-type Task = {
+export type Ask = { messageId: string; party: { id: string; name: string }; title: string; due: string | null; at: string };
+export type Task = {
   id: string; title: string; due: string | null; done: boolean; doneAt: string | null;
   who: { id: string; name: string } | null; from: { id: string; name: string } | null; answer: 'asked' | 'accepted' | 'not_now' | null;
 };
 
-const OPEN_KEY = 'ld.actions.open';
-const readOpen = () => { try { return localStorage.getItem(OPEN_KEY) === '1'; } catch { return false; } };
+type View = 'add' | 'notices';
+const VIEW_KEY = 'ld.actions.view';
+const readView = (): View | null => { try { const v = localStorage.getItem(VIEW_KEY); return v === 'add' || v === 'notices' ? v : null; } catch { return null; } };
 const first = (name: string) => name.split(' ')[0];
 const today = () => new Date().toISOString().slice(0, 10);
+/** How many open tasks the bar shows before "See all tasks". */
+const BAR_TASKS = 6;
 
-export default function ActionBar({ notices, onDismiss, onGo }: { notices: Notice[]; onDismiss: (id: string) => void; onGo: (href: string) => void }) {
+/** Your tasks and what people have asked of you, reloading with everything else. */
+export function useTasks() {
   const { version } = useAdmin();
-  const [open, setOpen] = useState(readOpen);
-  const updates = useUpdates(8);
   const { data: tasks } = useAsync(() => get<{ open: Task[]; done: Task[] }>('/api/tasks'), [version]);
   const { data: asks } = useAsync(() => get<{ items: Ask[] }>('/api/tasks/requests'), [version]);
+  return { tasks: tasks ?? null, asks: asks?.items ?? [] };
+}
+
+export default function ActionBar({ notices, onDismiss, onGo }: { notices: Notice[]; onDismiss: (id: string) => void; onGo: (href: string) => void }) {
+  const [view, setViewState] = useState<View | null>(readView);
+  const { tasks, asks } = useTasks();
   const addRef = useRef<HTMLTextAreaElement>(null);
-  const set = (v: boolean) => { setOpen(v); try { localStorage.setItem(OPEN_KEY, v ? '1' : '0'); } catch { /* just not remembered */ } };
-  const openTo = (focusAdd: boolean) => { set(true); if (focusAdd) setTimeout(() => addRef.current?.focus(), 60); };
+  const setView = (v: View | null) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v ?? ''); } catch { /* just not remembered */ } };
+  const show = (v: View) => { setView(v); if (v === 'add') setTimeout(() => addRef.current?.focus(), 60); };
   useEffect(() => {
-    if (!open) return;
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && window.matchMedia('(max-width: 760px)').matches && set(false);
+    if (!view) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && window.matchMedia('(max-width: 760px)').matches && setView(null);
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
-  }, [open]);
+  }, [view]);
 
-  const waiting = asks?.items.length ?? 0;
-  const openTasks = (tasks?.open.length ?? 0) + waiting;
+  const waiting = asks.length;
+  const unseen = notices.length;
+  // The two doors: + for adding (and your tasks), the bell for notifications. Shown on the rail and atop the panel.
+  const doors = (
+    <>
+      <button type="button" className="bare ab-rail-btn ab-main" data-on={view === 'add' ? '1' : '0'} onClick={() => (view === 'add' ? setView(null) : show('add'))}
+        title="Add an event, task or note" aria-label={`Add an event, task or note${waiting ? ` (${waiting} waiting for your answer)` : ''}`} aria-pressed={view === 'add'}>
+        <Icon name="plus" size={22} />
+        {waiting > 0 && <span className="nav-badge ab-count">{waiting}</span>}
+      </button>
+      <button type="button" className="bare ab-rail-btn" data-on={view === 'notices' ? '1' : '0'} onClick={() => (view === 'notices' ? setView(null) : show('notices'))}
+        title="Notifications" aria-label={`Notifications${unseen ? ` (${unseen})` : ''}`} aria-pressed={view === 'notices'}>
+        <Icon name="bell" size={20} />
+        {unseen > 0 && <span className="nav-badge ab-count ab-count-soft">{unseen}</span>}
+      </button>
+    </>
+  );
 
-  if (!open) {
-    return (
-      <aside className="actionbar" data-open="0" aria-label="Actions">
-        <button type="button" className="bare ab-rail-btn ab-main" onClick={() => openTo(true)} title="Add an event, task or note" aria-label="Add an event, task or note">
-          <Icon name="plus" size={22} />
-          {waiting > 0 && <span className="nav-badge ab-count">{waiting}</span>}
-        </button>
-        <button type="button" className="bare ab-rail-btn" onClick={() => openTo(false)} title={`Your tasks${openTasks ? ` (${openTasks})` : ''}`} aria-label={`Your tasks${openTasks ? ` (${openTasks})` : ''}`}>
-          <Icon name="tasks" size={20} />
-          {openTasks > 0 && <span className={`nav-badge ab-count${waiting ? '' : ' ab-count-soft'}`}>{openTasks}</span>}
-        </button>
-        <button type="button" className="bare ab-rail-btn" onClick={() => openTo(false)} title={`Notifications${notices.length ? ` (${notices.length})` : ''}`} aria-label={`Notifications${notices.length ? ` (${notices.length})` : ''}`}>
-          <Icon name="bell" size={20} />
-          {notices.length > 0 && <span className="nav-badge ab-count ab-count-soft">{notices.length}</span>}
-        </button>
-      </aside>
-    );
-  }
+  if (!view) return <aside className="actionbar" data-open="0" aria-label="Actions">{doors}</aside>;
 
   return (
     <>
-      <div className="ab-scrim" onClick={() => set(false)} aria-hidden />
-      <aside className="actionbar" data-open="1" aria-label="Actions">
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button type="button" className="bare side-toggle" onClick={() => set(false)} aria-label="Close" title="Close" style={{ transform: 'scaleX(-1)' }}>
+      <div className="ab-scrim" onClick={() => setView(null)} aria-hidden />
+      <aside className="actionbar" data-open="1" aria-label={view === 'add' ? 'Add' : 'Notifications'}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {doors}
+          <button type="button" className="bare side-toggle" onClick={() => setView(null)} aria-label="Close" title="Close" style={{ transform: 'scaleX(-1)', marginLeft: 'auto' }}>
             <Icon name="collapse" size={18} />
           </button>
         </div>
 
-        <QuickAdd inputRef={addRef} />
-
-        <Tasks tasks={tasks ?? null} asks={asks?.items ?? []} />
-
-        <section className="ab-section">
-          <div className="card-kicker">Notifications</div>
-          {updates && !updates.length && <div className="text-muted" style={{ fontSize: 13 }}>Nothing new from anyone.</div>}
-          {updates?.map((u) => {
-            const n = u.notice ? notices.find((x) => x.id === u.id) : null;
-            return (
-              <div key={u.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                <button type="button" className="bare" onClick={u.href ? () => onGo(u.href!) : undefined} style={{ all: 'unset', cursor: u.href ? 'pointer' : 'default', flex: 1, display: 'grid', gap: 2 }}>
-                  <span style={{ fontSize: 13 }}>{u.text}</span>
-                  <span className="text-muted" style={{ fontSize: 11.5 }}>{n ? `${n.text} · ` : ''}{ago(u.at)}</span>
-                </button>
-                {n && <button type="button" className="btn btn-ghost" onClick={() => onDismiss(n.id)} aria-label="Mark as seen" title="Mark as seen" style={{ fontSize: 14, padding: '0 8px' }}>×</button>}
-              </div>
-            );
-          })}
-          <Link to="/admin/activity" className="text-muted" style={{ fontSize: 12 }}>Activity log</Link>
-        </section>
+        {view === 'add' ? (
+          <>
+            <QuickAdd inputRef={addRef} />
+            <Tasks tasks={tasks} asks={asks} limit={BAR_TASKS} />
+          </>
+        ) : (
+          <Notifications notices={notices} onDismiss={onDismiss} onGo={onGo} />
+        )}
       </aside>
     </>
+  );
+}
+
+/** What happened without you, and nothing else. */
+function Notifications({ notices, onDismiss, onGo }: { notices: Notice[]; onDismiss: (id: string) => void; onGo: (href: string) => void }) {
+  const updates = useUpdates(20);
+  return (
+    <section className="ab-section">
+      <div className="card-kicker">Notifications</div>
+      {updates && !updates.length && <div className="text-muted" style={{ fontSize: 13 }}>Nothing new from anyone.</div>}
+      {updates?.map((u) => {
+        const n = u.notice ? notices.find((x) => x.id === u.id) : null;
+        return (
+          <div key={u.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+            <button type="button" className="bare" onClick={u.href ? () => onGo(u.href!) : undefined} style={{ all: 'unset', cursor: u.href ? 'pointer' : 'default', flex: 1, display: 'grid', gap: 2 }}>
+              <span style={{ fontSize: 13.5 }}>{u.text}</span>
+              <span className="text-muted" style={{ fontSize: 11.5 }}>{n ? `${n.text} · ` : ''}{ago(u.at)}</span>
+            </button>
+            {n && <button type="button" className="btn btn-ghost" onClick={() => onDismiss(n.id)} aria-label="Mark as seen" title="Mark as seen" style={{ fontSize: 14, padding: '0 8px' }}>×</button>}
+          </div>
+        );
+      })}
+      <Link to="/admin/activity" className="text-muted" style={{ fontSize: 12 }}>Activity log</Link>
+    </section>
   );
 }
 
@@ -107,11 +126,11 @@ const PLACEHOLDER: Record<Kind, string> = { event: 'Pick up kids at 3 on Saturda
  * underneath, ready to fix; a note is kept just as written. Nothing is saved until you press Add.
  * (A message will be the fourth kind.)
  */
-function QuickAdd({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement | null> }) {
+export function QuickAdd({ inputRef, only }: { inputRef?: React.RefObject<HTMLTextAreaElement | null>; only?: Kind }) {
   const { refresh } = useAdmin();
   const toast = useToast();
   const { run, busy } = useAction();
-  const [kind, setKind] = useState<Kind>('event');
+  const [kind, setKind] = useState<Kind>(only ?? 'event');
   const [text, setText] = useState('');
   const [fix, setFix] = useState<{ date?: string | null; time?: string | null }>({});
   const [who, setWho] = useState('');
@@ -141,7 +160,7 @@ function QuickAdd({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement 
 
   return (
     <section className="ab-section">
-      <Pills value={kind} size={13} options={[['event', 'Event'], ['task', 'Task'], ['note', 'Note']]} onChange={(v) => { setKind(v); setFix({}); }} />
+      {!only && <Pills value={kind} size={13} options={[['event', 'Event'], ['task', 'Task'], ['note', 'Note']]} onChange={(v) => { setKind(v); setFix({}); }} />}
       <textarea ref={inputRef} className="input ab-input" value={text} rows={kind === 'note' ? 5 : 2} onChange={(e) => { setText(e.target.value); setFix({}); }}
         // Enter adds an event or task; in a note it starts a new line (⌘/Ctrl+Enter saves).
         onKeyDown={(e) => { if (e.key === 'Enter' && (kind !== 'note' ? !e.shiftKey : e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); } }}
@@ -171,7 +190,7 @@ function QuickAdd({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement 
 const ANSWER: Record<NonNullable<Task['answer']>, string> = { asked: 'asked', accepted: 'taking care of it', not_now: 'can’t take this one' };
 
 /** Your tasks: tick to finish. Ones you asked of someone show their answer; ones asked of you say by whom. */
-function Tasks({ tasks, asks }: { tasks: { open: Task[]; done: Task[] } | null; asks: Ask[] }) {
+export function Tasks({ tasks, asks, limit }: { tasks: { open: Task[]; done: Task[] } | null; asks: Ask[]; limit?: number }) {
   const { refresh } = useAdmin();
   const { run, busy } = useAction();
   const [showDone, setShowDone] = useState(false);
@@ -201,7 +220,10 @@ function Tasks({ tasks, asks }: { tasks: { open: Task[]; done: Task[] } | null; 
   };
   return (
     <section className="ab-section">
-      <div className="card-kicker">Your tasks</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div className="card-kicker">Your tasks</div>
+        {limit !== undefined && <Link to="/admin/tasks" style={{ fontSize: 12 }}>See all tasks</Link>}
+      </div>
       {/* Asked of you and not answered yet: on top, answered right here (or in your conversation). */}
       {asks.map((a) => (
         <div key={a.messageId} className="ab-ask">
@@ -214,8 +236,10 @@ function Tasks({ tasks, asks }: { tasks: { open: Task[]; done: Task[] } | null; 
           </div>
         </div>
       ))}
-      {tasks.open.length ? tasks.open.map(row) : !asks.length && <div className="text-muted" style={{ fontSize: 13 }}>Nothing to do. Add one above.</div>}
-      {tasks.done.length > 0 && (
+      {tasks.open.length ? tasks.open.slice(0, limit).map(row) : !asks.length && <div className="text-muted" style={{ fontSize: 13 }}>Nothing to do. Add one above.</div>}
+      {limit !== undefined && tasks.open.length > limit && <Link to="/admin/tasks" className="text-muted" style={{ fontSize: 12 }}>{tasks.open.length - limit} more</Link>}
+      {/* Done ones live on the Tasks page; the bar stays about what's next. */}
+      {limit === undefined && tasks.done.length > 0 && (
         <>
           <button type="button" className="btn btn-ghost" onClick={() => setShowDone(!showDone)} style={{ fontSize: 12, justifySelf: 'start', padding: '2px 0' }}>{showDone ? 'Hide done' : `Done this week (${tasks.done.length})`}</button>
           {showDone && tasks.done.map(row)}

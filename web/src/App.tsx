@@ -15,6 +15,7 @@ import Lifestream from './pages/admin/Lifestream';
 import Calendar from './pages/admin/Calendar';
 import Contacts from './pages/admin/Contacts';
 import Activity from './pages/admin/Activity';
+import TasksPage from './pages/admin/TasksPage';
 import ContactDetail from './pages/admin/ContactDetail';
 import Messages from './pages/admin/Messages';
 import Review from './pages/admin/Review';
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="contacts/:id" element={<ContactRedirect />} />
             <Route path="messages" element={<Messages />} />
             <Route path="activity" element={<Activity />} />
+            <Route path="tasks" element={<TasksPage />} />
             <Route path="review" element={<Review />} />
             <Route path="messages/:contactId" element={<Messages />} />
             <Route path="public" element={<PublicEditor />} />
