@@ -277,6 +277,13 @@ async function saveChoice(c: CD, choice: Choice, run: ReturnType<typeof useActio
 const THEIRS: Record<string, string> = { 'Little Dipper': 'Their Little Dipper address', 'Preferred name': 'Their name', 'Lives in': 'Where they live', 'Home address': 'Their home address', Email: 'Their email', Phone: 'Their phone', Born: 'Their birthday', 'Legal name': 'Their legal name', 'Mailing address': 'Their mailing address' };
 const theirs = (label: string) => THEIRS[label] ?? `Their ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 
+/** One detail in the connect card. A Little Dipper line shows its address with the Node ID beneath, to compare. */
+const Given = ({ label, value }: { label: string; value: string }) => {
+  if (label !== 'Little Dipper') return <div style={{ fontSize: 14 }}>{value}</div>;
+  const [addr, id] = value.split(' · ');
+  return <div style={{ fontSize: 14 }}>{addr}{id && <div className="mono text-muted" style={{ fontSize: 11, overflowWrap: 'anywhere' }}>{id}</div>}</div>;
+};
+
 const Row = ({ label, value, note }: { label: string; value: string; note?: string }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}>
     <span className="text-muted" style={{ fontSize: 13 }}>{label}{note && <span style={{ fontSize: 11 }}> · {note}</span>}</span>
@@ -309,12 +316,12 @@ function ConnectCard({ c, first, sub, sharing, choice, setChoice, relation, setR
         <div style={panel}>
           <div className="card-kicker">{first} gives you</div>
           {c.request?.offeredDetails.length
-            ? c.request.offeredDetails.map((d) => <div key={d.label} style={{ fontSize: 14 }}>{d.value}</div>)
+            ? c.request.offeredDetails.map((d) => <Given key={d.label} label={d.label} value={d.value} />)
             : (c.request?.offeredLabels ?? []).map((l) => <div key={l} style={{ fontSize: 14 }}>{theirs(l)}</div>)}
         </div>
         <div style={panel}>
           <div className="card-kicker">You give {first}</div>
-          {give.map((g) => <div key={g.key} style={{ fontSize: 14 }}>{g.value || g.label}</div>)}
+          {give.map((g) => <Given key={g.key} label={g.label} value={g.value || g.label} />)}
         </div>
       </div>
 

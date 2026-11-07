@@ -74,7 +74,7 @@ export function ShareChooser({ data, first, choice, onChange, requested = [], re
       {showBasic && (
         <div>
           <div style={{ fontWeight: 600 }}>You’ll share with {first}</div>
-          <div className="text-muted" style={{ fontSize: 14 }}>{giveList(data, { extras: [] }).map((g) => g.value || g.label).join(' · ')}</div>
+          <div className="text-muted" style={{ fontSize: 14 }}>{giveList(data, { extras: [] }).map((g) => (g.key === 'little_dipper' ? g.value.split(' · ')[0] : g.value || g.label)).join(' · ')}</div>
         </div>
       )}
       <div>
@@ -110,7 +110,7 @@ function Tick({ on, label, value, onChange }: { on: boolean; label: string; valu
 export function giveList(data: SharingData, choice: Choice): { key: string; label: string; value: string }[] {
   const val = (k: string) => {
     const v = data.profile.items.find((l) => l.key === k)?.value ?? '';
-    return k === 'little_dipper' ? v.split(' · ')[0] : v; // your address, not the Node ID, at a glance
+    return v;
   };
   const basic = data.profile.basic.filter((k) => data.profile.items.some((l) => l.key === k));
   const extras = choice.extras.filter((x) => !basic.includes(x));

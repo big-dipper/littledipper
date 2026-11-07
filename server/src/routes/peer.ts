@@ -85,7 +85,9 @@ export default async function peerRoutes(app: FastifyInstance) {
     if (existing?.link.status === 'active') throw new HttpError(409, 'already_connected');
     const requested = (p.requestedFields || []).map(String).slice(0, 50);
     const offered = (p.offeredLabels || []).map(String).slice(0, 50);
-    const details = (Array.isArray(p.offeredDetails) ? p.offeredDetails : []).slice(0, 50).map((d) => ({ label: String(d?.label ?? '').slice(0, 80), value: String(d?.value ?? '').slice(0, 300) })).filter((d) => d.label && d.value);
+    const details = (Array.isArray(p.offeredDetails) ? p.offeredDetails : []).slice(0, 50).map((d) => ({ label: String(d?.label ?? '').slice(0, 80), value: String(d?.value ?? '').slice(0, 300) })).filter((d) => d.label && d.value)
+      // Their Little Dipper line is what we verified, not what they typed: address and Node ID.
+      .map((d) => (d.label === 'Little Dipper' ? { ...d, value: `${displayAddr(origin)} · ${intro.nodeId}` } : d));
     const name = String(intro.displayName || displayAddr(intro.address)).slice(0, 120);
     let contact: PartyDoc, link: LinkDoc;
     if (existing) {

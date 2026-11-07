@@ -175,6 +175,7 @@ async function main() {
     ok(inB.length === 1 && !inB[0].quiet && inB[0].inviteId, 'B sees a (non-quiet) invite request');
     const reqParty = await b.call('GET', `/api/parties/${inB[0].contactId}`);
     ok(reqParty.request.offeredDetails.some((d: any) => d.label === 'Preferred name' && d.value === 'Maya Lindqvist')
+      && reqParty.request.offeredDetails.some((d: any) => d.label === 'Little Dipper' && d.value.endsWith(` · ${inB[0].fromNodeId}`) && d.value.startsWith('localhost:'))
       && reqParty.request.offeredDetails.some((d: any) => d.label === 'Home address' && d.value.includes('Ankeny')), 'the request shows what Maya offers, with the values');
     await a.call('POST', '/api/federation/requests', { address: inv.url }, [409]);
     const reuse = await new Client(b.base).call('GET', `/public/invites/${inv.url.split('invite=')[1]}`);
