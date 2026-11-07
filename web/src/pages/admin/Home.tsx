@@ -1,10 +1,8 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { addr, ago, firstName, get, initials, post, whenLabel, type AuditEvent } from '../../api';
+import { addr, ago, firstName, get, initials, whenLabel, type AuditEvent } from '../../api';
 import { useAction, useAsync } from '../../ui';
-import { fetchCatalog, fmtDate, GROUPS } from '../../life';
+import { fetchCatalog, fmtDate } from '../../life';
 import { useAdmin } from './Layout';
-import AddContact from './AddContact';
 import { useDeviceBackup } from '../../deviceBackup';
 import { addDays, daysOf, lookOf, timeOf, ymd, type CalItem } from './Calendar';
 
@@ -19,9 +17,8 @@ export default function Home() {
   const nav = useNavigate();
   const { run } = useAction();
   const device = useDeviceBackup(refresh);
-  const [modal, setModal] = useState<null | 'add' | 'invite'>(null);
   const { data: reqs } = useAsync(() => get('/api/federation/requests?status=pending&direction=in'), []);
-  const { data: audit, reload } = useAsync(() => get<{ items: AuditEvent[] }>('/api/audit?limit=6'), []);
+  const { data: audit } = useAsync(() => get<{ items: AuditEvent[] }>('/api/audit?limit=6'), []);
   const { data: catalog } = useAsync(fetchCatalog, []);
   const { data: attention } = useAsync(() => get<{ items: { domain: string; id: string; title: string; part: string; kind?: 'expiry' | 'deadline'; date: string; expired: boolean }[] }>('/api/attention?days=90'), []);
 
@@ -39,50 +36,25 @@ export default function Home() {
       : node.deviceBackup.due ? [{ key: 'device-backup', initials: '⤓', title: node.deviceBackup.lastAt ? 'Save a fresh backup to this device' : 'Keep a backup on this device', sub: node.deviceBackup.lastAt ? `Last saved here ${whenLabel(node.deviceBackup.lastAt)}` : 'So far your backups are only on your Little Dipper', cta: 'Save', go: () => run(device.download, 'Backup saved to this device') }] : []),
     ...(node.update.available ? [{ key: 'update', initials: '↑', title: `Update ${node.update.latest} is ready`, sub: 'Release notes in Settings', cta: 'View', go: () => nav('/admin/settings/hosting') }] : []),
   ];
-  const started = catalog?.filter((d) => d.count > 0).length ?? 0;
-  const entries = catalog?.reduce((n, d) => n + d.count, 0) ?? 0;
-
-  const backup = () => run(() => post('/api/node/backups'), 'Backup complete').then(() => { refresh(); reload(); });
-
   return (
-    <div data-screen-label="Dashboard" style={{ maxWidth: 1040 }}>
-      <h1>{greeting()}, {firstName(owner.name)}.</h1>
-      <p className="text-muted" style={{ marginBottom: 28 }}>Everything here belongs to you, and only you decide who sees it.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,290px),1fr))', gap: 18 }}>
-        <div className="card" style={{ padding: '22px 24px', gap: 12 }}>
-          <div className="card-kicker">Your space</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--color-accent-2)' }} /><span className="card-title" style={{ fontSize: 20 }}>Online</span></div>
-          {[['Address', addr(node.address)], ['Version', node.version + (node.update.available ? ' · update ready' : '')], ['Last backup', node.lastBackupAt ? whenLabel(node.lastBackupAt) : 'Not yet']].map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}><span className="text-muted">{k}</span><span style={{ overflowWrap: 'anywhere', textAlign: 'right' }}>{v}</span></div>
-          ))}
-          <Link className="btn btn-secondary" to="/admin/settings" style={{ alignSelf: 'flex-start' }}>Settings</Link>
-        </div>
-        <div className="card" style={{ padding: '22px 24px', gap: 12, background: 'var(--color-accent-100)' }}>
-          <div className="card-kicker">Needs you</div>
-          {inbox.map((ib) => <InboxRow key={ib.key} {...ib} />)}
-          {reqs && inbox.length === 0 && <div className="text-muted" style={{ fontSize: 14 }}>Nothing waiting.</div>}
-        </div>
-        <ThisWeek />
-        <div className="card" style={{ padding: '22px 24px', gap: 10 }}>
-          <div className="card-kicker">My data</div>
-          <div className="card-title" style={{ fontSize: 20 }}>{started} of {catalog?.length ?? '…'} categories started</div>
-          <div className="card-body">{entries} entries so far. Nothing is shared unless you choose to.</div>
-          <div style={{ display: 'flex', gap: 4 }} aria-label="Categories started per group">
-            {GROUPS.filter((g) => catalog?.some((d) => d.group === g.id)).map((g) => {
-              const list = catalog!.filter((d) => d.group === g.id);
-              const n = list.filter((d) => d.count).length;
-              return (
-                <div key={g.id} title={`${g.label}: ${n} of ${list.length}`} style={{ flex: list.length, height: 10, borderRadius: 999, background: 'var(--color-neutral-300)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${(n / list.length) * 100}%`, background: g.ink, borderRadius: 999 }} />
-                </div>
-              );
-            })}
-          </div>
-          <Link className="btn btn-secondary" to="/admin/life" style={{ alignSelf: 'flex-start' }}>Open My data</Link>
+    <div data-screen-label="Dashboard" style={{ maxWidth: 760, display: 'grid', gap: 18 }}>
+      <div>
+        <h1 style={{ marginBottom: 6 }}>{greeting()}, {firstName(owner.name)}.</h1>
+        <div style={{ fontSize: 13, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'baseline' }}>
+          <a href={node.address} target="_blank" rel="noreferrer">{addr(node.address)}</a>
+          <span className="mono text-muted" style={{ fontSize: 12, overflowWrap: 'anywhere' }}>{node.id}</span>
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 18, padding: '22px 26px', flexDirection: 'row', alignItems: 'center', gap: 22, flexWrap: 'wrap', background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', position: 'relative', overflow: 'hidden' }}>
+      <div className="card" style={{ padding: '22px 24px', gap: 12, background: 'var(--color-accent-100)' }}>
+        <div className="card-kicker">Needs you</div>
+        {inbox.map((ib) => <InboxRow key={ib.key} {...ib} />)}
+        {reqs && inbox.length === 0 && <div className="text-muted" style={{ fontSize: 14 }}>Nothing waiting.</div>}
+      </div>
+
+      <ThisWeek />
+
+      <div className="card" style={{ padding: '22px 26px', flexDirection: 'row', alignItems: 'center', gap: 22, flexWrap: 'wrap', background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', position: 'relative', overflow: 'hidden' }}>
         <div aria-hidden style={{ position: 'absolute', right: -70, top: -90, width: 260, height: 260, borderRadius: '50%', background: 'var(--color-accent-700)', opacity: 0.5 }} />
         <div aria-hidden style={{ position: 'absolute', right: 150, bottom: -60, width: 120, height: 120, borderRadius: '50%', background: 'var(--color-accent-2-700)', opacity: 0.5 }} />
         <div style={{ flex: 1, minWidth: 260, position: 'relative' }}>
@@ -94,37 +66,25 @@ export default function Home() {
           <Link className="btn btn-primary" to="/admin/apps?preset=assistant" style={{ background: 'var(--color-accent-2-600)' }}>Connect an assistant</Link>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,420px),1fr))', gap: 28, marginTop: 32 }}>
-        <div>
-          <h4>Recent activity</h4>
-          {audit?.items.map((a) => (
-            <div key={a._id} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'flex-start' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 7, flex: 'none', background: TONE[a.tone] }} />
-              <div style={{ flex: 1, fontSize: 14 }}>{a.text}</div>
-              <span className="text-muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{ago(a.at)}</span>
-            </div>
-          ))}
-          {node.publicViewsToday > 0 && (
-            <div style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'flex-start' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 7, flex: 'none', background: TONE.system }} />
-              <div style={{ flex: 1, fontSize: 14 }}>Public profile viewed {node.publicViewsToday} time{node.publicViewsToday === 1 ? '' : 's'}</div>
-              <span className="text-muted" style={{ fontSize: 12 }}>today</span>
-            </div>
-          )}
-          {audit && audit.items.length === 0 && <p className="text-muted" style={{ fontSize: 14 }}>Nothing yet.</p>}
-        </div>
-        <div>
-          <h4>Quick actions</h4>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-            <button className="btn btn-secondary" onClick={() => setModal('add')}>Add a contact</button>
-            <button className="btn btn-secondary" onClick={() => setModal('invite')}>Create invite link</button>
-            <Link className="btn btn-secondary" to="/admin/public">Edit public profile</Link>
-            <Link className="btn btn-secondary" to="/admin/apps?new=1">New API key</Link>
-            <button className="btn btn-secondary" onClick={backup}>Back up now</button>
+
+      <div style={{ marginTop: 14 }}>
+        <h4>Recent activity</h4>
+        {audit?.items.map((a) => (
+          <div key={a._id} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'flex-start' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 7, flex: 'none', background: TONE[a.tone] }} />
+            <div style={{ flex: 1, fontSize: 14 }}>{a.text}</div>
+            <span className="text-muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{ago(a.at)}</span>
           </div>
-        </div>
+        ))}
+        {node.publicViewsToday > 0 && (
+          <div style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--color-divider)', alignItems: 'flex-start' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', marginTop: 7, flex: 'none', background: TONE.system }} />
+            <div style={{ flex: 1, fontSize: 14 }}>Public profile viewed {node.publicViewsToday} time{node.publicViewsToday === 1 ? '' : 's'}</div>
+            <span className="text-muted" style={{ fontSize: 12 }}>today</span>
+          </div>
+        )}
+        {audit && audit.items.length === 0 && <p className="text-muted" style={{ fontSize: 14 }}>Nothing yet.</p>}
       </div>
-      {modal && <AddContact initialTab={modal === 'invite' ? 'invite' : 'person'} onClose={() => setModal(null)} onDone={(id) => { setModal(null); if (id) nav(`/admin/contacts/${id}`); }} />}
     </div>
   );
 }

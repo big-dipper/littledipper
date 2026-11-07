@@ -183,7 +183,8 @@ function HostingTab() {
   const rows: [string, string][] = [
     ['Provider', node.hosting.label],
     ...(node.hosting.region ? [['Region', node.hosting.region] as [string, string]] : []),
-    ...(tech ? [['Database', `${node.hosting.store} · ${node.hosting.documents} documents`], ['Version', node.version], ['Claimed', node.claimedAt ? longDate(node.claimedAt) : '—']] as [string, string][] : [['Stored', `${node.hosting.documents} records`]] as [string, string][]),
+    ['Version', node.version + (node.update.available ? ' · update ready' : '')],
+    ...(tech ? [['Database', `${node.hosting.store} · ${node.hosting.documents} documents`], ['Claimed', node.claimedAt ? longDate(node.claimedAt) : '—']] as [string, string][] : [['Stored', `${node.hosting.documents} records`]] as [string, string][]),
   ];
   return (
     <div style={{ display: 'grid', gap: 18 }}>
