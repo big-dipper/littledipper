@@ -25,6 +25,7 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
   const [extraOpen, setExtraOpen] = useState<boolean | null>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [peek, setPeek] = useState<string | null>(null);
   const grants = c.share;
   const dg = grants.categories || {};
 
@@ -167,11 +168,16 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
                           <Mono d={d} size={30} />
                           <div style={{ flex: 1, minWidth: 120 }}>
                             <div style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>{d.label}{d.sensitivity === 'secret' && <Lock style={{ color: 'var(--color-accent-700)' }} />}</div>
-                            <div className="text-muted" style={{ fontSize: 12 }}>{d.count ? `${d.count} entr${d.count === 1 ? 'y' : 'ies'}${d.dated && d.currentCount ? ` · ${d.currentCount} current` : ''}` : 'Nothing added yet'}</div>
+                            {d.count ? (
+                              <button type="button" className="bare text-muted" aria-expanded={peek === d.id} onClick={() => setPeek(peek === d.id ? null : d.id)} style={{ fontSize: 12, cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                                {`${d.count} entr${d.count === 1 ? 'y' : 'ies'}${d.dated && d.currentCount ? ` · ${d.currentCount} current` : ''}`} <span style={{ textDecoration: 'underline' }}>{peek === d.id ? 'Hide' : 'See them'}</span>
+                              </button>
+                            ) : <div className="text-muted" style={{ fontSize: 12 }}>Nothing added yet</div>}
                           </div>
                           <Pills value={lvl} size={12} onChange={(v) => setLevel(d, v)}
                             options={d.dated ? [['off', 'Off'], ['current', 'Current'], ['all', 'All']] : [['off', 'Off'], ['all', 'Shared']]} />
                         </div>
+                        {peek === d.id && <WhatGoes d={d} level={lvl} first={first} />}
                         {lvl !== 'off' && hasSecretParts(d) && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 0 40px', fontSize: 12 }}>
                             <Lock style={{ color: 'var(--color-accent-700)' }} />
@@ -189,6 +195,29 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
         })}
       </div>
       {confirm && <Confirm cfg={confirm} onClose={() => setConfirm(null)} />}
+    </div>
+  );
+}
+
+/**
+ * What's in a category, so Current and All mean something before you choose: each entry, marked current or past.
+ * Entries that the chosen level would send are in full colour; the rest are faded.
+ */
+function WhatGoes({ d, level, first }: { d: Domain; level: Level; first: string }) {
+  const { data } = useAsync(() => get<{ items: Rec[] }>(`/api/data/${d.id}`), [d.id]);
+  if (!data) return <div className="text-muted" style={{ fontSize: 12, margin: '8px 0 0 40px' }}>Loading…</div>;
+  const goes = (r: Rec) => level === 'all' || (level === 'current' && r.current);
+  const hint = level === 'off' ? (d.dated ? `Current sends the current ones; All sends past ones too.` : `Shared sends all of these.`)
+    : level === 'current' ? `${first} sees the current ones. Past ones stay with you.` : `${first} sees all of these.`;
+  return (
+    <div style={{ margin: '8px 0 0 40px', display: 'grid', gap: 4 }}>
+      {data.items.map((r) => (
+        <div key={r.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, opacity: level === 'off' || goes(r) ? 1 : 0.45 }}>
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+          {d.dated && <span className="text-muted" style={{ fontSize: 11, flex: 'none' }}>{r.current ? 'Current' : 'Past'}</span>}
+        </div>
+      ))}
+      <div className="text-muted" style={{ fontSize: 11.5, marginTop: 2 }}>{hint}</div>
     </div>
   );
 }
