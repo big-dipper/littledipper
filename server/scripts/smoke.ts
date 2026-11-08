@@ -509,6 +509,11 @@ async function main() {
     ok(true, 'secret domain needs confirmation');
     for (const id of ['online_accounts', 'tasks', 'notes']) await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { [id]: true }, confirm: true }, [400]);
     ok(true, 'online accounts, tasks and notes are never shared as a whole category');
+    const peek = await a.call('GET', `/api/parties/${cA.id}/preview/employment`);
+    const peekSecret = await a.call('GET', `/api/parties/${cA.id}/preview/employment?secret=1`);
+    const has = (p: any, key: string) => p.records.some((r: any) => r.fields.some((f: any) => f.key === key));
+    ok(peek.records.length > 0 && !has(peek, 'employeeId') && has(peekSecret, 'employeeId') && typeof peek.records[0].current === 'boolean', 'a category preview shows entries as sent, secret details only when included');
+    await a.call('GET', `/api/parties/${cA.id}/preview/notes`, undefined, [404]);
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     const sharedJobs = detB.sharedDomains.find((d: any) => d.domain === 'employment');
     ok(sharedJobs && sharedJobs.records.length === 1 && sharedJobs.records[0].title === 'Design lead at Alder Studio', 'B sees only the current job');

@@ -4,9 +4,9 @@
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { get, put, type PartyDetail as ContactDetail, type ProfileLine as Field } from '../../api';
+import { get, put, type PartyDetail as ContactDetail, type ProfileLine as Field, type SharedRecord } from '../../api';
 import { Confirm, Pills, Toggle, useAction, useAsync, type ConfirmCfg } from '../../ui';
-import { fetchCatalog, GROUPS, Lock, Mono, Select, type Domain, type Rec } from '../../life';
+import { EntryCard, fetchCatalog, fmtRange, GROUPS, Lock, Mono, Select, type CardField, type Domain, type Rec } from '../../life';
 
 type Grants = ContactDetail['share'];
 type DomainGrant = { scope: 'all' | 'current'; includeSecret: boolean };
@@ -177,7 +177,7 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
                           <Pills value={lvl} size={12} onChange={(v) => setLevel(d, v)}
                             options={d.dated ? [['off', 'Off'], ['current', 'Current'], ['all', 'All']] : [['off', 'Off'], ['all', 'Shared']]} />
                         </div>
-                        {peek === d.id && <WhatGoes d={d} level={lvl} first={first} />}
+                        {peek === d.id && <WhatGoes d={d} partyId={c.id} level={lvl} secret={!!dg[d.id]?.includeSecret} first={first} />}
                         {lvl !== 'off' && hasSecretParts(d) && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 0 40px', fontSize: 12 }}>
                             <Lock style={{ color: 'var(--color-accent-700)' }} />
@@ -200,27 +200,32 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
 }
 
 /**
- * What's in a category, so Current and All mean something before you choose: each entry, marked current or past.
- * Entries that the chosen level would send are in full colour; the rest are faded.
+ * What a category would send, before you choose: each entry as the person will see it, built by the same code as the
+ * real share, so secret details appear only once you include them. Entries the chosen level leaves out are faded;
+ * long categories show the first few and say how many more.
  */
-function WhatGoes({ d, level, first }: { d: Domain; level: Level; first: string }) {
-  const { data } = useAsync(() => get<{ items: Rec[] }>(`/api/data/${d.id}`), [d.id]);
+function WhatGoes({ d, partyId, level, secret, first }: { d: Domain; partyId: string; level: Level; secret: boolean; first: string }) {
+  const { data } = useAsync(() => get<{ records: SharedRecord[] }>(`/api/parties/${partyId}/preview/${d.id}${secret ? '?secret=1' : ''}`), [d.id, secret]);
   if (!data) return <div className="text-muted" style={{ fontSize: 12, margin: '8px 0 0 40px' }}>Loading…</div>;
-  const goes = (r: Rec) => level === 'all' || (level === 'current' && r.current);
-  const hint = level === 'off' ? (d.dated ? `Current sends the current ones; All sends past ones too.` : `Shared sends all of these.`)
+  const goes = (r: SharedRecord) => level === 'all' || (level === 'current' && r.current);
+  // What would be sent first, then the rest.
+  const recs = level === 'off' ? data.records : [...data.records.filter(goes), ...data.records.filter((r) => !goes(r))];
+  const hint = level === 'off' ? (d.dated ? 'Current sends the current ones; All sends past ones too.' : 'Shared sends all of these.')
     : level === 'current' ? `${first} sees the current ones. Past ones stay with you.` : `${first} sees all of these.`;
   return (
-    <div style={{ margin: '8px 0 0 40px', display: 'grid', gap: 4 }}>
-      {data.items.map((r) => (
-        <div key={r.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 13, opacity: level === 'off' || goes(r) ? 1 : 0.45 }}>
-          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
-          {d.dated && <span className="text-muted" style={{ fontSize: 11, flex: 'none' }}>{r.current ? 'Current' : 'Past'}</span>}
+    <div style={{ margin: '10px 0 0 40px', display: 'grid', gap: 8 }}>
+      <div className="text-muted" style={{ fontSize: 12 }}>{hint}</div>
+      {recs.slice(0, PEEK).map((r) => (
+        <div key={r.id} style={{ opacity: level === 'off' || goes(r) ? 1 : 0.45 }}>
+          <EntryCard theirs title={r.title} range={[fmtRange(r.validFrom, r.validTo), d.dated ? (r.current ? 'Current' : 'Past') : ''].filter(Boolean).join(' · ') || undefined}
+            fields={r.fields.map((f): CardField => ({ key: f.key, label: f.label, text: f.value, type: f.type, rows: f.rows, links: f.links }))} />
         </div>
       ))}
-      <div className="text-muted" style={{ fontSize: 11.5, marginTop: 2 }}>{hint}</div>
+      {recs.length > PEEK && <div className="text-muted" style={{ fontSize: 12 }}>and {recs.length - PEEK} more</div>}
     </div>
   );
 }
+const PEEK = 4;
 
 /** Entries shared one by one (just this residence, just this job), with a picker to add one. */
 function SingleEntries({ c, catalog, first, send, ask }: { c: ContactDetail; catalog: Domain[]; first: string; send: (body: object, msg?: string) => Promise<unknown>; ask: (cfg: ConfirmCfg | null) => void }) {

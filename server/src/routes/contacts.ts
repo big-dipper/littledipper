@@ -289,6 +289,25 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   /**
+   * One category as this person would receive it if you shared it whole, before you choose: every entry, shaped by the
+   * same code as the real share (secret details only with ?secret=1), each marked current or past. Nothing is sent.
+   */
+  app.get('/api/parties/:id/preview/:domain', async (req) => {
+    await requireOwner(req, 'parties:read');
+    const { id, domain } = req.params as { id: string; domain: string };
+    const c = await getContact(id);
+    const d = await getDomain(domain);
+    if (!d || d.oneAtATime) throw notFound('domain');
+    const { recordsOf, sortRecords } = await import('../domains/records.js');
+    const { shapeRecords, visibleTo } = await import('../domains/sharing.js');
+    const recs = sortRecords(d, await recordsOf(d.id));
+    // Links within the category stay links, as they would once it's shared.
+    const visible = await visibleTo(c._id);
+    for (const r of recs) visible.set(r._id, { d, r });
+    return { records: await shapeRecords(d, recs, (req.query as { secret?: string }).secret === '1', visible) };
+  });
+
+  /**
    * Change what a party gets. Body: { basic?: boolean, lines?: { [key]: boolean },
    * categories?: { [domain]: false | true | { scope?: 'all'|'current', includeSecret?: boolean } },
    * entries?: { [recordId]: false | true | { includeSecret?: boolean } }, confirm?: boolean }.
