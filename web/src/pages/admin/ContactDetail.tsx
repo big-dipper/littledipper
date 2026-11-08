@@ -139,12 +139,13 @@ export default function ContactDetail() {
           {/* One column, top to bottom, like Home: what they see, how you know them, their details, what they share, then the rest. */}
           <div style={{ display: 'grid', gap: 22, marginTop: 22 }}>
             <div style={{ display: 'grid', gap: 22 }}>
-              {catalog && <HowYouKnow partyId={c.id} first={first} catalog={catalog} />}
+              {catalog && <HowYouKnow partyId={c.id} first={first} catalog={catalog} notes={isNode ? { text: c.notes, save: (notes) => run(() => patch(`/api/parties/${c.id}`, { notes }), 'Saved').then(reload) } : undefined} />}
               {/* One contact card: what they share (kept up to date by them), plus anything you added yourself. */}
               <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="card-kicker">Contact info</div>
-                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, birthDate: c.birthDate ?? '', notes: c.notes, methods: c.methods.length ? c.methods : [{ kind: 'email', value: '' }] })}>{isNode ? 'Add a detail' : 'Edit'}</button>
+                  {/* A connected person's card is what they share. Details you added before connecting stay editable. */}
+                  {(!isNode || c.methods.length > 0) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, birthDate: c.birthDate ?? '', notes: c.notes, methods: c.methods.length ? c.methods : [{ kind: 'email', value: '' }] })}>Edit</button>}
                 </div>
                 {isNode && c.sharedIn.map((m) => (
                   <Row key={m.key} label={m.label} value={m.key === 'little_dipper' ? m.value.split(' · ')[0] : m.value} />
@@ -159,7 +160,7 @@ export default function ContactDetail() {
                     {s === 'active' && <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} disabled={busy} onClick={() => run(() => get<CD>(`/api/parties/${c.id}?sync=1`)).then((x) => x && setData(x))}>Refresh</button>}
                   </div>
                 )}
-                {c.notes && <p className="text-muted" style={{ fontSize: 13, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
+                {!isNode && c.notes && <p className="text-muted" style={{ fontSize: 13, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
               </div>
 
               {isNode && catalog && <SharedWithYou domains={c.sharedDomains || []} catalog={catalog} first={first} />}
@@ -297,7 +298,7 @@ function AsTheySee({ partyId, first, catalog, onClose }: { partyId: string; firs
  * "How you know Theo": your relationships with this person (spouse, reference, landlord…). They're entries in the
  * Relationships category, dated and sensitive like any other, shown here on the person rather than in My data.
  */
-function HowYouKnow({ partyId, first, catalog }: { partyId: string; first: string; catalog: Awaited<ReturnType<typeof fetchCatalog>> }) {
+function HowYouKnow({ partyId, first, catalog, notes }: { partyId: string; first: string; catalog: Awaited<ReturnType<typeof fetchCatalog>>; notes?: { text: string; save: (t: string) => Promise<unknown> } }) {
   const d = catalog.find((x) => x.id === 'relationships');
   const { data, reload } = useAsync(() => get<{ items: Rec[] }>('/api/data/relationships'), []);
   const contacts = useContactsLite();
@@ -319,7 +320,31 @@ function HowYouKnow({ partyId, first, catalog }: { partyId: string; first: strin
         </button>
       ))}
       {data && !mine.length && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>Spouse, family, a reference, a mentor… Add how you know {first} if it helps.</div>}
+      {notes && <YourNotes first={first} {...notes} />}
       {editing && <RecordEditor d={d} rec={editing.rec} contacts={contacts} defaults={{ party: partyId }} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+    </div>
+  );
+}
+
+/** What you remember about someone, in your words. Only you see it; it's never shared. */
+function YourNotes({ first, text, save }: { first: string; text: string; save: (t: string) => Promise<unknown> }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  if (draft !== null) return (
+    <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+      <textarea className="input" autoFocus aria-label={`Your notes about ${first}`} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`Where you met, birthdays, what ${first} likes…`} style={{ borderRadius: 20, minHeight: 90 }} />
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+        <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setDraft(null)}>Cancel</button>
+        <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => save(draft.trim()).then(() => setDraft(null))}>Save</button>
+      </div>
+    </div>
+  );
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+        <span className="text-muted" style={{ fontSize: 12 }}>Your notes · only you see these</span>
+        <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setDraft(text)}>{text ? 'Edit' : 'Add a note'}</button>
+      </div>
+      {text && <p style={{ fontSize: 14, margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{text}</p>}
     </div>
   );
 }
