@@ -77,6 +77,8 @@ export type DomainDef = {
   single?: boolean;
   /** Shown somewhere other than My data: on each person's page (relationships) or in the action bar (tasks). Still records. */
   livesOn?: 'party' | 'actions';
+  /** Shared one entry at a time, never as a whole live category: too revealing together (online accounts) or not a thing to share (tasks, notes). */
+  oneAtATime?: boolean;
   /** Related entries and documents this category invites, e.g. a vehicle invites its title, insurance and loan. Never required. */
   companions?: { domain?: string; document?: string; label: string; when?: { part: string; in: string[] } }[];
   parts: PartDef[];

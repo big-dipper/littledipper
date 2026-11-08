@@ -507,6 +507,8 @@ async function main() {
     await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { employment: { scope: 'current' } } });
     await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { ids: true } }, [409]);
     ok(true, 'secret domain needs confirmation');
+    for (const id of ['online_accounts', 'tasks', 'notes']) await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { [id]: true }, confirm: true }, [400]);
+    ok(true, 'online accounts, tasks and notes are never shared as a whole category');
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     const sharedJobs = detB.sharedDomains.find((d: any) => d.domain === 'employment');
     ok(sharedJobs && sharedJobs.records.length === 1 && sharedJobs.records[0].title === 'Design lead at Alder Studio', 'B sees only the current job');

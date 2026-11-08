@@ -53,7 +53,11 @@ export type WhatTheyGet = { basic: boolean; lines: string[]; categories: Record<
 export async function whatTheyGet(partyId: string): Promise<WhatTheyGet> {
   const s = await liveShareFor(partyId);
   if (!s) return { basic: false, lines: [], categories: {}, entries: [] };
-  return { basic: s.basic, lines: s.lines, categories: Object.fromEntries(s.categories.map((c) => [c.domain, c])), entries: s.entries };
+  // A category granted whole before it became one-at-a-time is no longer sent.
+  const { getDomain } = await import('./domains/records.js');
+  const whole = [];
+  for (const c of s.categories) if (!(await getDomain(c.domain))?.oneAtATime) whole.push(c);
+  return { basic: s.basic, lines: s.lines, categories: Object.fromEntries(whole.map((c) => [c.domain, c])), entries: s.entries };
 }
 
 /** Single entries as people read them: id, title and category, for the owner's screens. */

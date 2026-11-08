@@ -171,7 +171,7 @@ const DEFS: Def[] = [
   {
     // A task for you, or one you ask of someone. Asked of a connected Little Dipper, it travels as a message: they
     // accept or say not now, and tell you when it's done. The system parts are that conversation's state.
-    id: 'tasks', label: 'Tasks', noun: 'task', group: 'life', sensitivity: 'sensitive', dated: false, publicable: false, livesOn: 'actions', sortBy: 'due',
+    id: 'tasks', oneAtATime: true, label: 'Tasks', noun: 'task', group: 'life', sensitivity: 'sensitive', dated: false, publicable: false, livesOn: 'actions', sortBy: 'due',
     description: 'Things to do: yours, and ones you ask of people you’re connected with.',
     title: '{title}',
     parts: [
@@ -560,7 +560,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'online_accounts', label: 'Online accounts', noun: 'account', group: 'things', sensitivity: 'sensitive', dated: true, publicable: false,
+    id: 'online_accounts', oneAtATime: true, label: 'Online accounts', noun: 'account', group: 'things', sensitivity: 'sensitive', dated: true, publicable: false,
     description: 'Which services you use, under what username and with which email or phone. Never passwords.',
     title: '{service} · {username}',
     parts: [
@@ -574,7 +574,7 @@ const DEFS: Def[] = [
   // ── personal ─────────────────────────────────────────────────────────
   {
     // Anything worth remembering, in your own words: the action bar's third kind of thing to add.
-    id: 'notes', label: 'Notes', noun: 'note', group: 'personal', sensitivity: 'sensitive', dated: false, publicable: false,
+    id: 'notes', oneAtATime: true, label: 'Notes', noun: 'note', group: 'personal', sensitivity: 'sensitive', dated: false, publicable: false,
     description: 'Anything you want to remember, in your own words.',
     title: '{text}',
     parts: [{ key: 'text', label: 'Note', type: 'longtext', required: true }],

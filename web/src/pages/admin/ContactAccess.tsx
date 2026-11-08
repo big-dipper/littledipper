@@ -145,7 +145,7 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
         <SingleEntries c={c} catalog={catalog ?? []} first={first} send={send} ask={setConfirm} />
         <SubHead>Whole categories</SubHead>
         {!catalog ? <div className="text-muted" style={{ fontSize: 13 }}>Loading…</div> : GROUPS.map((g) => {
-          const list = catalog.filter((d) => d.group === g.id);
+          const list = catalog.filter((d) => d.group === g.id && !d.oneAtATime);
           if (!list.length) return null;
           const on = list.filter((d) => dg[d.id]).length;
           const open = openGroups[g.id] ?? on > 0;

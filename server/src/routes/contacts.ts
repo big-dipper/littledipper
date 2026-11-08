@@ -46,6 +46,7 @@ async function applyShare(partyId: string, b: ShareInput): Promise<string[]> {
     const d = await getDomain(id);
     if (!d) throw bad('unknown_domain', id);
     if (!v) { delete categories[id]; changes.push(`${d.label} unshared`); continue; }
+    if (d.oneAtATime) throw bad('one_at_a_time', `${d.label} can only be shared one entry at a time`);
     const g = v === true ? {} : v;
     const scope = g.scope === 'current' ? 'current' : 'all';
     const includeSecret = !!g.includeSecret;
