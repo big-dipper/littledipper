@@ -128,7 +128,7 @@ await add('contact_methods', { kind: 'messaging', service: 'Signal', value: 'may
 
 // Maya's public page: a card, then her details, ways to reach her and her work, each folded to a line.
 await call('PUT', '/api/public-profile', {
-  headline: 'Designer and ceramicist in Portland, OR',
+  headline: 'Designer and ceramicist',
   fieldKeys: ['legal_name', 'born', 'citizenship', 'marital_status', 'lives_in'],
   sections: [
     { type: 'about', text: 'I make furniture and lighting that lasts. Happy to talk about craft, production, or clay.' },

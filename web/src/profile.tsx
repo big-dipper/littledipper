@@ -60,7 +60,11 @@ export function ProfileView({ p, compact, actions }: { p: ProfileViewData; compa
   const [viewing, setViewing] = useState<Page[] | null>(null);
   const h = compact ? { name: 24, head: 13, body: 13, photo: 60, pad: '18px 20px', fold: 30 } : { name: 34, head: 16, body: 15, photo: 84, pad: '26px 28px', fold: 36 };
   const about = p.sections.filter((s): s is Extract<ViewSection, { type: 'about' }> => s.type === 'about');
-  const folds = p.sections.filter((s): s is Exclude<ViewSection, { type: 'about' }> => s.type !== 'about' && (s.type !== 'details' || s.fields.length > 0));
+  // Where you live reads best beside your name, so it moves out of the details into the card.
+  const livesIn = p.sections.flatMap((s) => (s.type === 'details' ? s.fields : [])).find((f) => f.key === 'lives_in')?.value;
+  const folds = p.sections
+    .map((s) => (s.type === 'details' ? { ...s, fields: s.fields.filter((f) => f.key !== 'lives_in') } : s))
+    .filter((s): s is Exclude<ViewSection, { type: 'about' }> => s.type !== 'about' && (s.type !== 'details' || s.fields.length > 0));
 
   return (
     <div className={`pp${compact ? ' pp-compact' : ''}`} style={{ display: 'grid', gap: compact ? 10 : 14, maxWidth: 640 }}>
@@ -70,6 +74,7 @@ export function ProfileView({ p, compact, actions }: { p: ProfileViewData; compa
           <div style={{ minWidth: 0 }}>
             <h1 style={{ fontSize: h.name, margin: 0, lineHeight: 1.05 }}>{p.displayName}</h1>
             {p.headline && <p style={{ fontSize: h.head, margin: '4px 0 0', textWrap: 'pretty' }}>{p.headline}</p>}
+            {livesIn && <p className="text-muted" style={{ fontSize: h.head - 2, margin: '4px 0 0', display: 'flex', gap: 5, alignItems: 'center' }}><ContactIcon kind="postal" size={h.head - 2} />{livesIn}</p>}
           </div>
         </div>
         {about.map((s, i) => <p key={i} style={{ fontSize: h.body, lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: 0, maxWidth: '58ch', textWrap: 'pretty' }}>{s.text}</p>)}
