@@ -92,7 +92,7 @@ export function ShareChooser({ data, first, choice, onChange, requested = [], re
           {asked.map((item) => <Tick key={item} on={choice.extras.includes(item)} label={itemLabel(item, data)} value={valueOf(item, data)} onChange={() => toggle(item)} />)}
         </div>
       )}
-      <div className="text-muted" style={{ fontSize: 13 }}>Once you’re connected, you can add or remove anything here, one thing at a time.</div>
+      <div className="text-muted" style={{ fontSize: 13 }}>You can change what {first} sees any time after you connect.</div>
     </div>
   );
 }
