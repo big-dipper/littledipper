@@ -15,7 +15,7 @@ type Page = FileRef & { url: string };
 export type ViewSection =
   | { type: 'details'; fields: Field[] }
   | { type: 'about'; text: string }
-  | { type: 'domain'; domain: string; title: string; dated: boolean; group: string; noun: string; items: Item[] }
+  | { type: 'domain'; domain: string; title: string; dated: boolean; group?: string; noun?: string; items: Item[] }
   | { type: 'resume'; title: string; document: { title: string; updatedAt: string; pages: Page[] } };
 export type ProfileViewData = { displayName: string; headline: string; avatarUrl: string | null; sections: ViewSection[] };
 
@@ -40,7 +40,7 @@ function sectionSummary(s: Exclude<ViewSection, { type: 'about' }>) {
   if (s.type === 'details') return detailsSummary(s.fields);
   if (s.type === 'resume') return `${s.document.pages.length > 1 ? `${s.document.pages.length} pages · ` : ''}Updated ${monthYear(s.document.updatedAt)}`;
   if (s.items.every((it) => it.contact)) return [...new Set(s.items.map((it) => it.contact!.label))].join(' · ');
-  return s.items.length > 1 ? `${s.items[0].title} · ${plural(s.items.length, s.noun)}` : s.items[0].title;
+  return s.items.length > 1 ? `${s.items[0].title} · ${plural(s.items.length, s.noun ?? 'entry')}` : s.items[0].title;
 }
 
 const ICONS: Record<string, ReactNode> = {
@@ -79,7 +79,7 @@ export function ProfileView({ p, compact, actions }: { p: ProfileViewData; compa
       {folds.map((s, i) => (
         <details key={i} className="card pp-fold">
           <summary>
-            <Mono d={{ label: s.type === 'details' ? 'Personal details' : s.title, group: s.type === 'domain' ? s.group : s.type === 'details' ? 'identity' : 'work' }} size={h.fold} />
+            <Mono d={{ label: s.type === 'details' ? 'Personal details' : s.title, group: s.type === 'domain' ? s.group ?? 'work' : s.type === 'details' ? 'identity' : 'work' }} size={h.fold} />
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: 'block', fontWeight: 600, fontSize: compact ? 13 : 15 }}>{s.type === 'details' ? 'Personal details' : s.title}</span>
               <span className="text-muted" style={{ display: 'block', fontSize: compact ? 11 : 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sectionSummary(s)}</span>
