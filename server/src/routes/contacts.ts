@@ -328,10 +328,11 @@ export default async function contactRoutes(app: FastifyInstance) {
   app.post('/api/parties/:id/invite', async (req) => {
     await requireOwner(req, 'parties:write');
     const c = await getContact((req.params as { id: string }).id);
-    const inv = await createInvite('7d', []);
+    // Setting up a Little Dipper takes a while, so an invite to a person lasts a month. It still works once.
+    const inv = await createInvite('30d', []);
     const n = await getNode();
     const email = String(c.methods.find((m) => m.kind === 'email' && m.primary)?.value ?? c.methods.find((m) => m.kind === 'email')?.value ?? '');
-    const body = `Hi ${firstName(c.name)},\n\nI keep my contact details on Little Dipper, a personal data store I run myself. If you set one up too, open this link in it and we'll be connected:\n\n${inv.url}\n\nDon't have one yet? It's free and open source.\n\n${await ownerName()}`;
+    const body = `Hi ${firstName(c.name)},\n\nI keep my contact details on Little Dipper, a private place for your own information. I'd like us to be connected there. This link explains it and works for the next 30 days:\n\n${inv.url}\n\n${await ownerName()}`;
     return { ...inv, to: email, subject: 'Connect with me on Little Dipper', body, address: displayAddr(canonicalUrl(n)) };
   });
 

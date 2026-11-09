@@ -39,7 +39,9 @@ export default async function miscRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get('/public/invites/:token', async (req) => {
+  app.get('/public/invites/:token', async (req, reply) => {
+    // Open to any site: Big Dipper's Get Started shows who invited you while you set up.
+    reply.header('access-control-allow-origin', '*');
     const { token } = req.params as { token: string };
     const [id, secret] = token.split('.');
     const inv = await ctx.store.get<InviteDoc>('invites', id || '');

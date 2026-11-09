@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { copy, firstName, initials, post } from '../../api';
 import { AskChooser, ShareChooser, toShare, useSharing, type Choice, type Relation } from '../../sharing';
 import { Dialog, Pills, QR, Striped, Toggle, useAction, useAsync, useToast } from '../../ui';
@@ -7,13 +7,13 @@ import { useAdmin } from './Layout';
 type Tab = 'person' | 'node' | 'invite';
 type Lookup = { nodeId: string; displayName: string | null; address: string; version: string; signingKey: string; viaInvite: boolean; acceptsRequests: boolean; existing: { contactId: string; status: string } | null };
 
-export default function AddContact({ initialTab = 'person', onClose, onDone }: { initialTab?: Tab; onClose: () => void; onDone: (contactId?: string) => void }) {
+export default function AddContact({ initialTab = 'person', initialAddress, onClose, onDone }: { initialTab?: Tab; initialAddress?: string; onClose: () => void; onDone: (contactId?: string) => void }) {
   const { tech } = useAdmin();
   const toast = useToast();
   const { run, busy } = useAction();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [person, setPerson] = useState<{ type: 'person' | 'organisation'; name: string; email: string; phone: string }>({ type: 'person', name: '', email: '', phone: '' });
-  const [nodeUrl, setNodeUrl] = useState('');
+  const [nodeUrl, setNodeUrl] = useState(initialAddress ?? '');
   const [found, setFound] = useState<Lookup | null>(null);
   const [lookupError, setLookupError] = useState('');
   const sharing = useSharing();
@@ -21,7 +21,7 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
   const [relation, setRelation] = useState<Relation | ''>('');
   const [asks, setAsks] = useState<string[]>([]);
   const [note, setNote] = useState('');
-  const [exp, setExp] = useState<'24h' | '7d' | '30d'>('7d');
+  const [exp, setExp] = useState<'24h' | '7d' | '30d'>('30d');
   const [invite, setInvite] = useState<{ url: string; expiresAt: string } | null>(null);
   const name = found?.displayName || found?.address || '';
 
@@ -34,6 +34,8 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
       setLookupError((e as Error).message);
     }
   };
+  // Opened with an invite already in hand: find them straight away.
+  useEffect(() => { if (initialAddress) lookup(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const savePerson = async () => {
     if (!person.name.trim()) return toast('Add a name first');

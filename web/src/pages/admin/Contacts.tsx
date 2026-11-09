@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ago, displayMethod, get, initials, post, STATUS, type Party as Contact } from '../../api';
 import { ErrorNote, Loading, Pills, useAction, useAsync } from '../../ui';
 import { useAdmin } from './Layout';
@@ -22,7 +22,10 @@ export default function Contacts() {
   const { run } = useAction();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<'all' | 'node' | 'person' | 'organisation'>('all');
-  const [modal, setModal] = useState<null | 'person' | 'invite'>(null);
+  // ?connect=<invite or address>: someone's invite, opened from their page or after setup, ready to send.
+  const [params, setParams] = useSearchParams();
+  const [connect] = useState(() => params.get('connect') || '');
+  const [modal, setModal] = useState<null | 'person' | 'node' | 'invite'>(connect ? 'node' : null);
   const { data, error, reload } = useAsync(() => get<{ items: Contact[] }>('/api/parties'), []);
   // How you know each person (spouse, reference…), from the Relationships entries that point to them.
   const { data: rels } = useAsync(async () => {
@@ -106,7 +109,7 @@ export default function Contacts() {
           </table>
         </div>
       )}
-      {modal && <AddContact initialTab={modal} onClose={() => setModal(null)} onDone={(id) => { setModal(null); reload(); if (id) nav(`/admin/relationships/${id}`); }} />}
+      {modal && <AddContact initialTab={modal} initialAddress={modal === 'node' ? connect : undefined} onClose={() => { setModal(null); if (params.has('connect')) setParams({}, { replace: true }); }} onDone={(id) => { setModal(null); reload(); if (id) nav(`/admin/relationships/${id}`); }} />}
     </div>
   );
 }

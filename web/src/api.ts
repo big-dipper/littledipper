@@ -19,6 +19,11 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
   return data as T;
 }
 
+/** Big Dipper: where people get their own Little Dipper. */
+export const BIG_DIPPER = import.meta.env.VITE_BIG_DIPPER_URL || 'https://bigdipper.onrender.com';
+/** An invite someone opened before they had a Little Dipper, kept in this browser until setup is done. */
+export const PENDING_INVITE = 'ld.pendingInvite';
+
 export const get = <T = any>(p: string) => api<T>('GET', p);
 export const post = <T = any>(p: string, b: unknown = {}) => api<T>('POST', p, b);
 export const put = <T = any>(p: string, b: unknown) => api<T>('PUT', p, b);

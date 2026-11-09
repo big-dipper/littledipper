@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { startRegistration } from '@simplewebauthn/browser';
-import { addr, get, post, saveFile } from '../api';
+import { addr, BIG_DIPPER, get, PENDING_INVITE, post, saveFile } from '../api';
 import { Brand, Circle, Loading, Pills, useToast } from '../ui';
 import RestoreFromBackup from './Restore';
 
@@ -9,7 +9,6 @@ type Status = { claimed: boolean; version: string; address: string; hosting: { l
 type HostTab = 'railway' | 'render' | 'docker' | 'vps' | 'home';
 
 /** Where the one-click setup starts. It holds the claim code it made, in the owner's browser. */
-const BIG_DIPPER = import.meta.env.VITE_BIG_DIPPER_URL || 'https://bigdipper.onrender.com';
 
 const HOST: Record<HostTab, { label: string; text: string; cmd: string; out: (a: string) => string; note: string }> = {
   railway: { label: 'Railway', text: 'Your claim code was made when you deployed. Only someone signed in to your Railway account can see it, so it proves the server is yours. It works until you claim.', cmd: 'Railway → your Little Dipper → Variables → LD_CLAIM_TOKEN', out: () => 'Copy the value (click the eye to reveal it) and paste it below', note: 'Started from Big Dipper in another browser? Use this code instead.' },
@@ -40,6 +39,12 @@ function StepPills({ step }: { step: number }) {
 export default function Setup() {
   const [params] = useSearchParams();
   const token = params.get('token');
+  // Someone invited you before you had a Little Dipper: Big Dipper brought the invite along. Keep it until you're in.
+  const [invite] = useState(() => {
+    const v = params.get('invite');
+    if (v && /^https?:\/\/[^\s]+\/connect\?invite=/.test(v)) localStorage.setItem(PENDING_INVITE, v);
+    return localStorage.getItem(PENDING_INVITE);
+  });
   const nav = useNavigate();
   const toast = useToast();
   const [status, setStatus] = useState<Status | null>(null);
@@ -255,7 +260,12 @@ export default function Setup() {
                 <div key={d} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 15 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--color-accent-2)', flex: 'none' }} />{d}</div>
               ))}
             </div>
-            <button className="btn btn-primary" onClick={() => nav('/admin', { replace: true })} style={{ fontSize: 16, padding: '12px 26px' }}>Open my dashboard</button>
+            {invite ? (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button className="btn btn-primary" onClick={() => { localStorage.removeItem(PENDING_INVITE); nav(`/admin/relationships?connect=${encodeURIComponent(invite)}`, { replace: true }); }} style={{ fontSize: 16, padding: '12px 26px' }}>Connect with the person who invited you</button>
+                <button className="btn btn-ghost" onClick={() => nav('/admin', { replace: true })}>Later</button>
+              </div>
+            ) : <button className="btn btn-primary" onClick={() => nav('/admin', { replace: true })} style={{ fontSize: 16, padding: '12px 26px' }}>Open my dashboard</button>}
           </>
         )}
       </div>

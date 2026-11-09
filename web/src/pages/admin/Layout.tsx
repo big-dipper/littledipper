@@ -81,7 +81,8 @@ export default function AdminLayout() {
     return () => clearInterval(t);
   }, []);
 
-  if (authError) return <Navigate to="/login" replace />;
+  // Back to where you were going once you've signed in (an invite opened from someone's page, say).
+  if (authError) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
   if (!owner || !node) return <div style={{ padding: 48 }}><Loading /></div>;
 
   const tech = owner.prefs.showTechnical;
