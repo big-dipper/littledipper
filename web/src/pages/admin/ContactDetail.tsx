@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, put, SENS, shortDate, STATUS, type ContactMethod, type PartyDetail as CD, type ProfileLine as Field, type SharedDomain } from '../../api';
-import { Confirm, Dialog, ErrorNote, Loading, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
+import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, shortDate, STATUS, type ContactMethod, type PartyDetail as CD, type ProfileLine as Field, type SharedDomain } from '../../api';
+import { Confirm, Dialog, ErrorNote, Loading, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
 import { fetchCatalog, fmtRange, PartialDate, RecordEditor, Select, useContactsLite, type Rec } from '../../life';
 import { CopyList, SendCopy } from './Copies';
 import SharedWithYou from './SharedWithYou';
-import { giveList, itemLabel, ShareChooser, toShare, useSharing, type Choice, type Relation, type SharingData } from '../../sharing';
+import { giveList, ShareChooser, toShare, useSharing, type Choice, type Relation, type SharingData } from '../../sharing';
 
 export default function ContactDetail() {
   const { id = '' } = useParams();
@@ -25,8 +25,6 @@ export default function ContactDetail() {
   const sharing = useSharing();
   const [choice, setChoice] = useState<Choice>({ extras: [] });
   const [relation, setRelation] = useState<Relation | ''>('');
-  const [changing, setChanging] = useState(false);
-  const [weeds, setWeeds] = useState(false);
   const [preview, setPreview] = useState(false);
 
   if (error) return <div><Link className="btn btn-ghost" to="/admin/relationships">← Relationships</Link><ErrorNote error={error} /></div>;
@@ -110,31 +108,9 @@ export default function ContactDetail() {
             </div>
           )}
 
-          {/* What they see: first, under their name, at any width. */}
-          {isNode && s === 'active' && sharing && (
-            <div className="card" style={{ padding: '20px 24px', gap: 12, marginTop: 22 }}>
-              <div className="card-kicker">What {first} sees</div>
-              <div style={{ fontSize: 16 }}>{seesSentence(c, sharing)}</div>
-              {c.asked.length > 0 && <div className="text-muted" style={{ fontSize: 13 }}>You asked {first} for {c.asked.map((x) => `${x.label.toLowerCase()} (${x.shared ? 'shared' : 'not shared'})`).join(', ')}.</div>}
-              {!changing ? (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-secondary" onClick={() => { setChoice({ extras: currentExtras(c) }); setChanging(true); }}>Change</button>
-                  <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setPreview(true)}>See it as {first} does</button>
-                  <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setWeeds(!weeds)}>{weeds ? 'Fewer options' : 'More options'}</button>
-                </div>
-              ) : (
-                <>
-                  <ShareChooser data={sharing} first={first} choice={choice} onChange={setChoice} relation={relation} onRelation={setRelation} showBasic={false} />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-primary" disabled={busy} onClick={async () => { if (await saveChoice(c, choice, run, put)) { setChanging(false); reload(); } }}>Save</button>
-                    <button className="btn btn-ghost" onClick={() => setChanging(false)}>Cancel</button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          {/* What they see: first, under their name, at any width. One editor; every change a specific one. */}
+          {isNode && s === 'active' && <ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} onPreview={() => setPreview(true)} />}
           {preview && catalog && <AsTheySee partyId={c.id} first={first} catalog={catalog} onClose={() => setPreview(false)} />}
-          {isNode && s === 'active' && weeds && <div style={{ marginTop: 18 }}><ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} /></div>}
 
           {/* One column, top to bottom, like Home: what they see, how you know them, their details, what they share, then the rest. */}
           <div style={{ display: 'grid', gap: 22, marginTop: 22 }}>
@@ -241,25 +217,6 @@ const STRING_KINDS: ContactMethod['kind'][] = ['email', 'phone', 'website', 'soc
 function saveContact(id: string, e: Edit) {
   const methods = e.methods.filter((m) => typeof m.value === 'object' || m.value.trim());
   return patch(`/api/parties/${id}`, { name: e.name, type: e.type, notes: e.notes, methods, ...(e.type === 'person' ? { birthDate: e.birthDate || null } : {}) });
-}
-
-/** The extras a party gets now, as chooser items: profile lines and whole categories (single entries stay in More options). */
-const currentExtras = (c: CD) => [...c.share.lines, ...Object.values(c.share.categories).map((g) => `category:${g.domain}:${g.scope}`)];
-
-/** "Theo sees your basic profile, your mobile and your home address." */
-function seesSentence(c: CD, data: SharingData) {
-  if (!c.share.basic && !currentExtras(c).length && !c.share.entries.length) return 'Nothing yet.';
-  const parts = [c.share.basic ? 'your basic profile' : null, ...currentExtras(c).map((x) => itemLabel(x, data).replace(/^Your /, 'your ').replace(/^All your /, 'all your ')), c.share.entries.length ? `${c.share.entries.length} single entr${c.share.entries.length === 1 ? 'y' : 'ies'}` : null].filter(Boolean) as string[];
-  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0];
-  return `${firstName(c.name)} sees ${list}.`;
-}
-
-/** Save a "Change": the extras become exactly what's ticked (lines and categories); single entries are untouched. */
-async function saveChoice(c: CD, choice: Choice, run: ReturnType<typeof useAction>['run'], putFn: typeof put) {
-  const want = toShare(choice);
-  const lines = Object.fromEntries([...new Set([...c.share.lines, ...want.lines])].map((k) => [k, want.lines.includes(k)]));
-  const cats = Object.fromEntries([...new Set([...Object.keys(c.share.categories), ...Object.keys(want.categories)])].map((d) => [d, want.categories[d] ?? false]));
-  return run(() => putFn(`/api/parties/${c.id}/share`, { basic: true, lines, categories: cats }), 'Saved');
 }
 
 /** Their side of the exchange, in words: "Where they live", not "Their lives in". */
