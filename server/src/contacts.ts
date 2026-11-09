@@ -60,7 +60,7 @@ export async function partyOut(c: PartyDoc, opts: { detail?: boolean } = {}) {
     sharedDomains: c.sharedDomains || [],
     sharedInFetchedAt: c.sharedInFetchedAt,
     request: req ? {
-      id: req._id, direction: req.direction, note: req.note, quiet: req.quiet, viaInvite: !!req.inviteId, expiresAt: req.expiresAt,
+      id: req._id, direction: req.direction, note: req.note, viaInvite: !!req.inviteId, expiresAt: req.expiresAt,
       requestedFields: req.requestedFields, offeredLabels: req.offeredLabels, offeredDetails: req.offeredDetails ?? [],
     } : null,
     // What you asked them for when you connected, and whether they shared it ("Not shared" is never "declined").

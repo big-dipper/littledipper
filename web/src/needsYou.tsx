@@ -22,7 +22,7 @@ export function useNeedsYou(): { items: NeedsYouItem[] | null } {
   const { run } = useAction();
   const device = useDeviceBackup(refresh);
   const { data } = useAsync(() => Promise.all([
-    get<{ items: { _id: string; contactId: string; fromNode: string; peerName: string; quiet: boolean }[] }>('/api/federation/requests?status=pending&direction=in'),
+    get<{ items: { _id: string; contactId: string; fromNode: string; peerName: string }[] }>('/api/federation/requests?status=pending&direction=in'),
     get<{ items: TaskAsk[] }>('/api/tasks/requests'),
     get<{ items: { id: string; by: string; keyId: string }[] }>('/api/reviews'),
     get<{ items: Attention[] }>('/api/attention?days=90'),
@@ -33,7 +33,7 @@ export function useNeedsYou(): { items: NeedsYouItem[] | null } {
   const answer = (a: TaskAsk, ans: 'accepted' | 'not_now') => run(() => post(`/api/tasks/requests/${a.messageId}`, { answer: ans }), ans === 'accepted' ? 'Added to your tasks' : `${a.party.name.split(' ')[0]} will see you can’t take this one`).then(refresh);
 
   const items: NeedsYouItem[] = [
-    ...reqs.items.filter((r) => !r.quiet).map((r) => ({
+    ...reqs.items.map((r) => ({
       key: r._id, initials: initials(r.peerName), title: `${r.peerName} wants to connect`, sub: r.fromNode, actions: [{ label: 'Review', go: () => nav(`/admin/relationships/${r.contactId}`) }],
     })),
     // Someone asked you to do something: answer here; it shows in your conversation with them either way.

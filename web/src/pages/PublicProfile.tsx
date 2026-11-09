@@ -4,7 +4,7 @@ import { addr, copy, get } from '../api';
 import { Circle, Dialog, ErrorNote, Loading, useAsync, useToast } from '../ui';
 import { ProfileView, type ProfileViewData } from '../profile';
 
-type Profile = ProfileViewData & { connectRequests: 'off' | 'fof' | 'anyone'; address: string; ownerFirstName: string };
+type Profile = ProfileViewData & { connectRequests: 'off' | 'anyone'; address: string; ownerFirstName: string };
 
 export default function PublicProfile() {
   const toast = useToast();

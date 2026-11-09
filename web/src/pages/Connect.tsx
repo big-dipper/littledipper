@@ -19,7 +19,7 @@ export default function Connect() {
           <>
             <span className="tag tag-accent-2">Invite</span>
             <h1 style={{ marginTop: 14, textWrap: 'pretty' }}>{data.displayName} invited you to connect.</h1>
-            <p style={{ fontSize: 17 }}>Open your own Little Dipper, choose <strong>Add contact → On Little Dipper</strong>, and paste this link. {data.displayName?.split(' ')[0]} will see your request and choose what to share.</p>
+            <p style={{ fontSize: 17 }}>Open your own Little Dipper, go to <strong>Relationships → Add someone → On Little Dipper</strong>, and paste this link. {data.displayName?.split(' ')[0]} will see your request and choose what to share.</p>
             <div className="mono" style={{ fontSize: 12, background: 'var(--color-neutral-100)', borderRadius: 16, padding: '10px 14px', overflowWrap: 'anywhere', margin: '18px 0' }}>{link}</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               <button className="btn btn-primary" onClick={async () => { await copy(link); toast('Invite link copied'); }}>Copy link</button>

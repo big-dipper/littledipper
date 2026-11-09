@@ -11,13 +11,12 @@ type Section =
   | { type: 'about'; text: string }
   | { type: 'domain'; domain: string; title?: string; parts: string[]; scope: 'all' | 'current'; hidden: string[] }
   | { type: 'resume'; documentId: string; title?: string };
-type PP = { nameId: string | null; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'fof' | 'anyone'; sections: Section[]; view: ProfileViewData };
+type PP = { nameId: string | null; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'anyone'; sections: Section[]; view: ProfileViewData };
 type Option = { domain: string; label: string; dated: boolean; parts: { key: string; label: string }[]; defaultParts: string[]; records: { id: string; title: string; current: boolean; validFrom: string | null; validTo: string | null }[] };
 
 const CONNECT: [PP['connectRequests'], string, string][] = [
-  ['off', 'Nobody', 'Hide the button. People can still connect with an invite link from you.'],
-  ['fof', 'People my contacts know', 'Only someone already connected to one of your contacts.'],
-  ['anyone', 'Anyone on Little Dipper', 'Requests from strangers wait quietly in Contacts, with no notification.'],
+  ['anyone', 'Anyone with my address', 'Someone on Little Dipper can ask to connect from your address or this page. You decide every request.'],
+  ['off', 'Only people I invite', 'No Connect button, and requests by address are turned away. An invite link from you always works.'],
 ];
 const DOMAIN_TITLES: Record<string, string> = { employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications', military: 'Military service' };
 /** Suggested first, then the rest of the public categories. */
@@ -217,7 +216,7 @@ export default function PublicEditor() {
 
           <div className="card" style={{ padding: '20px 24px', gap: 10 }}>
             <div className="card-kicker">Connection requests</div>
-            <div className="text-muted" style={{ fontSize: 13 }}>Who can ask to connect from your public profile. Requests never include anything until you approve and choose what to share.</div>
+            <div className="text-muted" style={{ fontSize: 13 }}>Who can ask to connect with you. Nothing is shared until you approve a request and choose what to share.</div>
             <div role="radiogroup" aria-label="Connection requests" style={{ display: 'grid', gap: 4 }}>
               {CONNECT.map(([k, label, hint]) => (
                 <button key={k} role="radio" aria-checked={pp.connectRequests === k} className="bare" onClick={() => save({ connectRequests: k })} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '4px 0' }}>

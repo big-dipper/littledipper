@@ -11,7 +11,7 @@ import { checkMethods } from '../methods.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import { getOwner } from '../owner.js';
 import {
-  lookupDescriptor, mutualHints, now, parsePeerInput, REQUEST_TTL_DAYS, sealToken, sendSigned, tokenHash,
+  connectPolicy, lookupDescriptor, now, parsePeerInput, REQUEST_TTL_DAYS, sealToken, sendSigned, tokenHash,
   type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc, type RequestDoc,
 } from '../federation.js';
 import {
@@ -127,7 +127,7 @@ async function offerDetails(basic: boolean, extra: string[]) {
 async function sendRequest(link: LinkDoc, offeredFields: string[], offered: { label: string; value: string }[], requestedFields: string[], note: string, invite: string | null) {
   await sendSigned(link.peerUrl, '/peer/requests', {
     type: 'connect.request', requestId: link.requestId, to: link.peerNodeId, fromNode: await selfIntro(),
-    offeredFields, offeredLabels: offered.map((o) => o.label), offeredDetails: offered, requestedFields, note, invite, mutualHints: await mutualHints(link.peerNodeId),
+    offeredFields, offeredLabels: offered.map((o) => o.label), offeredDetails: offered, requestedFields, note, invite,
   });
 }
 
@@ -166,7 +166,7 @@ export async function requestConnection(keyId: string, address: string, choice: 
   await ctx.store.insert<RequestDoc>('connectionRequests', {
     _id: newId('req'), direction: 'out', requestId, fromNodeId: n._id, peerName: name, fromNode: displayAddr(canonicalUrl(n)), toNode: displayAddr(d.address),
     offeredFields: offered, offeredLabels: [], requestedFields: requested, note, nonce: randomToken(8), signature: '', inviteId: null,
-    quiet: false, status: 'pending', contactId: contact._id, linkId: link._id, createdAt: t, expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString(),
+    status: 'pending', contactId: contact._id, linkId: link._id, createdAt: t, expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString(),
   });
   await audit({ actor: ownerActor(keyId), action: 'link.request.out', resource: `parties/${contact._id}`, text: `You sent ${name} a connection request`, tone: 'request' });
   return { delivered: true, contactId: contact._id, requestId };
@@ -347,7 +347,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     return {
       nodeId: d.nodeId, displayName: d.displayName, address: displayAddr(d.address), version: d.version,
       signingKey: fingerprint(d.signingKey),
-      viaInvite: !!invite, acceptsRequests: !!invite || d.connectRequests !== 'off',
+      viaInvite: !!invite, acceptsRequests: !!invite || connectPolicy(d) === 'anyone',
       existing: existing ? { contactId: existing.contact._id, status: existing.link.status } : null,
     };
   });

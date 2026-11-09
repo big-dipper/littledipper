@@ -7,7 +7,7 @@ const MODE_TEXT: Record<AssistantMode, string> = { answer: 'answer questions onl
 import { ownerName, profileLines, PROFILE_LINES, publicName } from '../profile.js';
 import { getDomain } from '../domains/records.js';
 import { canonicalUrl, getNode } from '../node.js';
-import { sendSigned, tokenHash, type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc } from '../federation.js';
+import { connectPolicy, sendSigned, tokenHash, type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc } from '../federation.js';
 import { contactsSharing, endLink, nudgePeers } from '../contacts.js';
 import { listDomains, recordOut, versionRecord } from '../domains/records.js';
 import { appVersions, sessionsOf, undoChanges } from '../undo.js';
@@ -18,7 +18,7 @@ import type { AuditDoc } from '../audit.js';
 async function profileDoc() {
   const pp = await ctx.store.get<PublicProfileDoc>('publicProfile', 'public');
   if (!pp) throw notFound('not_claimed');
-  return pp;
+  return { ...pp, connectRequests: connectPolicy(pp) };
 }
 
 export default async function miscRoutes(app: FastifyInstance) {
@@ -80,7 +80,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     }
     if (b.sections !== undefined) patch.sections = await checkSections(b.sections);
     if (b.connectRequests !== undefined) {
-      if (!['off', 'fof', 'anyone'].includes(b.connectRequests)) throw bad('bad_connect_requests');
+      if (!['off', 'anyone'].includes(b.connectRequests)) throw bad('bad_connect_requests');
       patch.connectRequests = b.connectRequests;
     }
     await ctx.store.update('publicProfile', 'public', patch);

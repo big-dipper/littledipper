@@ -7,7 +7,7 @@ import AddContact from './AddContact';
 import { fetchCatalog, type Rec } from '../../life';
 import BigDipperBanner from './BigDipperBanner';
 
-type Req = { _id: string; contactId: string; peerName: string; fromNode: string; requestedFields: string[]; inviteId: string | null; quiet: boolean };
+type Req = { _id: string; contactId: string; peerName: string; fromNode: string; requestedFields: string[]; inviteId: string | null };
 
 export const shareSummary = (c: Contact) => {
   if (!c.node) return '—';
@@ -59,14 +59,14 @@ export default function Contacts() {
       <BigDipperBanner />
 
       {reqs?.items.map((r) => (
-        <div key={r._id} style={{ marginTop: 22, borderRadius: 32, background: r.quiet ? 'var(--color-neutral-100)' : 'var(--color-accent-100)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <div key={r._id} style={{ marginTop: 22, borderRadius: 32, background: 'var(--color-accent-100)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <span style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--color-accent-300)', display: 'grid', placeItems: 'center', fontSize: 13, flex: 'none' }}>{initials(r.peerName)}</span>
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ fontWeight: 600 }}>{r.peerName} wants to connect</div>
             <div style={{ fontSize: 13, color: 'var(--color-accent-800)' }}>
               <span className="mono">{r.fromNode}</span>
               {r.requestedFields.length > 0 && ` · asks for ${r.requestedFields.length} field${r.requestedFields.length === 1 ? '' : 's'}`}
-              {r.inviteId ? ' · used your invite link' : r.quiet ? ' · not connected to anyone you know' : ''} · identity confirmed
+              {r.inviteId ? ' · used your invite link' : ''} · identity confirmed
             </div>
           </div>
           <button className="btn btn-secondary" onClick={() => decline(r)}>Decline</button>

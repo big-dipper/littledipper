@@ -62,8 +62,7 @@ export default function AdminLayout() {
       const [o, nd, reqs, unread, docs, reviews, ns] = await Promise.all([get<Owner>('/api/owner'), get<NodeInfo>('/api/node'), get('/api/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/messages/unread'), get<{ items: unknown[] }>('/api/documents?status=inbox'), get<{ items: unknown[] }>('/api/reviews'), get<{ items: Notice[] }>('/api/notifications')]);
       setOwner(o);
       setNode(nd);
-      // Stranger requests under "Anyone" wait quietly: no badge.
-      setPendingIn(reqs.items.filter((r: { quiet: boolean }) => !r.quiet).length);
+      setPendingIn(reqs.items.length);
       setUnreadMessages(unread.count);
       setInboxDocs(docs.items.length);
       setPendingReview(reviews.items.length);

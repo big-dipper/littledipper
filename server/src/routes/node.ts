@@ -12,7 +12,7 @@ import { BUILT_IN_DOMAINS } from '../domains/catalog.js';
 import { buildRecord, recordVersion } from '../domains/records.js';
 import { runMigrations } from '../migrate.js';
 import { getOwner, getPendingOwner, type OwnerDoc } from '../owner.js';
-import { now, sendSigned, type LinkDoc, type PublicProfileDoc } from '../federation.js';
+import { connectPolicy, now, sendSigned, type LinkDoc, type PublicProfileDoc } from '../federation.js';
 import { COLLECTIONS } from '../store/index.js';
 import { plainData } from '../domains/records.js';
 import type { RecordDoc } from '../domains/types.js';
@@ -100,7 +100,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
     reply.header('access-control-allow-origin', '*');
     const n = await getNode();
     const pp = await publicProfileDoc();
-    return descriptor(n, n.claimed ? (await publicName(pp ?? null)) || null : null, pp?.connectRequests || 'off');
+    return descriptor(n, n.claimed ? (await publicName(pp ?? null)) || null : null, connectPolicy(pp));
   });
 
   app.get('/api/node/status', async () => {
@@ -192,7 +192,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
       }
       await runMigrations();
       if (!(await publicProfileDoc())) {
-        await ctx.store.insert<PublicProfileDoc>('publicProfile', { _id: 'public', nameId: null, headline: '', avatarFileId: null, fieldKeys: ['preferred_name'], connectRequests: 'off' });
+        await ctx.store.insert<PublicProfileDoc>('publicProfile', { _id: 'public', nameId: null, headline: '', avatarFileId: null, fieldKeys: ['preferred_name'], connectRequests: 'anyone' });
       }
     }
     await startSession(reply, deviceLabel(req));

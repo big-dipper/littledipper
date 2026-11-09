@@ -164,6 +164,10 @@ async function main() {
     await a.call('DELETE', `/api/parties/${acme.id}`);
 
     console.log('connections');
+    ok((await a.call('POST', '/api/federation/lookup', { address: 'localhost:4202' })).acceptsRequests === true, 'a new Little Dipper accepts requests by address');
+    await b.call('PUT', '/api/public-profile', { connectRequests: 'fof' }, [400]);
+    await b.call('PUT', '/api/public-profile', { connectRequests: 'off' });
+    ok((await a.call('POST', '/api/federation/lookup', { address: 'localhost:4202' })).acceptsRequests === false, 'invite-only: the lookup says so before you write anything');
     await a.call('POST', '/api/federation/requests', { address: 'localhost:4202' }, [403]);
     ok(true, 'stranger request refused while B has connect requests off');
     const inv = await b.call('POST', '/api/federation/invites', { expiresIn: '7d' });
@@ -172,7 +176,7 @@ async function main() {
     const sent = await a.call('POST', '/api/federation/requests', { address: inv.url, offeredFields: ['address'], note: 'Hi Theo' });
     ok(sent.delivered, 'request delivered');
     const inB = (await b.call('GET', '/api/federation/requests?status=pending&direction=in')).items;
-    ok(inB.length === 1 && !inB[0].quiet && inB[0].inviteId, 'B sees a (non-quiet) invite request');
+    ok(inB.length === 1 && inB[0].inviteId, 'B sees the invite request');
     const reqParty = await b.call('GET', `/api/parties/${inB[0].contactId}`);
     ok(reqParty.request.offeredDetails.some((d: any) => d.label === 'Preferred name' && d.value === 'Maya Lindqvist')
       && reqParty.request.offeredDetails.some((d: any) => d.label === 'Little Dipper' && d.value.endsWith(` · ${inB[0].fromNodeId}`) && d.value.startsWith('localhost:'))

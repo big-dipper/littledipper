@@ -78,8 +78,6 @@ export type RequestDoc = Doc & {
   nonce: string;
   signature: string;
   inviteId: string | null;
-  /** Stranger requests under connectRequests=anyone wait quietly (no badge). */
-  quiet: boolean;
   status: 'pending' | 'accepted' | 'declined' | 'expired';
   contactId: string;
   linkId: string;
@@ -102,7 +100,7 @@ export type PublicProfileDoc = Doc & {
   headline: string;
   avatarFileId: string | null;
   fieldKeys: string[];
-  connectRequests: 'off' | 'fof' | 'anyone';
+  connectRequests: 'off' | 'anyone';
   /** Layout of the public page. Missing on profiles from before sections: just the details. */
   sections?: import('./publicProfile.js').PublicSection[];
 };
@@ -215,16 +213,12 @@ export async function peerGet(link: LinkDoc, path: string) {
 // ── grants ──────────────────────────────────────────────────────────────
 
 /** sha256(peerNodeId + recipientNodeId) for each active peer: lets a recipient spot mutual contacts without learning the rest. */
-export async function mutualHints(recipientNodeId: string) {
-  const links = await ctx.store.find<LinkDoc>('nodeLinks', { status: 'active' });
-  return links.map((l) => sha256(l.peerNodeId + recipientNodeId));
-}
-
-export async function hasMutual(hints: unknown, selfId: string) {
-  if (!Array.isArray(hints)) return false;
-  const mine = new Set((await ctx.store.find<LinkDoc>('nodeLinks', { status: 'active' })).map((l) => sha256(l.peerNodeId + selfId)));
-  return hints.some((h) => mine.has(String(h)));
-}
+/**
+ * Who can ask to connect by your address: anyone (the default), or only people you invite. An invite link always
+ * works. A setting stored before "people my contacts know" was retired counts as invite-only: never more open than chosen.
+ */
+export const connectPolicy = (pp: { connectRequests?: string } | null | undefined): 'anyone' | 'off' =>
+  pp?.connectRequests === 'off' || pp?.connectRequests === 'fof' ? 'off' : 'anyone';
 
 export async function selfAddress() {
   return canonicalUrl(await getNode());

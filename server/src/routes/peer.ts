@@ -6,7 +6,7 @@ import { audit } from '../audit.js';
 import { bad, findKey, HttpError, rateLimit } from '../auth.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import {
-  hasMutual, lookupDescriptor, now, openEnvelope, parsePeerInput, REQUEST_TTL_DAYS, sealToken, tokenHash,
+  connectPolicy, lookupDescriptor, now, openEnvelope, parsePeerInput, REQUEST_TTL_DAYS, sealToken, tokenHash,
   type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc, type RequestDoc,
 } from '../federation.js';
 import { getDomain } from '../domains/records.js';
@@ -50,7 +50,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     const intro = body?.payload?.fromNode;
     if (!intro?.signingKey || !intro.nodeId || !intro.address) throw bad('bad_request');
     if (nodeIdFromPublicKey(intro.signingKey) !== intro.nodeId || peerFrom(body) !== intro.nodeId) throw new HttpError(401, 'identity_mismatch');
-    const p = openEnvelope<{ type: string; requestId: string; to: string; offeredFields?: string[]; offeredLabels?: string[]; offeredDetails?: { label?: unknown; value?: unknown }[]; requestedFields?: string[]; note?: string; invite?: string | null; mutualHints?: string[] }>(body, intro.signingKey);
+    const p = openEnvelope<{ type: string; requestId: string; to: string; offeredFields?: string[]; offeredLabels?: string[]; offeredDetails?: { label?: unknown; value?: unknown }[]; requestedFields?: string[]; note?: string; invite?: string | null }>(body, intro.signingKey);
     const n = await getNode();
     if (p.type !== 'connect.request' || p.to !== n._id) throw bad('wrong_recipient');
     if (!n.claimed) throw new HttpError(409, 'unclaimed');
@@ -61,7 +61,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     const d = await lookupDescriptor(origin);
     if (d.nodeId !== intro.nodeId) throw new HttpError(401, 'address_mismatch');
 
-    // Who may ask: an invite always works; otherwise the owner's connectRequests setting.
+    // Who may ask: an invite always works; otherwise anyone with the address, unless the owner chose invite-only.
     let inviteId: string | null = null;
     if (p.invite) {
       const [id, secret] = String(p.invite).split('.');
@@ -73,13 +73,7 @@ export default async function peerRoutes(app: FastifyInstance) {
       inviteId = inv._id;
     }
     const pp = await ctx.store.get<PublicProfileDoc>('publicProfile', 'public');
-    const policy = pp?.connectRequests || 'off';
-    const mutual = await hasMutual(p.mutualHints, n._id);
-    if (!inviteId) {
-      if (policy === 'off') throw new HttpError(403, 'not_accepting', "This Little Dipper isn't accepting connection requests. Ask its owner for an invite link.");
-      if (policy === 'fof' && !mutual) throw new HttpError(403, 'not_accepting', 'This Little Dipper only accepts requests from people its owner\'s contacts know.');
-    }
-    const quiet = !inviteId && !mutual;
+    if (!inviteId && connectPolicy(pp) === 'off') throw new HttpError(403, 'not_accepting', 'This Little Dipper only connects with people its owner invites. Ask them for an invite link.');
 
     const existing = await existingForNode(intro.nodeId);
     if (existing?.link.status === 'active') throw new HttpError(409, 'already_connected');
@@ -105,7 +99,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     await ctx.store.insert<RequestDoc>('connectionRequests', {
       _id: newId('req'), direction: 'in', requestId: p.requestId, fromNodeId: intro.nodeId, peerName: name, fromNode: displayAddr(origin), toNode: displayAddr(canonicalUrl(n)),
       offeredFields: (p.offeredFields || []).map(String), offeredLabels: offered, offeredDetails: details, requestedFields: requested, note: String(p.note || '').slice(0, 500),
-      nonce: (body as { payload: { nonce: string } }).payload.nonce, signature: (body as unknown as { signature: string }).signature, inviteId, quiet,
+      nonce: (body as { payload: { nonce: string } }).payload.nonce, signature: (body as unknown as { signature: string }).signature, inviteId,
       status: 'pending', contactId: contact._id, linkId: link._id, createdAt: t, expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString(),
     });
     await audit({ actor: { type: 'peer', id: intro.nodeId }, action: 'link.request.in', resource: `parties/${contact._id}`, text: `${name} sent a connection request${inviteId ? ' with your invite link' : ''}`, tone: 'request', ip: req.ip });
