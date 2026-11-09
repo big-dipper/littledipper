@@ -4,7 +4,7 @@ import { addr, copy, get } from '../api';
 import { Circle, Dialog, ErrorNote, Loading, useAsync, useToast } from '../ui';
 import { ProfileView, type ProfileViewData } from '../profile';
 
-type Profile = ProfileViewData & { connectRequests: 'off' | 'anyone'; address: string; ownerFirstName: string };
+type Profile = ProfileViewData & { connectButton: boolean; address: string; ownerFirstName: string };
 
 export default function PublicProfile() {
   const toast = useToast();
@@ -37,7 +37,7 @@ export default function PublicProfile() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--color-accent)' }} /><span className="mono" style={{ fontSize: 13 }}>{a}</span></div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-secondary" onClick={() => toast('API documentation is coming soon')}>API docs</button>
-            {p.connectRequests !== 'off' && <button className="btn btn-primary" onClick={() => setConnect(true)}>Connect with me</button>}
+            {p.connectButton && <button className="btn btn-primary" onClick={() => setConnect(true)}>Connect with me</button>}
           </div>
         </div>
         <ProfileView p={p} />

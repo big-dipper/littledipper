@@ -45,10 +45,10 @@ export function useAction() {
 }
 
 // ── toggle: 40×24 track, 18px knob, 150ms ───────────────────────────────
-export function Toggle({ on, onChange, label, style }: { on: boolean; onChange: () => void; label: string; style?: CSSProperties }) {
+export function Toggle({ on, onChange, label, style, disabled }: { on: boolean; onChange: () => void; label: string; style?: CSSProperties; disabled?: boolean }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={onChange}
-      style={{ width: 40, height: 24, borderRadius: 999, border: 'none', padding: 3, background: on ? 'var(--color-accent-2-600)' : 'var(--color-neutral-300)', cursor: 'pointer', display: 'flex', flex: 'none', transition: 'background .15s', ...style }}>
+    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={onChange} disabled={disabled}
+      style={{ width: 40, height: 24, borderRadius: 999, border: 'none', padding: 3, background: on ? 'var(--color-accent-2-600)' : 'var(--color-neutral-300)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, display: 'flex', flex: 'none', transition: 'background .15s', ...style }}>
       <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--color-neutral-100)', boxShadow: 'var(--shadow-sm)', transform: `translateX(${on ? 16 : 0}px)`, transition: 'transform .15s' }} />
     </button>
   );

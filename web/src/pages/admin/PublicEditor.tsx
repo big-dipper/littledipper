@@ -11,13 +11,9 @@ type Section =
   | { type: 'about'; text: string }
   | { type: 'domain'; domain: string; title?: string; parts: string[]; scope: 'all' | 'current'; hidden: string[] }
   | { type: 'resume'; documentId: string; title?: string };
-type PP = { nameId: string | null; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'anyone'; sections: Section[]; view: ProfileViewData };
+type PP = { nameId: string | null; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'anyone'; connectButton?: boolean; sections: Section[]; view: ProfileViewData };
 type Option = { domain: string; label: string; dated: boolean; parts: { key: string; label: string }[]; defaultParts: string[]; records: { id: string; title: string; current: boolean; validFrom: string | null; validTo: string | null }[] };
 
-const CONNECT: [PP['connectRequests'], string, string][] = [
-  ['anyone', 'Anyone with my address', 'Someone on Little Dipper can ask to connect from your address or this page. You decide every request.'],
-  ['off', 'Only people I invite', 'No Connect button, and requests by address are turned away. An invite link from you always works.'],
-];
 const DOMAIN_TITLES: Record<string, string> = { employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications', military: 'Military service' };
 /** Suggested first, then the rest of the public categories. */
 const ORDER = ['employment', 'education', 'credentials', 'military'];
@@ -215,15 +211,17 @@ export default function PublicEditor() {
           </div>
 
           <div className="card" style={{ padding: '20px 24px', gap: 10 }}>
-            <div className="card-kicker">Connection requests</div>
-            <div className="text-muted" style={{ fontSize: 13 }}>Who can ask to connect with you. Nothing is shared until you approve a request and choose what to share.</div>
-            <div role="radiogroup" aria-label="Connection requests" style={{ display: 'grid', gap: 4 }}>
-              {CONNECT.map(([k, label, hint]) => (
-                <button key={k} role="radio" aria-checked={pp.connectRequests === k} className="bare" onClick={() => save({ connectRequests: k })} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '4px 0' }}>
-                  <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid var(--color-accent)', background: pp.connectRequests === k ? 'var(--color-accent)' : 'transparent', boxShadow: pp.connectRequests === k ? 'inset 0 0 0 2px var(--color-neutral-100)' : undefined, flex: 'none', marginTop: 3 }} />
-                  <span><span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{label}</span><span className="text-muted" style={{ fontSize: 12 }}>{hint}</span></span>
-                </button>
-              ))}
+            <div className="card-kicker">Connect button</div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <Toggle on={!!pp.connectButton && pp.connectRequests === 'anyone'} label="Show a Connect with me button" disabled={pp.connectRequests !== 'anyone'} onChange={() => save({ connectButton: !pp.connectButton })} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Show a “Connect with me” button</div>
+                <div className="text-muted" style={{ fontSize: 12 }}>
+                  {pp.connectRequests === 'anyone'
+                    ? 'Visitors can copy your address and ask to connect from their own Little Dipper. You decide every request.'
+                    : <>You only connect with people you invite, so there’s no button. Change that in <Link to="/admin/settings/address">Settings</Link>.</>}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -235,7 +233,7 @@ export default function PublicEditor() {
               <ProfileView p={{ ...pp.view, headline: header.headline }} compact />
               <div style={{ display: 'flex', gap: 6, marginTop: 20, flexWrap: 'wrap' }}>
                 <span className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 12px' }}>API docs</span>
-                {pp.connectRequests !== 'off' && <span className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}>Connect with me</span>}
+                {pp.connectButton && pp.connectRequests === 'anyone' && <span className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}>Connect with me</span>}
               </div>
             </div>
           </div>

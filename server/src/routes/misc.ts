@@ -35,7 +35,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     // `fields` stays for older clients; `sections` is the profile as laid out.
     return {
       ...(await publicView(pp)), fields: await publicFields(pp),
-      connectRequests: pp.connectRequests, address: canonicalUrl(n), ownerFirstName: ((await publicName(pp)) || (await ownerName())).split(' ')[0],
+      connectButton: !!pp.connectButton && pp.connectRequests === 'anyone', address: canonicalUrl(n), ownerFirstName: ((await publicName(pp)) || (await ownerName())).split(' ')[0],
     };
   });
 
@@ -58,7 +58,7 @@ export default async function miscRoutes(app: FastifyInstance) {
   app.put('/api/public-profile', async (req) => {
     const p = await requireOwner(req, 'public:write');
     const pp = await profileDoc();
-    const b = (req.body || {}) as Partial<Pick<PublicProfileDoc, 'nameId' | 'headline' | 'fieldKeys' | 'connectRequests' | 'sections'>>;
+    const b = (req.body || {}) as Partial<Pick<PublicProfileDoc, 'nameId' | 'headline' | 'fieldKeys' | 'connectRequests' | 'connectButton' | 'sections'>>;
     const patch: Partial<PublicProfileDoc> = {};
     // The public name points to one of your Names entries (a professional or pen name is fine: it's a name you use).
     if (b.nameId !== undefined) {
@@ -83,9 +83,10 @@ export default async function miscRoutes(app: FastifyInstance) {
       if (!['off', 'anyone'].includes(b.connectRequests)) throw bad('bad_connect_requests');
       patch.connectRequests = b.connectRequests;
     }
+    if (b.connectButton !== undefined) patch.connectButton = b.connectButton === true;
     await ctx.store.update('publicProfile', 'public', patch);
     const what = [
-      patch.fieldKeys && 'visible fields', patch.sections && 'sections', patch.connectRequests && 'connection requests', (patch.nameId !== undefined || patch.headline !== undefined) && 'header',
+      patch.fieldKeys && 'visible fields', patch.sections && 'sections', patch.connectRequests && 'who can ask to connect', patch.connectButton !== undefined && 'Connect button', (patch.nameId !== undefined || patch.headline !== undefined) && 'header',
     ].filter(Boolean).join(', ');
     await audit({ actor: ownerActor(p.key._id), action: 'public.update', resource: 'publicProfile', text: `You changed your public profile (${what})`, tone: 'owner' });
     const out = await profileDoc();

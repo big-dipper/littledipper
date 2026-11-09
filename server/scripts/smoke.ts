@@ -166,8 +166,12 @@ async function main() {
     console.log('connections');
     ok((await a.call('POST', '/api/federation/lookup', { address: 'localhost:4202' })).acceptsRequests === true, 'a new Little Dipper accepts requests by address');
     await b.call('PUT', '/api/public-profile', { connectRequests: 'fof' }, [400]);
+    await b.call('PUT', '/api/public-profile', { connectButton: true });
+    const pubOpen = await (await fetch('http://localhost:4202/public/profile')).json();
+    ok(pubOpen.connectButton === true && pubOpen.connectRequests === undefined, 'the Connect button is its own setting');
     await b.call('PUT', '/api/public-profile', { connectRequests: 'off' });
     ok((await a.call('POST', '/api/federation/lookup', { address: 'localhost:4202' })).acceptsRequests === false, 'invite-only: the lookup says so before you write anything');
+    ok((await (await fetch('http://localhost:4202/public/profile')).json()).connectButton === false, 'invite-only hides the Connect button even when it’s on');
     await a.call('POST', '/api/federation/requests', { address: 'localhost:4202' }, [403]);
     ok(true, 'stranger request refused while B has connect requests off');
     const inv = await b.call('POST', '/api/federation/invites', { expiresIn: '7d' });

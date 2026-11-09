@@ -42,6 +42,32 @@ export default function Settings() {
   );
 }
 
+const ASK: ['anyone' | 'off', string, string][] = [
+  ['anyone', 'Anyone with my address', 'Someone on Little Dipper can paste your address and ask to connect. You decide every request.'],
+  ['off', 'Only people I invite', 'Requests by address are turned away. An invite link from you always works.'],
+];
+
+/** Who can ask to connect by your address. Separate from the Connect button on your public page. */
+function WhoCanAsk() {
+  const { run } = useAction();
+  const { data, reload } = useAsync(() => get<{ connectRequests: 'anyone' | 'off' }>('/api/public-profile'), []);
+  if (!data) return null;
+  return (
+    <div className="card" style={{ padding: '22px 24px', gap: 10 }}>
+      <div className="card-kicker">Who can ask to connect</div>
+      <div className="text-muted" style={{ fontSize: 13 }}>Nothing is shared until you approve a request and choose what to share.</div>
+      <div role="radiogroup" aria-label="Who can ask to connect" style={{ display: 'grid', gap: 4 }}>
+        {ASK.map(([k, label, hint]) => (
+          <button key={k} role="radio" aria-checked={data.connectRequests === k} className="bare" onClick={() => run(() => put('/api/public-profile', { connectRequests: k }), 'Saved').then(reload)} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '4px 0', textAlign: 'left' }}>
+            <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid var(--color-accent)', background: data.connectRequests === k ? 'var(--color-accent)' : 'transparent', boxShadow: data.connectRequests === k ? 'inset 0 0 0 2px var(--color-neutral-100)' : undefined, flex: 'none', marginTop: 3 }} />
+            <span><span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{label}</span><span className="text-muted" style={{ fontSize: 12 }}>{hint}</span></span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AddressTab() {
   const { node, tech, refresh } = useAdmin();
   const toast = useToast();
@@ -105,6 +131,8 @@ function AddressTab() {
           {tech && <button className="btn btn-secondary" disabled={busy} onClick={() => run(() => post<{ notified: string[] }>('/api/node/address-change/announce'), (r) => (r.notified.length ? `Told ${r.notified.length} connection${r.notified.length === 1 ? '' : 's'} your address` : 'No connections to tell yet'))}>Send address-change notice</button>}
         </div>
       </div>
+
+      <WhoCanAsk />
 
       <div className="card" style={{ padding: '22px 24px', gap: 10 }}>
         <div className="card-kicker">Where people find you</div>

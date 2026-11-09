@@ -100,7 +100,10 @@ export type PublicProfileDoc = Doc & {
   headline: string;
   avatarFileId: string | null;
   fieldKeys: string[];
+  /** Who can ask to connect by your address (Settings). Kept here for history; it isn't part of the public page. */
   connectRequests: 'off' | 'anyone';
+  /** A "Connect with me" button on your public page, which gives visitors your address. Off unless you turn it on, and only shown while requests by address are allowed. */
+  connectButton?: boolean;
   /** Layout of the public page. Missing on profiles from before sections: just the details. */
   sections?: import('./publicProfile.js').PublicSection[];
 };
