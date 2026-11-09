@@ -122,6 +122,22 @@ await add('insurance', { kind: 'auto', insurer: await party('Northwest Mutual'),
 await add('receipts', { merchant: await party('Blue Bottle'), purchased: '2026-10-01', total: { amount: 12.5, currency: 'USD' }, category: 'dining', paymentMethod: 'cash' });
 await add('events', { title: 'Book club', start: { at: '2026-01-12T19:00', tz: 'America/Los_Angeles' }, end: { at: '2026-01-12T21:00', tz: 'America/Los_Angeles' }, repeat: 'FREQ=MONTHLY;BYDAY=2MO', location: 'Powell’s' });
 await add('preferences', { category: 'drink', name: 'Coffee order', value: 'Oat flat white' });
+await add('contact_methods', { kind: 'website', value: 'mayalind.studio' });
+await add('contact_methods', { kind: 'social', service: 'Instagram', value: '@maya.makes' });
+await add('contact_methods', { kind: 'messaging', service: 'Signal', value: 'maya.07' });
+
+// Maya's public page: a card, then her details, ways to reach her and her work, each folded to a line.
+await call('PUT', '/api/public-profile', {
+  headline: 'Designer and ceramicist in Portland, OR',
+  fieldKeys: ['legal_name', 'born', 'citizenship', 'marital_status', 'lives_in'],
+  sections: [
+    { type: 'about', text: 'I make furniture and lighting that lasts. Happy to talk about craft, production, or clay.' },
+    { type: 'details' },
+    { type: 'domain', domain: 'contact_methods' },
+    { type: 'domain', domain: 'employment' },
+    { type: 'domain', domain: 'education' },
+  ],
+});
 
 // ── Theo, a friend on his own Little Dipper, connected through an invite ──
 await theo.call('POST', '/api/data/residences', { data: { street1: '88 Rose St', city: 'Seattle', region: 'WA', country: 'US', primary: true }, validFrom: '2020-04' });

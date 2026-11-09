@@ -33,14 +33,11 @@ export default function PublicProfile() {
       )}
       <Circle style={{ right: -160, top: 40, width: 560, height: 560, background: 'var(--color-accent-200)', opacity: 0.55 }} />
       <div style={{ position: 'relative', padding: '36px clamp(20px,7vw,96px) 80px', maxWidth: 820 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 56, gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 36, gap: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--color-accent)' }} /><span className="mono" style={{ fontSize: 13 }}>{a}</span></div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary" onClick={() => toast('API documentation is coming soon')}>API docs</button>
-            {p.connectButton && <button className="btn btn-primary" onClick={() => setConnect(true)}>Connect with me</button>}
-          </div>
+          <button className="btn btn-secondary" onClick={() => toast('API documentation is coming soon')}>API docs</button>
         </div>
-        <ProfileView p={p} />
+        <ProfileView p={p} actions={p.connectButton && <button className="btn btn-primary" onClick={() => setConnect(true)}>Connect with me</button>} />
         <p className="text-muted" style={{ fontSize: 12, marginTop: 56 }}>Your data, not your definition.{!isOwner && <> · <Link to="/login" style={{ color: 'inherit' }}>Owner sign in</Link></>}</p>
       </div>
 
@@ -49,7 +46,7 @@ export default function PublicProfile() {
           <button className="btn btn-secondary" onClick={() => setConnect(false)}>Close</button>
           <button className="btn btn-primary" onClick={async () => { await copy(a); setConnect(false); toast('Address copied'); }}>Copy address</button>
         </>}>
-          <div className="dialog-body">Open your own Little Dipper, choose Add contact → On Little Dipper, and enter this address. {p.ownerFirstName} will see your request and choose what to share.</div>
+          <div className="dialog-body">Open your own Little Dipper, go to Relationships → Add someone → On Little Dipper, and enter this address. {p.ownerFirstName} will see your request and choose what to share.</div>
           <div className="mono" style={{ fontSize: 15, background: 'var(--color-neutral-100)', borderRadius: 999, padding: '10px 18px', overflowWrap: 'anywhere' }}>{a}</div>
           <div className="text-muted" style={{ fontSize: 13 }}>Don't have Little Dipper yet? It's free and open source.</div>
         </Dialog>

@@ -14,9 +14,9 @@ type Section =
 type PP = { nameId: string | null; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'anyone'; connectButton?: boolean; sections: Section[]; view: ProfileViewData };
 type Option = { domain: string; label: string; dated: boolean; parts: { key: string; label: string }[]; defaultParts: string[]; records: { id: string; title: string; current: boolean; validFrom: string | null; validTo: string | null }[] };
 
-const DOMAIN_TITLES: Record<string, string> = { employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications', military: 'Military service' };
+const DOMAIN_TITLES: Record<string, string> = { contact_methods: 'Contact', employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications', military: 'Military service' };
 /** Suggested first, then the rest of the public categories. */
-const ORDER = ['employment', 'education', 'credentials', 'military'];
+const ORDER = ['contact_methods', 'employment', 'education', 'credentials', 'military'];
 
 export default function PublicEditor() {
   const { node } = useAdmin();
@@ -127,7 +127,7 @@ export default function PublicEditor() {
 
           <div className="card" style={{ padding: '20px 24px', gap: 10 }}>
             <div className="card-kicker">Sections</div>
-            <div className="text-muted" style={{ fontSize: 13 }}>Shown in this order below your name. Add what you want people to see; new entries in a section appear automatically.</div>
+            <div className="text-muted" style={{ fontSize: 13 }}>About goes in your card. The rest fold up below it in this order, each showing one line until a visitor opens it. New entries in a section appear automatically.</div>
             {pp.sections.map((s, i) => (
               <div key={`${s.type}-${s.type === 'domain' ? s.domain : i}`} style={{ border: '1px solid var(--color-divider)', borderRadius: 20, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: open === i ? 'var(--color-neutral-100)' : undefined }}>
@@ -230,11 +230,8 @@ export default function PublicEditor() {
           <div style={{ borderRadius: 32, background: 'var(--color-neutral-100)', boxShadow: 'var(--shadow-md)', padding: 28, position: 'relative', overflow: 'hidden', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}>
             <div aria-hidden style={{ position: 'absolute', right: -80, top: -60, width: 220, height: 220, borderRadius: '50%', background: 'var(--color-accent-200)', opacity: 0.6 }} />
             <div style={{ position: 'relative' }}>
-              <ProfileView p={{ ...pp.view, headline: header.headline }} compact />
-              <div style={{ display: 'flex', gap: 6, marginTop: 20, flexWrap: 'wrap' }}>
-                <span className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 12px' }}>API docs</span>
-                {pp.connectButton && pp.connectRequests === 'anyone' && <span className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}>Connect with me</span>}
-              </div>
+              <ProfileView p={{ ...pp.view, headline: header.headline }} compact
+                actions={pp.connectButton && pp.connectRequests === 'anyone' && <span className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}>Connect with me</span>} />
             </div>
           </div>
         </div>

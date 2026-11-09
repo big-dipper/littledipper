@@ -9,6 +9,7 @@ import { profileLines, publicName } from './profile.js';
 import type { PublicProfileDoc } from './federation.js';
 import type { DocumentDoc } from './documents.js';
 import type { FileDoc } from './files.js';
+import { displayPhone } from './methods.js';
 import { displayValue, getDomain, isCurrent, partSens, plainData, recordsOf, renderTitle, sortRecords, type DomainDef, type PartDef } from './domains/records.js';
 
 export type PublicSection =
@@ -19,9 +20,10 @@ export type PublicSection =
 
 const MAX_SECTIONS = 12;
 
-const TITLES: Record<string, string> = { employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications', military: 'Military service' };
+const TITLES: Record<string, string> = { contact_methods: 'Contact', employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications', military: 'Military service' };
 /** What a new section shows until the owner changes it: the parts a résumé would. */
 const DEFAULT_PARTS: Record<string, string[]> = {
+  contact_methods: ['kind', 'value', 'address', 'service', 'label'],
   employment: ['title', 'employer', 'type', 'city', 'country', 'remote', 'description'],
   education: ['institution', 'degree', 'field', 'honors'],
   credentials: ['name', 'issuer', 'kind', 'region', 'issued', 'expires', 'url'],
@@ -84,21 +86,42 @@ export async function publicFields(pp: PublicProfileDoc) {
     .map((l) => ({ key: l!.key, label: l!.label, value: l!.value }));
 }
 
+const CONTACT_ORDER = ['email', 'phone', 'website', 'social', 'messaging', 'postal'];
+
+/** A contact method as a row a visitor can tap: what it is, how it reads, and where it goes. */
+function contactOf(values: Record<string, unknown>, d: DomainDef) {
+  const kind = String(values.kind ?? '');
+  const raw = String(values.value ?? '');
+  const part = (k: string) => d.parts.find((p) => p.key === k)!;
+  const value = kind === 'phone' ? displayPhone(raw) : kind === 'postal' ? displayValue(part('address'), values.address) : kind === 'website' ? raw.replace(/^https?:\/\//i, '').replace(/\/$/, '') : raw;
+  if (!kind || !value) return undefined;
+  const web = /^https?:\/\//i.test(raw) ? raw : '';
+  const href = kind === 'email' ? `mailto:${raw}` : kind === 'phone' ? `tel:${raw}` : kind === 'website' ? (web || `https://${raw}`) : web || undefined;
+  const label = String(values.service ?? '') || String(values.label ?? '') || displayValue(part('kind'), kind);
+  return { kind, value, label, href };
+}
+
 async function domainItems(s: Extract<PublicSection, { type: 'domain' }>) {
   const d = await getDomain(s.domain);
   if (!d || !d.publicable) return null;
   const shown = publicParts(d).filter((p) => s.parts.includes(p.key));
   const titleKeys = new Set([...d.title.matchAll(/\{(\w+)\}/g)].map((m) => m[1]));
   const recs = sortRecords(d, await recordsOf(d.id)).filter((r) => !s.hidden.includes(r._id) && (s.scope === 'all' || isCurrent(d, r)));
+  // Ways to reach you read best in a steady order: email, phone, web, social, messaging, post; the main one first.
+  if (d.id === 'contact_methods') {
+    const rank = (r: (typeof recs)[number]) => { const v = plainData(r); return CONTACT_ORDER.indexOf(String(v.kind)) * 2 + (v.primary === true ? 0 : 1); };
+    recs.sort((a, b) => rank(a) - rank(b));
+  }
   return {
-    type: 'domain' as const, domain: d.id, title: s.title || TITLES[d.id] || d.label, dated: d.dated,
+    type: 'domain' as const, domain: d.id, title: s.title || TITLES[d.id] || d.label, dated: d.dated, group: d.group, noun: d.noun,
     items: recs.map((r) => {
       const plain = plainData(r);
       const values = Object.fromEntries(shown.filter((p) => plain[p.key] !== undefined).map((p) => [p.key, plain[p.key]]));
       const fields = shown.filter((p: PartDef) => !titleKeys.has(p.key) && values[p.key] !== undefined)
         .map((p) => ({ key: p.key, label: p.label, type: p.type, value: displayValue(p, values[p.key]) }))
         .filter((f) => f.value);
-      return { id: r._id, title: renderTitle(d, values), fields, validFrom: r.validFrom, validTo: r.validTo, current: isCurrent(d, r) };
+      const contact = d.id === 'contact_methods' ? contactOf(values, d) : undefined;
+      return { id: r._id, title: renderTitle(d, values), fields, validFrom: r.validFrom, validTo: r.validTo, current: isCurrent(d, r), ...(contact && { contact }) };
     }),
   };
 }
