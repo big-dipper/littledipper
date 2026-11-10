@@ -23,13 +23,13 @@ async function notices(): Promise<Notice[]> {
   for (const k of keys.filter((x) => x.assistant)) {
     // A connection that reached the length the owner chose, in the last week.
     if (k.expiresAt && !k.revokedAt && Date.parse(k.expiresAt) < now && now - Date.parse(k.expiresAt) < WEEK) {
-      out.push({ id: `ended:${k._id}`, kind: 'ended', at: k.expiresAt, href: '/admin/apps', title: `${k.name}'s connection ended`, text: 'It reached the length you chose. Reconnect from the assistant if you still want it.' });
+      out.push({ id: `ended:${k._id}`, kind: 'ended', at: k.expiresAt, href: '/admin/settings/apps', title: `${k.name}'s connection ended`, text: 'It reached the length you chose. Reconnect from the assistant if you still want it.' });
     }
     // This month so far, for assistants still connected.
     if (!k.revokedAt && k.usage?.month === month && (k.usage.reads || k.usage.writes)) {
       const { reads, writes } = k.usage;
       out.push({
-        id: `digest:${k._id}:${month}`, kind: 'digest', at: k.lastUsedAt ?? new Date().toISOString(), href: `/admin/apps?assistant=${k._id}`,
+        id: `digest:${k._id}:${month}`, kind: 'digest', at: k.lastUsedAt ?? new Date().toISOString(), href: `/admin/settings/apps?assistant=${k._id}`,
         title: `This month ${k.name} looked things up ${reads} ${reads === 1 ? 'time' : 'times'} and made ${writes} ${writes === 1 ? 'change' : 'changes'}`,
         text: 'See what it did, undo anything, or disconnect it.',
       });
@@ -38,7 +38,7 @@ async function notices(): Promise<Notice[]> {
 
   // Connections ended for safety (a sign-in token reused after it was swapped).
   for (const e of (await ctx.store.find<AuditDoc>('audit', { action: 'oauth.reuse' })).filter((x) => now - Date.parse(x.at) < WEEK)) {
-    out.push({ id: `safety:${e._id}`, kind: 'safety', at: e.at, href: '/admin/apps', title: 'An assistant was disconnected for safety', text: e.text });
+    out.push({ id: `safety:${e._id}`, kind: 'safety', at: e.at, href: '/admin/settings/apps', title: 'An assistant was disconnected for safety', text: e.text });
   }
 
   const seen = new Set((await ctx.store.find<Seen>('notices', {})).map((s) => s._id));

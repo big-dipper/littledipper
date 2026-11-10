@@ -17,7 +17,7 @@ const MODES: [Mode, string, string][] = [
 const modeLabel = (m: Mode) => MODES.find(([k]) => k === m)![1];
 const KIND = { session: 'Owner session', peer: 'Peer token', app: 'App key' };
 
-export default function Apps() {
+export default function Apps({ embedded = false }: { embedded?: boolean }) {
   const { tech, node } = useAdmin();
   const mcpAddress = `${node.address}/api/mcp`;
   const toast = useToast();
@@ -78,7 +78,7 @@ export default function Apps() {
   return (
     <div data-screen-label="API and keys" style={{ maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div><h1>Apps and access</h1><p className="text-muted" style={{ margin: 0 }}>Keys let apps and services use your data. Each key can only do what you allow, and you can revoke it any time.</p></div>
+        <div>{!embedded && <h1>Apps and access</h1>}<p className="text-muted" style={{ margin: 0 }}>Keys let apps and services use your data. Each key can only do what you allow, and you can revoke it any time.</p></div>
         <button className="btn btn-primary" onClick={() => setNewKey({ name: '', scopes: { 'owner:read': true }, secret: null })}>New API key</button>
       </div>
       <ConnectAssistant />

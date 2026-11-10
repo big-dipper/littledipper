@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { addr, ApiError, copy, get, initials, patch, post, type NodeInfo, type Owner } from '../../api';
 import { Loading, useToast } from '../../ui';
 import { Icon, type IconName } from '../../icons';
@@ -23,10 +23,11 @@ type Admin = {
 const AdminCtx = createContext<Admin>(null as never);
 export const useAdmin = () => useContext(AdminCtx);
 
+/** Everyday places first, setup last. Review only shows while something waits for you. */
 const NAV: [string, string, IconName][] = [
-  ['/admin', 'Home', 'home'], ['/admin/calendar', 'Calendar', 'calendar'], ['/admin/life', 'My data', 'data'], ['/admin/documents', 'Documents', 'documents'], ['/admin/lifestream', 'Lifestream', 'lifestream'],
-  ['/admin/receipts', 'Receipts', 'receipts'], ['/admin/relationships', 'Relationships', 'contacts'], ['/admin/messages', 'Messages', 'messages'], ['/admin/review', 'Review', 'review'],
-  ['/admin/public', 'Public profile', 'profile'], ['/admin/apps', 'Apps and access', 'apps'], ['/admin/settings', 'Settings', 'settings'],
+  ['/admin', 'Home', 'home'], ['/admin/calendar', 'Calendar', 'calendar'], ['/admin/tasks', 'Tasks', 'tasks'], ['/admin/life/notes', 'Notes', 'notes'],
+  ['/admin/messages', 'Messages', 'messages'], ['/admin/relationships', 'Relationships', 'contacts'], ['/admin/life', 'My data', 'data'], ['/admin/documents', 'Documents', 'documents'],
+  ['/admin/review', 'Review', 'review'], ['/admin/public', 'Public profile', 'profile'], ['/admin/settings', 'Settings', 'settings'],
 ];
 const DOCS: [string, string, IconName][] = [['/admin/reference/model', 'Data model', 'model'], ['/admin/reference/endpoints', 'Endpoints', 'endpoints']];
 
@@ -95,7 +96,7 @@ export default function AdminLayout() {
     await post('/api/auth/logout');
     nav('/login', { replace: true });
   };
-  const isOn = (to: string) => (to === '/admin' ? loc.pathname === '/admin' : loc.pathname.startsWith(to));
+  const isOn = (to: string) => (to === '/admin' ? loc.pathname === '/admin' : to === '/admin/life' ? loc.pathname.startsWith(to) && !loc.pathname.startsWith('/admin/life/notes') : loc.pathname.startsWith(to));
 
   return (
     <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, pendingReview, refresh: () => setN((x) => x + 1), version: n, notices }}>
@@ -115,13 +116,14 @@ export default function AdminLayout() {
           </div>
           {NAV.map(([to, label, icon]) => {
             const count = to === '/admin/relationships' ? pendingIn : to === '/admin/messages' ? unreadMessages : to === '/admin/documents' ? inboxDocs : to === '/admin/review' ? pendingReview : 0;
+            if (to === '/admin/review' && !count && !isOn(to)) return null;
             return (
-              <NavLink key={to} to={to} end={to === '/admin'} className="nav-pill" aria-current={isOn(to) ? 'page' : undefined}
+              <Link key={to} to={to} className="nav-pill" aria-current={isOn(to) ? 'page' : undefined}
                 title={rail ? (count ? `${label} (${count})` : label) : undefined} aria-label={rail ? (count ? `${label} (${count})` : label) : undefined}>
                 <Icon name={icon} className="nav-ico" />
                 <span className="nav-label">{label}</span>
                 {count > 0 && <Badge n={count} />}
-              </NavLink>
+              </Link>
             );
           })}
           {tech && (

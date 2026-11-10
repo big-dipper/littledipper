@@ -89,6 +89,10 @@ const PATHS: Record<string, ReactNode> = {
     <circle {...F} cx="12" cy="12" r="8.5" />
     <path {...N} d="M12 8v8M8 12h8" strokeWidth={1.8} />
   </>,
+  notes: <>
+    <path {...F} d="M6.5 3h11A1.5 1.5 0 0 1 19 4.5V15l-6 6H6.5A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3z" />
+    <path {...N} d="M13 21v-4.5a1.5 1.5 0 0 1 1.5-1.5H19M8.5 8h7M8.5 11.5h5" />
+  </>,
   tasks: <>
     <rect {...F} x="4" y="4" width="16" height="16" rx="5" />
     <path {...N} d="m8.5 12.3 2.4 2.4 4.8-5.2" strokeWidth={1.8} />

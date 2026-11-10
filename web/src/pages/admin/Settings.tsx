@@ -5,10 +5,11 @@ import { addr, bytes, copy, del, get, longDate, patch, post, put, saveFile, when
 import { Confirm, Dialog, Loading, Pills, QR, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import BigDipperSetup from './BigDipperSetup';
+import Apps from './Apps';
 import { downloadBackup, useDeviceBackup } from '../../deviceBackup';
 
-type Tab = 'address' | 'hosting' | 'backups' | 'security' | 'big-dipper';
-const TABS: [Tab, string][] = [['address', 'Address'], ['hosting', 'Hosting'], ['backups', 'Backups'], ['security', 'Security'], ['big-dipper', 'Big Dipper']];
+type Tab = 'address' | 'hosting' | 'backups' | 'security' | 'apps' | 'big-dipper';
+const TABS: [Tab, string][] = [['address', 'Address'], ['hosting', 'Hosting'], ['backups', 'Backups'], ['security', 'Security'], ['apps', 'Apps and access'], ['big-dipper', 'Big Dipper']];
 
 const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 14 }}>
@@ -37,6 +38,7 @@ export default function Settings() {
       {tab === 'hosting' && <HostingTab />}
       {tab === 'backups' && <BackupsTab />}
       {tab === 'security' && <SecurityTab />}
+      {tab === 'apps' && <Apps embedded />}
       {tab === 'big-dipper' && <BigDipperSetup />}
     </div>
   );

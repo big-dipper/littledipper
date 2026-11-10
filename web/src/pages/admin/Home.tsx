@@ -44,7 +44,7 @@ export default function Home() {
           <div style={{ fontSize: 13, color: 'var(--color-neutral-400)', marginTop: 4, maxWidth: 560 }}>It gets its own key. You pick which categories it can read, and you can revoke it at any time.</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
-          <Link className="btn btn-primary" to="/admin/apps?preset=assistant" style={{ background: 'var(--color-accent-2-600)' }}>Connect an assistant</Link>
+          <Link className="btn btn-primary" to="/admin/settings/apps?preset=assistant" style={{ background: 'var(--color-accent-2-600)' }}>Connect an assistant</Link>
         </div>
       </div>
 

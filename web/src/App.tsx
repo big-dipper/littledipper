@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { get } from './api';
 import { ToastProvider, useAsync, Loading } from './ui';
 import Setup from './pages/Setup';
@@ -24,7 +24,6 @@ import Documents from './pages/admin/Documents';
 import SharedDocument from './pages/SharedDocument';
 import SharedCopy from './pages/SharedCopy';
 import PublicEditor from './pages/admin/PublicEditor';
-import Apps from './pages/admin/Apps';
 import Settings from './pages/admin/Settings';
 import { DataModel, Endpoints } from './pages/admin/Reference';
 
@@ -70,7 +69,7 @@ export default function App() {
             <Route path="review" element={<Review />} />
             <Route path="messages/:contactId" element={<Messages />} />
             <Route path="public" element={<PublicEditor />} />
-            <Route path="apps" element={<Apps />} />
+            <Route path="apps" element={<AppsRedirect />} />
             <Route path="settings" element={<Settings />} />
             <Route path="settings/:tab" element={<Settings />} />
             <Route path="reference/model" element={<DataModel />} />
@@ -84,6 +83,12 @@ export default function App() {
 }
 
 /** Contacts became Relationships: old links still land on the person. */
+/** Apps and access moved into Settings; old links (notifications, bookmarks) keep working. */
+function AppsRedirect() {
+  const loc = useLocation();
+  return <Navigate to={`/admin/settings/apps${loc.search}`} replace />;
+}
+
 function ContactRedirect() {
   const { id } = useParams();
   return <Navigate to={`/admin/relationships/${id}`} replace />;
