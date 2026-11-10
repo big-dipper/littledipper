@@ -559,13 +559,11 @@ One entry: receipt · Group: money · Default sensitivity: sensitive · Keeps da
 | Return by | `returnBy` | date |  | follows the entry | reminder before it passes |
 | Warranty until | `warrantyUntil` | date |  | follows the entry | reminder before it passes |
 
-## Group: things
-
 ### Vehicles `vehicles`
 
 Cars, bikes and boats you own or owned.
 
-One entry: vehicle · Group: things · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): yes · Can be public: no · Takes documents: registration
+One entry: vehicle · Group: money · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): yes · Can be public: no · Takes documents: registration
 
 | Field | Key | Type | Required | Sensitivity (at least) | Notes |
 |---|---|---|---|---|---|
@@ -586,7 +584,7 @@ Invites: The title (proof you own it); The registration; Is it insured?; The loa
 
 Homes, land and valuables: where they are, who owns them, what they’re worth and the papers that prove it.
 
-One entry: item · Group: things · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): yes · Can be public: no · Takes documents: warranty
+One entry: item · Group: money · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): yes · Can be public: no · Takes documents: warranty
 
 | Field | Key | Type | Required | Sensitivity (at least) | Notes |
 |---|---|---|---|---|---|
@@ -608,11 +606,13 @@ One entry: item · Group: things · Default sensitivity: sensitive · Keeps date
 
 Invites: The deed; The mortgage; Is it insured?; Property tax bills; The receipt.
 
+## Group: personal
+
 ### Memberships & loyalty `memberships`
 
 Frequent flyer, hotel and loyalty numbers, clubs, associations, unions and subscriptions.
 
-One entry: membership · Group: things · Default sensitivity: standard (by kind: union sensitive, religious sensitive, political sensitive) · Keeps dates (validFrom/validTo): yes · Can be public: yes · Takes documents: card
+One entry: membership · Group: personal · Default sensitivity: standard (by kind: union sensitive, religious sensitive, political sensitive) · Keeps dates (validFrom/validTo): yes · Can be public: yes · Takes documents: card
 
 | Field | Key | Type | Required | Sensitivity (at least) | Notes |
 |---|---|---|---|---|---|
@@ -628,7 +628,7 @@ One entry: membership · Group: things · Default sensitivity: standard (by kind
 
 Which services you use, under what username and with which email or phone. Never passwords.
 
-One entry: account · Group: things · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): yes · Can be public: no
+One entry: account · Group: personal · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): yes · Can be public: no
 
 | Field | Key | Type | Required | Sensitivity (at least) | Notes |
 |---|---|---|---|---|---|
@@ -637,8 +637,6 @@ One entry: account · Group: things · Default sensitivity: sensitive · Keeps d
 | Signs in with | `signsInWith` | link to contact_methods |  | follows the entry | Change your email and Little Dipper lists every account still using the old one |
 | Two-factor on | `twoFactor` | boolean |  | follows the entry |  |
 | Where recovery codes are kept | `recoveryHint` | text |  | secret | A location, never the codes themselves |
-
-## Group: personal
 
 ### Notes `notes`
 

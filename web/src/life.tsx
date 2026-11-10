@@ -58,9 +58,8 @@ export const GROUPS: Group[] = [
   { id: 'life', label: 'Life', blurb: 'Where you live, who you live with, where you’ve been', ink: 'var(--color-accent-2-600)', wash: 'var(--color-accent-2-100)' },
   { id: 'work', label: 'Work', blurb: 'What you do and what you’ve learned', ink: 'var(--color-accent-500)', wash: 'var(--color-accent-200)' },
   { id: 'health', label: 'Health', blurb: 'Your body, your care, your cover', ink: 'var(--color-accent-2-800)', wash: 'var(--color-accent-2-200)' },
-  { id: 'money', label: 'Money', blurb: 'Accounts, income, taxes and your estate', ink: 'var(--color-neutral-800)', wash: 'var(--color-neutral-200)' },
-  { id: 'things', label: 'Things', blurb: 'What you own and what you belong to', ink: 'var(--color-accent-600)', wash: 'var(--color-accent-100)' },
-  { id: 'personal', label: 'Personal', blurb: 'The details that make you you', ink: 'var(--color-accent-2-500)', wash: 'var(--color-accent-2-100)' },
+  { id: 'money', label: 'Money', blurb: 'Accounts, income, what you own, taxes and your estate', ink: 'var(--color-neutral-800)', wash: 'var(--color-neutral-200)' },
+  { id: 'personal', label: 'Personal', blurb: 'Your memberships, online accounts and the details that make you you', ink: 'var(--color-accent-2-500)', wash: 'var(--color-accent-2-100)' },
   { id: 'custom', label: 'Your categories', blurb: 'Anything else you want to keep track of', ink: 'var(--color-neutral-600)', wash: 'var(--color-neutral-200)' },
 ];
 export const groupOf = (id: string) => GROUPS.find((g) => g.id === id) ?? GROUPS[GROUPS.length - 1];

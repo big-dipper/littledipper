@@ -491,7 +491,7 @@ const DEFS: Def[] = [
   },
   // ── things ───────────────────────────────────────────────────────────
   {
-    id: 'vehicles', label: 'Vehicles', noun: 'vehicle', group: 'things', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'registration',
+    id: 'vehicles', label: 'Vehicles', noun: 'vehicle', group: 'money', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'registration',
     description: 'Cars, bikes and boats you own or owned.',
     title: '{year} {make} {model}',
     parts: [
@@ -516,7 +516,7 @@ const DEFS: Def[] = [
   },
   {
     // Homes and land carry what verification (and, one day, tokenization) needs: the parcel, how it's held, who owns what share.
-    id: 'property', label: 'Property & valuables', noun: 'item', group: 'things', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'warranty',
+    id: 'property', label: 'Property & valuables', noun: 'item', group: 'money', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'warranty',
     description: 'Homes, land and valuables: where they are, who owns them, what they’re worth and the papers that prove it.',
     title: '{name}',
     parts: [
@@ -545,7 +545,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'memberships', label: 'Memberships & loyalty', noun: 'membership', group: 'things', sensitivity: 'standard', dated: true, publicable: true, documents: 'card',
+    id: 'memberships', label: 'Memberships & loyalty', noun: 'membership', group: 'personal', sensitivity: 'standard', dated: true, publicable: true, documents: 'card',
     sensitivityBy: { part: 'kind', values: { union: 'sensitive', religious: 'sensitive', political: 'sensitive' } },
     description: 'Frequent flyer, hotel and loyalty numbers, clubs, associations, unions and subscriptions.',
     title: '{organization}',
@@ -560,7 +560,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'online_accounts', oneAtATime: true, label: 'Online accounts', noun: 'account', group: 'things', sensitivity: 'sensitive', dated: true, publicable: false,
+    id: 'online_accounts', oneAtATime: true, label: 'Online accounts', noun: 'account', group: 'personal', sensitivity: 'sensitive', dated: true, publicable: false,
     description: 'Which services you use, under what username and with which email or phone. Never passwords.',
     title: '{service} · {username}',
     parts: [
