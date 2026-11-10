@@ -199,39 +199,50 @@ function WhatGoes({ d, partyId, level, secret, first }: { d: Domain; partyId: st
 }
 const PEEK = 4;
 
-/** Entries shared one by one (just this residence, just this job), with a picker to add one. */
+/**
+ * Entries shared one by one (just this residence, just this job). Pick a category and switch on as many of its
+ * entries as you like; what's shared from other categories stays listed above.
+ */
 function SingleEntries({ c, catalog, first, send, ask }: { c: ContactDetail; catalog: Domain[]; first: string; send: (body: object, msg?: string) => Promise<unknown>; ask: (cfg: ConfirmCfg | null) => void }) {
   const [domain, setDomain] = useState('');
   const [recs, setRecs] = useState<Rec[]>([]);
   const pick = async (d: string) => { setDomain(d); setRecs(d ? (await get<{ items: Rec[] }>(`/api/data/${d}`)).items : []); };
   const shared = c.share.entries;
+  const isShared = (id: string) => shared.some((e) => e.id === id);
   // IDs, health, money and secret entries ask first, like whole categories do.
-  const share = async (id: string) => {
+  const toggle = async (r: Rec) => {
+    if (isShared(r.id)) return send({ entries: { [r.id]: false } }, `No longer shared with ${first}`);
     const d = catalog.find((x) => x.id === domain);
-    const title = recs.find((r) => r.id === id)?.title ?? 'this entry';
-    const secret = recs.find((r) => r.id === id)?.sensitivity === 'secret';
-    if (d?.confirmShare || secret) {
+    if (d?.confirmShare || r.sensitivity === 'secret') {
       return ask({
-        title: `Share ${title} with ${first}?`, body: `${first} will see it until you stop sharing it. Each read is logged in your activity.`, cta: 'Share it',
-        onConfirm: async () => { await send({ entries: { [id]: true }, confirm: true }, `Shared with ${first}`); ask(null); pick(''); },
+        title: `Share ${r.title} with ${first}?`, body: `${first} will see it until you stop sharing it. Each read is logged in your activity.`, cta: 'Share it',
+        onConfirm: async () => { await send({ entries: { [r.id]: true }, confirm: true }, `Shared with ${first}`); ask(null); },
       });
     }
-    await send({ entries: { [id]: true } }, `Shared with ${first}`);
-    pick('');
+    return send({ entries: { [r.id]: true } }, `Shared with ${first}`);
   };
+  const others = shared.filter((e) => !recs.some((r) => r.id === e.id));
   return (
     <div style={{ display: 'grid', gap: 6 }}>
-      {shared.map((e) => (
+      {others.map((e) => (
         <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--color-divider)' }}>
           <span style={{ flex: 1, fontSize: 14 }}>{e.title ?? 'An entry'} <span className="text-muted" style={{ fontSize: 12 }}>· {e.domainLabel}</span></span>
           <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => send({ entries: { [e.id]: false } }, `No longer shared with ${first}`)}>Stop sharing</button>
         </div>
       ))}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+      <div style={{ maxWidth: 320 }}>
         <Select value={domain} onChange={pick} placeholder="Pick a category…" options={catalog.filter((d) => d.count > 0).map((d) => [d.id, d.label])} />
-        {domain && <Select value="" onChange={(id) => id && share(id)} placeholder="Pick the one to share"
-          options={recs.filter((r) => !shared.some((e) => e.id === r.id)).map((r) => [r.id, r.title])} />}
       </div>
+      {domain && (
+        <div style={{ display: 'grid' }}>
+          {recs.map((r) => (
+            <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: '1px solid var(--color-divider)' }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>{r.title}{r.sensitivity === 'secret' && <Lock style={{ color: 'var(--color-accent-700)' }} />}</span>
+              <Toggle on={isShared(r.id)} label={`Share ${r.title}`} onChange={() => toggle(r)} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
