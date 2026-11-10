@@ -110,6 +110,15 @@ const job = await add('employment', { employer: alder, title: 'Design lead', arr
 await add('employment', { employer: await party('Kiln Co'), title: 'Ceramicist', endedHow: 'resigned', startingPay: { amount: 28, currency: 'USD', period: 'hour' } }, { validFrom: '2016-01', validTo: '2021-02' });
 await add('relationships', { party: ana, relation: 'reference', job });
 await add('education', { institution: await party('Konstfack'), level: 'master', degree: 'MFA', field: 'Ceramics', outcome: 'graduated', conferredOn: '2014-06-05' }, { validFrom: '2012-09', validTo: '2014-06' });
+// Income: a year from the W-2, then this autumn's paychecks and a couple of ceramics sales.
+await add('income', { received: '2025-12-31', amount: { amount: 82340, currency: 'USD' }, gross: { amount: 116500, currency: 'USD' }, kind: 'wages', payer: alder, source: job, taxForm: 'w2', periodStart: '2025-01-01', periodEnd: '2025-12-31' });
+for (const [day, start] of [['2026-09-04', '2026-08-17'], ['2026-09-18', '2026-08-31'], ['2026-10-02', '2026-09-14'], ['2026-10-16', '2026-09-28'], ['2026-10-30', '2026-10-12']]) {
+  const end = new Date(Date.parse(start) + 13 * 86400_000).toISOString().slice(0, 10);
+  await add('income', { received: day, amount: { amount: 3412.5, currency: 'USD' }, gross: { amount: 4615.38, currency: 'USD' }, kind: 'wages', payer: alder, source: job, how: 'direct_deposit', periodStart: start, periodEnd: end });
+}
+const etsy = await party('Etsy');
+await add('income', { received: '2026-06-14', amount: { amount: 418.2, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Mugs, spring batch' });
+await add('income', { received: '2026-10-21', amount: { amount: 640, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Lamp bases' });
 await add('awards', { name: 'Oregon Craft Award', issuer: await party('Oregon Arts Commission'), date: '2023-05' });
 await add('conditions', { name: 'Gluten sensitivity', status: 'suspected' }, { validFrom: '2025-02' });
 await add('medications', { name: 'Magnesium glycinate', kind: 'supplement', dose: '200 mg', frequency: 'nightly' }, { validFrom: '2025-03' });

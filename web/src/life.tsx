@@ -28,6 +28,8 @@ export type Domain = {
   feedsProfile?: boolean;
   livesOn?: 'party' | 'actions';
   oneAtATime?: boolean;
+  /** Newest first by this date part (receipts: purchase date, income: received on). */
+  sortBy?: string;
   /** What this category invites once an entry is saved (a car: its title, insurance, loan). Never required. */
   companions?: { domain?: string; document?: string; label: string; when?: { part: string; in: string[] } }[];
   single?: boolean;

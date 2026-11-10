@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { get, longDate, post, SENS } from '../../api';
 import { ErrorNote, Loading, useAction, useAsync } from '../../ui';
-import { byWhom, Details, duration, EntryCard, fetchCatalog, fmtRange, groupOf, Lock, Mono, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec, type Version } from '../../life';
+import { byWhom, Details, duration, EntryCard, fetchCatalog, fmtRange, groupOf, Lock, money, Mono, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec, type Version } from '../../life';
 import { plural } from './LifeHub';
 import { CopyList, SendCopy } from './Copies';
 
@@ -21,6 +21,47 @@ const WHY: Record<string, string> = {
   travel: 'Visa and clearance applications ask where you’ve been and when.',
 };
 
+type Money = { amount: number; currency: string };
+
+/** Sums per currency of one money part, each entry weighted (a payment in euros isn't added to dollars). */
+function sums(recs: [Rec, number][], key: string): Money[] {
+  const by = new Map<string, number>();
+  for (const [r, w] of recs) { const m = r.data[key] as Money | undefined; if (m?.currency && w > 0) by.set(m.currency, (by.get(m.currency) ?? 0) + m.amount * w); }
+  return [...by].map(([currency, amount]) => ({ currency, amount: Math.round(amount * 100) / 100 })).sort((a, b) => b.amount - a.amount);
+}
+const sumText = (ms: Money[]) => (ms.length ? ms.map(money).join(' + ') : 'Nothing yet');
+
+/** Income at a glance: this year so far and the last 12 months, worked out from the payments. */
+function IncomeTotals({ items }: { items: Rec[] }) {
+  const now = new Date();
+  const yearStart = `${now.getFullYear()}-01-01`;
+  const yearAgo = new Date(now.getTime() - 365 * 86400_000).toISOString().slice(0, 10);
+  const today = now.toISOString().slice(0, 10);
+  const day = (v: string) => Date.parse(`${v}T00:00:00Z`) / 86400_000;
+  // The share of an entry inside the window: a W-2 for all of last year counts only for the months that overlap.
+  // Without a period, the payment counts in full on the day it was received.
+  const share = (r: Rec, from: string) => {
+    const a = r.data.periodStart as string | undefined, b = r.data.periodEnd as string | undefined;
+    if (a?.length === 10 && b?.length === 10 && b >= a) {
+      const overlap = Math.min(day(b), day(today)) - Math.max(day(a), day(from)) + 1;
+      return Math.max(0, overlap) / (day(b) - day(a) + 1);
+    }
+    return String(r.data.received ?? '') >= from ? 1 : 0;
+  };
+  const tiles: [string, [Rec, number][]][] = [yearStart, yearAgo].map((from, i) => [i ? 'Last 12 months' : 'This year so far', items.map((r) => [r, share(r, from)] as [Rec, number]).filter(([, w]) => w > 0)]);
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 22 }}>
+      {tiles.map(([label, recs]) => (
+        <div key={label} className="card" style={{ padding: '18px 22px', gap: 4 }}>
+          <div className="card-kicker">{label}</div>
+          <div className="card-title" style={{ fontSize: 24 }}>{sumText(sums(recs, 'amount'))}</div>
+          <div className="text-muted" style={{ fontSize: 12 }}>{recs.length} payment{recs.length === 1 ? '' : 's'}{recs.some(([, w]) => w < 1) ? ', some in part' : ''}{sums(recs, 'gross').length ? ` · ${sumText(sums(recs, 'gross'))} gross where known` : ''}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Category() {
   const { domain = '' } = useParams();
   const contacts = useContactsLite();
@@ -31,13 +72,21 @@ export default function Category() {
   const [editing, setEditing] = useState<Rec | 'new' | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(0);
+  const [q, setQ] = useState('');
+  const [year, setYear] = useState('all');
 
   const d = catalog?.find((x) => x.id === domain);
   if (error) return <div><Link className="btn btn-ghost" to="/admin/life">← My data</Link><ErrorNote error={error} /></div>;
   if (!d || !data) return <Loading />;
   const g = groupOf(d.group);
-  const current = d.dated ? data.items.filter((r) => r.current) : data.items;
-  const past = d.dated ? data.items.filter((r) => !r.current) : [];
+  // Long lists (payments, receipts) get a search box and, when entries have a date, a year filter.
+  const searchable = data.items.length > 5;
+  const yearOf = (r: Rec) => String((d.sortBy && r.data[d.sortBy]) ?? r.validFrom ?? '').slice(0, 4);
+  const years = d.sortBy ? [...new Set(data.items.map(yearOf).filter(Boolean))].sort().reverse() : [];
+  const needle = q.trim().toLowerCase();
+  const shown = data.items.filter((r) => (year === 'all' || yearOf(r) === year) && (!needle || r.title.toLowerCase().includes(needle) || JSON.stringify(r.data).toLowerCase().includes(needle) || (r.notes ?? '').toLowerCase().includes(needle)));
+  const current = d.dated ? shown.filter((r) => r.current) : shown;
+  const past = d.dated ? shown.filter((r) => !r.current) : [];
   const done = () => { setEditing(null); reload(); reloadCatalog(); reloadDeleted(); };
   const bringBack = async (v: Version) => { if (await run(() => post(`/api/data/${d.id}/${v.record.id}/history/${v.version}/restore`))) done(); };
 
@@ -62,6 +111,19 @@ export default function Category() {
         <span className={`tag ${SENS[d.sensitivity][1]}`} style={{ gap: 4 }}>{d.sensitivity === 'secret' && <Lock style={{ width: 8, height: 9 }} />}{SENS[d.sensitivity][0]}</span>
         <span className="tag tag-neutral">{d.sharedWith ? `Shared with ${d.sharedWith} contact${d.sharedWith === 1 ? '' : 's'}` : 'Not shared with anyone'}</span>
       </div>
+
+      {d.id === 'income' && data.items.length > 0 && <IncomeTotals items={data.items} />}
+
+      {searchable && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 22 }}>
+          <input className="input" type="search" placeholder={`Search ${plural(d.noun)}…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: '1 1 220px', maxWidth: 360 }} />
+          {years.length > 1 && <select className="input" value={year} onChange={(e) => setYear(e.target.value)} style={{ width: 'auto' }} aria-label="Year">
+            <option value="all">All years</option>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>}
+          {(needle || year !== 'all') && <span className="text-muted" style={{ fontSize: 13 }}>{shown.length} of {data.items.length}</span>}
+        </div>
+      )}
 
       {data.items.length === 0 ? (
         <div className="card" style={{ marginTop: 22, padding: '34px 30px', gap: 10, alignItems: 'flex-start', background: g.wash, position: 'relative', overflow: 'hidden' }}>

@@ -383,16 +383,32 @@ const DEFS: Def[] = [
     ],
   },
   {
-    // What you received, not your rate of pay (that's on the job).
-    id: 'income', label: 'Income', noun: 'income entry', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, sortBy: 'taxYear', documents: 'tax_form',
-    description: 'What you received each year and from where, with the form that proves it (W-2, 1099…).',
-    title: '{taxYear} · {payer}',
+    // Money that actually reached you, one entry per payment (a paycheck, a payout, rent) or per period (a W-2's year).
+    // Your rate of pay is on the job. Amounts are sensitive, not secret, so the page can total them.
+    id: 'income', label: 'Income', noun: 'payment', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, sortBy: 'received', documents: 'pay_stub',
+    description: 'Money you received: paychecks, payouts, rent, benefits. One entry per payment, or one for a whole year.',
+    title: '{payer} · {amount}',
     parts: [
-      { key: 'taxYear', label: 'Tax year', type: 'number', required: true },
-      { key: 'kind', label: 'Kind', type: 'enum', options: o('salary', 'self_employment=Self-employment', 'investment', 'rental', 'pension', 'benefits', 'other') },
-      { key: 'payer', label: 'Paid by', type: 'party', expects: 'organisation' },
+      { key: 'received', label: 'Received on', type: 'date', required: true },
+      { key: 'amount', label: 'Amount received', type: 'money', required: true, hint: 'What reached you, after tax and fees' },
+      // Grouped by where money comes from, because taxes, budgets, benefit applications and building wealth all
+      // ask the same question. Cash work, help from family and benefits are first-class: forms ask about them too.
+      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o(
+        'wages=Work · Wages or salary', 'bonus=Work · Bonus or commission', 'overtime=Work · Overtime', 'tips=Work · Tips', 'cash_work=Work · Cash job or day labor',
+        'self_employment=Business · Self-employment or freelance', 'gig=Business · Gig or app work (Uber, DoorDash, Etsy…)', 'business=Business · Business profits or distributions', 'sales=Business · Selling things you own',
+        'interest=Investments · Interest', 'dividends=Investments · Dividends', 'capital_gains=Investments · Capital gains', 'crypto=Investments · Crypto', 'rental=Investments · Rent from a property or room', 'royalties=Investments · Royalties',
+        'pension=Retirement · Pension or annuity', 'retirement_withdrawal=Retirement · Withdrawal (401(k), IRA…)', 'social_security=Retirement · Social Security',
+        'unemployment=Benefits · Unemployment', 'disability=Benefits · Disability (SSI, SSDI…)', 'food_assistance=Benefits · Food assistance (SNAP, WIC…)', 'cash_assistance=Benefits · Cash assistance (TANF…)', 'tax_credit=Benefits · Tax credit or refund', 'benefits=Benefits · Other government help',
+        'child_support=Family · Child support', 'alimony=Family · Alimony or spousal support', 'family_help=Family · Help from family or friends',
+        'gift=Other · Gift or inheritance', 'prize=Other · Prize, settlement or winnings', 'scholarship=Other · Scholarship or grant', 'other=Other') },
+      { key: 'payer', label: 'Paid by', type: 'party' },
+      { key: 'taxForm', label: 'Reported on', type: 'enum', hint: 'The tax form this shows up on, if any (US forms for now)', options: o('w2=W-2', 'nec=1099-NEC', 'k=1099-K', 'misc=1099-MISC', 'int=1099-INT', 'div=1099-DIV', 'b=1099-B', 'r=1099-R', 'g=1099-G', 'ssa=SSA-1099', 'k1=Schedule K-1', 'other=Another form', 'none=No form') },
+      { key: 'how', label: 'How it was paid', type: 'enum', options: o('direct_deposit=Direct deposit', 'check=Check', 'cash', 'app=Payment app (Venmo, Cash App…)', 'card=Benefits card (EBT…)', 'other') },
+      { key: 'gross', label: 'Gross amount', type: 'money', hint: 'Before tax and fees, if the pay stub or statement shows it' },
+      { key: 'periodStart', label: 'Covers from', type: 'date', hint: 'A paycheck covers a pay period; a W-2 the whole year' },
+      { key: 'periodEnd', label: 'Covers to', type: 'date' },
       { key: 'source', label: 'From', type: 'record', to: ['employment', 'property', 'financial_accounts'], hint: 'The job, rental or account it came from' },
-      { key: 'amount', label: 'Amount received', type: 'money', required: true, sensitivity: 'secret' },
+      { key: 'paidInto', label: 'Paid into', type: 'record', to: ['financial_accounts'] },
     ],
   },
   {
