@@ -20,14 +20,13 @@ export type PublicSection =
 
 const MAX_SECTIONS = 12;
 
-const TITLES: Record<string, string> = { contact_methods: 'Contact', employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications', military: 'Military service' };
+const TITLES: Record<string, string> = { contact_methods: 'Contact', employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications' };
 /** What a new section shows until the owner changes it: the parts a résumé would. */
 const DEFAULT_PARTS: Record<string, string[]> = {
   contact_methods: ['kind', 'value', 'address', 'service', 'label'],
   employment: ['title', 'employer', 'type', 'city', 'country', 'remote', 'description'],
   education: ['institution', 'degree', 'field', 'honors'],
   credentials: ['name', 'issuer', 'kind', 'region', 'issued', 'expires', 'url'],
-  military: ['branch', 'rank', 'country', 'discharge'],
 };
 
 /** Never public: secret parts, links to the owner's contacts, and lists. */

@@ -243,20 +243,6 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'military', label: 'Military service', noun: 'service period', group: 'work', sensitivity: 'sensitive', dated: true, publicable: true, documents: 'certificate',
-    description: 'Branch, rank and how your service was characterized.',
-    title: '{branch} · {rank}',
-    parts: [
-      { key: 'country', label: 'Country', type: 'country', required: true },
-      { key: 'branch', label: 'Branch', type: 'text', required: true },
-      { key: 'rank', label: 'Highest rank', type: 'text' },
-      { key: 'serviceNumber', label: 'Service number', type: 'text', sensitivity: 'secret' },
-      { key: 'characterization', label: 'Characterization of service', type: 'enum', options: o('honorable', 'general=General (under honorable conditions)', 'other_than_honorable=Other than honorable', 'bad_conduct=Bad conduct', 'dishonorable', 'uncharacterized') },
-      { key: 'separationReason', label: 'Reason for separation', type: 'text', hint: 'e.g. end of enlistment, medical' },
-    ],
-    companions: [{ document: 'certificate', label: 'Your discharge paper (e.g. DD-214)' }],
-  },
-  {
     id: 'awards', label: 'Awards & honors', noun: 'award', group: 'work', sensitivity: 'standard', dated: false, publicable: true, sortBy: 'date', documents: 'certificate',
     description: 'Prizes, honors and recognitions, for résumés and applications.',
     title: '{name}',
@@ -385,26 +371,15 @@ const DEFS: Def[] = [
       { key: 'jointWith', label: 'Joint with', type: 'party', many: true },
       { key: 'status', label: 'Status', type: 'enum', options: o('current', 'past_due=Past due', 'charged_off=Charged off', 'in_collections=In collections', 'settled', 'paid_in_full=Paid in full', 'closed') },
       { key: 'statusSince', label: 'Status since', type: 'date' },
-    ],
-    companions: [{ domain: 'collections', label: 'Who’s collecting it now', when: { part: 'status', in: ['in_collections'] } }],
-  },
-  {
-    // A collection is a new relationship with a new party, so it's its own entry pointing to the original debt.
-    // A resold debt points to the previous collection, so the whole chain stays visible.
-    id: 'collections', label: 'Debts in collections', noun: 'collection', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'letter',
-    description: 'Debts a collection agency is pursuing: who, how much they claim, and every letter, dispute and payment.',
-    title: '{collector} · {claimed}',
-    parts: [
-      { key: 'debt', label: 'Original debt', type: 'record', to: ['financial_accounts', 'collections'], required: true },
-      { key: 'collector', label: 'Collector', type: 'party', expects: 'organisation', required: true },
-      { key: 'owner', label: 'Who owns the debt now', type: 'party', expects: 'organisation', hint: 'Often a debt buyer, not the collector' },
-      { key: 'reference', label: 'Their reference number', type: 'text', sensitivity: 'sensitive' },
-      { key: 'originalAmount', label: 'Original amount', type: 'money' },
-      { key: 'claimed', label: 'Amount they claim', type: 'money' },
-      { key: 'claimedAsOf', label: 'Claimed as of', type: 'date' },
-      { key: 'firstDelinquency', label: 'Date of first delinquency', type: 'date', hint: 'Credit-report timelines run from this date' },
-      { key: 'status', label: 'Status', type: 'enum', options: o('open', 'validation_requested=Validation requested', 'disputed', 'payment_plan=Payment plan', 'settled', 'paid') },
-      { key: 'judgment', label: 'Court judgment', type: 'record', to: ['legal'] },
+      // A debt that went wrong: the details live on the account itself, not in a separate category.
+      { key: 'firstDelinquency', label: 'Date of first delinquency', type: 'date', hint: 'Credit-report timelines run from this date', when: { part: 'status', in: ['past_due', 'charged_off', 'in_collections', 'settled'] } },
+      { key: 'collector', label: 'Collector', type: 'party', expects: 'organisation', when: { part: 'status', in: ['in_collections'] } },
+      { key: 'debtOwner', label: 'Who owns the debt now', type: 'party', expects: 'organisation', hint: 'Often a debt buyer, not the collector', when: { part: 'status', in: ['in_collections'] } },
+      { key: 'collectorReference', label: 'Their reference number', type: 'text', sensitivity: 'sensitive', when: { part: 'status', in: ['in_collections'] } },
+      { key: 'claimed', label: 'Amount they claim', type: 'money', when: { part: 'status', in: ['in_collections'] } },
+      { key: 'claimedAsOf', label: 'Claimed as of', type: 'date', when: { part: 'status', in: ['in_collections'] } },
+      { key: 'dispute', label: 'Where it stands', type: 'enum', options: o('open', 'validation_requested=Validation requested', 'disputed', 'payment_plan=Payment plan'), when: { part: 'status', in: ['in_collections'] } },
+      { key: 'judgment', label: 'Court judgment', type: 'record', to: ['legal'], when: { part: 'status', in: ['in_collections'] } },
     ],
   },
   {
@@ -433,17 +408,6 @@ const DEFS: Def[] = [
       { key: 'taxPaid', label: 'Total tax', type: 'money', sensitivity: 'secret' },
       { key: 'refund', label: 'Refund (or amount owed, negative)', type: 'money', sensitivity: 'secret' },
       { key: 'preparer', label: 'Preparer', type: 'party' },
-    ],
-  },
-  {
-    // Your own declaration (tax forms ask you to sign it), never worked out from where you live or your citizenship.
-    id: 'tax_residency', label: 'Tax residency', noun: 'tax residency', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'certificate',
-    description: 'Where you’re a tax resident, as you declare it. You can be resident in more than one place.',
-    title: '{jurisdiction}',
-    parts: [
-      { key: 'jurisdiction', label: 'Where', type: 'region', required: true },
-      { key: 'taxId', label: 'Tax ID there', type: 'record', to: ['ids'] },
-      { key: 'provenBy', label: 'Proven by', type: 'record', to: ['ids'], many: true, hint: 'A tax residency certificate, if you have one' },
     ],
   },
   {

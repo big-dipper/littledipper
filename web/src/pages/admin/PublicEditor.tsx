@@ -14,9 +14,9 @@ type Section =
 type PP = { nameId: string | null; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'anyone'; connectButton?: boolean; sections: Section[]; view: ProfileViewData };
 type Option = { domain: string; label: string; dated: boolean; parts: { key: string; label: string }[]; defaultParts: string[]; records: { id: string; title: string; current: boolean; validFrom: string | null; validTo: string | null }[] };
 
-const DOMAIN_TITLES: Record<string, string> = { contact_methods: 'Contact', employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications', military: 'Military service' };
+const DOMAIN_TITLES: Record<string, string> = { contact_methods: 'Contact', employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications' };
 /** Suggested first, then the rest of the public categories. */
-const ORDER = ['contact_methods', 'employment', 'education', 'credentials', 'military'];
+const ORDER = ['contact_methods', 'employment', 'education', 'credentials'];
 
 export default function PublicEditor() {
   const { node } = useAdmin();

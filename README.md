@@ -77,7 +77,7 @@ Personal data is organised into **domains**, one per category. Each domain has i
 |---|---|
 | Identity | `names`, `ids` (government IDs), `citizenship`, `contact_methods` |
 | Life | `residences`, `relationships`, `pets`, `travel`, `life_events` |
-| Work | `employment`, `education`, `credentials`, `military` |
+| Work | `employment`, `education`, `credentials` |
 | Health | `health`, `insurance` |
 | Money | `financial_accounts`, `income`, `tax_returns`, `legal`, `vehicles`, `property` |
 | Personal | `memberships`, `online_accounts`, `preferences` |
