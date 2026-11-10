@@ -31,9 +31,6 @@ const CODE_TTL_MS = 60_000;
 export const LENGTHS = { hour: 3600, day: 86400, '60d': 60 * 86400, forever: 0 } as const;
 type Length = keyof typeof LENGTHS;
 
-/** Everyday: the kinds people most often want help with. Not IDs, health, money or legal. */
-export const EVERYDAY = ['names', 'contact_methods', 'residences', 'relationships', 'pets', 'travel', 'events', 'employment', 'education', 'credentials', 'awards', 'vehicles', 'property', 'memberships', 'insurance', 'receipts', 'preferences'];
-
 type ClientDoc = Doc & { name: string; uri: string | null; redirectUris: string[]; createdAt: string };
 type CodeDoc = Doc & { hash: string; clientId: string; redirectUri: string; challenge: string; scopes: string[]; assistant: AssistantSettings; length: Length; ownerKeyId: string; expiresAt: string; usedAt: string | null };
 type TokenDoc = Doc & { hash: string; kind: 'access' | 'refresh'; keyId: string; expiresAt: string; usedAt: string | null };
@@ -63,12 +60,12 @@ function checkRedirect(u: string) {
 }
 
 /** The grant the owner chose, turned into scopes. Answer-only assistants get read scopes only. */
-export async function scopesFor(choice: { preset: 'everyday' | 'everything' | 'custom'; kinds?: string[]; documents?: boolean }, mode: AssistantSettings['mode']) {
+export async function scopesFor(choice: { preset: 'everything' | 'custom'; kinds?: string[]; documents?: boolean }, mode: AssistantSettings['mode']) {
   const known = new Set((await listDomains()).map((d) => d.id));
   const verbs = mode === 'answer' ? ['read'] : ['read', 'write'];
   if (choice.preset === 'everything') return [...verbs.map((v) => `records:${v}`), ...verbs.map((v) => `documents:${v}`)];
-  const kinds = (choice.preset === 'everyday' ? EVERYDAY : choice.kinds ?? []).filter((k) => known.has(k));
-  const docs = choice.preset === 'everyday' ? true : !!choice.documents;
+  const kinds = (choice.kinds ?? []).filter((k) => known.has(k));
+  const docs = !!choice.documents;
   if (!kinds.length && !docs) throw new HttpError(400, 'nothing_chosen', 'Choose at least one kind of record');
   return [...kinds.flatMap((k) => verbs.map((v) => `${k}:${v}`)), ...(docs ? verbs.map((v) => `documents:${v}`) : [])];
 }
@@ -156,10 +153,8 @@ export default async function oauthRoutes(app: FastifyInstance) {
   app.get('/api/oauth/request', async (req) => {
     await requireSession(req);
     const { client } = await checkRequest(req.query as Record<string, unknown>);
-    const domains = await listDomains();
     return {
       client: { name: client.name, uri: client.uri, verified: false, redirectHost: new URL((req.query as { redirect_uri: string }).redirect_uri).host },
-      everyday: EVERYDAY.filter((k) => domains.some((d) => d.id === k)),
       lengths: Object.keys(LENGTHS),
     };
   });
@@ -167,7 +162,7 @@ export default async function oauthRoutes(app: FastifyInstance) {
   /** The owner's answer. Returns where to send the browser: back to the assistant with a code, or with access_denied. */
   app.post('/api/oauth/authorize', async (req) => {
     const p = await requireSession(req);
-    const b = (req.body || {}) as Record<string, unknown> & { approve?: boolean; preset?: 'everyday' | 'everything' | 'custom'; kinds?: string[]; documents?: boolean; assistant?: unknown; length?: string };
+    const b = (req.body || {}) as Record<string, unknown> & { approve?: boolean; preset?: 'everything' | 'custom'; kinds?: string[]; documents?: boolean; assistant?: unknown; length?: string };
     const { client, redirectUri, challenge, state } = await checkRequest(b);
     const iss = await base();
     if (!b.approve) {
@@ -176,7 +171,7 @@ export default async function oauthRoutes(app: FastifyInstance) {
     }
     const assistant = checkAssistant(b.assistant) ?? { mode: 'suggest', secretFields: [] };
     const length = (b.length && b.length in LENGTHS ? b.length : '60d') as Length;
-    const scopes = await scopesFor({ preset: b.preset ?? 'everyday', kinds: b.kinds, documents: b.documents }, assistant.mode);
+    const scopes = await scopesFor({ preset: b.preset === 'everything' ? 'everything' : 'custom', kinds: b.kinds, documents: b.documents }, assistant.mode);
     const code = `ldo_ac_${randomToken(32)}`;
     await ctx.store.insert<CodeDoc>('oauthCodes', {
       _id: newId('cod'), hash: sha256(code), clientId: client._id, redirectUri, challenge, scopes, assistant, length, ownerKeyId: p.key._id,

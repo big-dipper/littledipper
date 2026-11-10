@@ -10,7 +10,7 @@ import { Brand, Circle, Loading, Pills } from '../ui';
  */
 type Mode = 'answer' | 'suggest' | 'make';
 type Length = 'hour' | 'day' | '60d' | 'forever';
-type Info = { client: { name: string; uri: string | null; verified: boolean; redirectHost: string }; everyday: string[] };
+type Info = { client: { name: string; uri: string | null; verified: boolean; redirectHost: string } };
 
 const MODES: [Mode, string, string][] = [
   ['answer', 'Answer questions', 'It reads what you allow and changes nothing.'],
@@ -26,9 +26,9 @@ export default function Authorize() {
   const [info, setInfo] = useState<Info | null>(null);
   const [catalog, setCatalog] = useState<Domain[] | null>(null);
   const [error, setError] = useState('');
-  const [preset, setPreset] = useState<'everyday' | 'everything' | 'custom'>('everyday');
+  const [preset, setPreset] = useState<'everything' | 'custom'>('custom');
   const [kinds, setKinds] = useState<string[]>([]);
-  const [documents, setDocuments] = useState(true);
+  const [documents, setDocuments] = useState(false);
   const [mode, setMode] = useState<Mode>('suggest');
   const [secretFields, setSecretFields] = useState<string[]>([]);
   const [length, setLength] = useState<Length>('60d');
@@ -36,14 +36,14 @@ export default function Authorize() {
 
   useEffect(() => {
     get<Info>(`/api/oauth/request?${params.toString()}`)
-      .then((i) => { setInfo(i); setKinds(i.everyday); return fetchCatalog().then(setCatalog); })
+      .then((i) => { setInfo(i); return fetchCatalog().then(setCatalog); })
       .catch((e) => {
         if (e instanceof ApiError && e.status === 401) nav(`/login?next=${encodeURIComponent(`/oauth/authorize?${params.toString()}`)}`, { replace: true });
         else setError((e as Error).message);
       });
   }, [params, nav]);
 
-  const visible = (catalog ?? []).filter((d) => preset === 'everything' || (preset === 'everyday' ? info?.everyday.includes(d.id) : kinds.includes(d.id)));
+  const visible = (catalog ?? []).filter((d) => preset === 'everything' || kinds.includes(d.id));
   const secrets = visible.flatMap((d) => d.parts.filter((p) => p.sensitivity === 'secret' && !p.deprecated).map((p) => ({ id: `${d.id}.${p.key}`, label: `${d.label}: ${p.label}` })));
 
   const answer = async (approve: boolean) => {
@@ -85,11 +85,10 @@ export default function Authorize() {
             </div>
 
             <h3 style={{ marginTop: 28 }}>What it can see</h3>
-            <Pills value={preset} onChange={setPreset} options={[['everyday', 'Everyday'], ['everything', 'Everything'], ['custom', 'Choose']]} />
+            <Pills value={preset} onChange={setPreset} options={[['custom', 'Choose'], ['everything', 'Everything']]} />
             <div className="text-muted" style={{ fontSize: 13, marginTop: 8 }}>
-              {preset === 'everyday' && 'Addresses, work, education, vehicles, home, insurance, pets, receipts, events and documents. Not IDs, health, money or legal records.'}
               {preset === 'everything' && 'Every kind of record and every document.'}
-              {preset === 'custom' && 'Pick the kinds of records it may see.'}
+              {preset === 'custom' && 'Pick the kinds of records it may see. Nothing is picked until you choose.'}
             </div>
             {preset === 'custom' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 4, marginTop: 10 }}>
