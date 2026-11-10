@@ -11,7 +11,7 @@ type HostTab = 'railway' | 'render' | 'docker' | 'vps' | 'home';
 /** Where the one-click setup starts. It holds the claim code it made, in the owner's browser. */
 
 const HOST: Record<HostTab, { label: string; text: string; cmd: string; out: (a: string) => string; note: string }> = {
-  railway: { label: 'Railway', text: 'Your claim code was made when you deployed. Only someone signed in to your Railway account can see it, so it proves the server is yours. It works until you claim.', cmd: 'Railway → your Little Dipper → Variables → LD_CLAIM_TOKEN', out: () => 'Copy the value (click the eye to reveal it) and paste it below', note: 'Started from Big Dipper in another browser? Use this code instead.' },
+  railway: { label: 'Railway', text: 'In Railway, open your Little Dipper, then Variables. Click the eye next to LD_CLAIM_TOKEN to show it, and copy it.', cmd: 'Railway → your Little Dipper → Variables → LD_CLAIM_TOKEN', out: () => 'Copy the value (click the eye to reveal it) and paste it below', note: 'Started from Big Dipper in another browser? Use this code instead.' },
   render: { label: 'Render / one-click', text: 'The install button opened your claim link automatically. If you closed that tab, the link is also in your service logs from the first boot.', cmd: 'Render → your service → Logs', out: (a) => `Claim this node: https://${a}/claim?token=ct_…`, note: 'Expired? Open the Render Shell and run: little-dipper claim-link' },
   docker: { label: 'Docker', text: 'The link prints to the container logs on first boot. Anyone who can read those logs controls the server, so it proves you deployed it.', cmd: '$ docker logs little-dipper | grep claim', out: (a) => `Claim this node: https://${a}/claim?token=ct_…`, note: 'Expired? Run: docker exec little-dipper little-dipper claim-link' },
   vps: { label: 'Server / VPS', text: 'Run the CLI on the machine. It prints a fresh link, valid for 1 hour, and invalidates any earlier one.', cmd: '$ sudo little-dipper claim-link', out: (a) => `https://${a}/claim?token=ct_…  (expires in 60 min)`, note: 'Headless box without a browser? Add --qr to print a QR code you can scan with your phone.' },
@@ -52,6 +52,10 @@ export default function Setup() {
   const [mode, setMode] = useState<'claim' | 'transfer'>('claim');
   const [step, setStep] = useState(0);
   const [hostTab, setHostTab] = useState<HostTab>('docker');
+  // Railway and Render are recognised, so only their steps show; elsewhere you pick where it runs.
+  const [hostKnown, setHostKnown] = useState(false);
+  // Big Dipper sends people back with ?help=1 when it couldn't finish automatically.
+  const [help, setHelp] = useState(() => params.has('help'));
   const [claimInput, setClaimInput] = useState('');
   const [claimError, setClaimError] = useState(false);
   const [form, setForm] = useState({ name: '', email: '' });
@@ -68,6 +72,7 @@ export default function Setup() {
       setStatus(s);
       const l = s.hosting.label.toLowerCase();
       setHostTab(l.includes('railway') ? 'railway' : l.includes('render') ? 'render' : l.includes('docker') ? 'docker' : 'vps');
+      setHostKnown(l.includes('railway') || l.includes('render'));
     });
   }, []);
 
@@ -77,7 +82,7 @@ export default function Setup() {
     tried.current = true;
     post<{ mode: 'claim' | 'transfer' }>('/api/node/claim', { token })
       .then((r) => { setMode(r.mode); setVerified('yes'); })
-      .catch(() => { setVerified('no'); setClaimError(true); });
+      .catch(() => { setVerified('no'); setClaimError(true); setHelp(true); });
   }, [token]);
 
   if (!status || verified === 'checking') return <div style={{ padding: 48 }}><Loading /></div>;
@@ -177,13 +182,16 @@ export default function Setup() {
         {!restoring && step === 0 && verified === 'no' && (
           <>
             <span className="tag tag-accent">Not set up yet</span>
-            <h1 style={{ marginTop: 14, fontSize: 44, textWrap: 'pretty' }}>This Little Dipper is waiting for its owner.</h1>
-            <div className="card" style={{ padding: '20px 24px', gap: 10, marginTop: 20 }}>
-              <div style={{ fontSize: 15 }}><strong>Set it up from Big Dipper?</strong> Big Dipper kept your claim code in that browser and will bring you straight back.</div>
-              <div><a className="btn btn-primary" href={`${BIG_DIPPER}/continue?node=${encodeURIComponent(window.location.origin)}`} style={{ fontSize: 16, padding: '12px 26px' }}>Finish setting up</a></div>
-            </div>
-            <p style={{ fontSize: 17, maxWidth: 540, textWrap: 'pretty', marginTop: 28 }}>Otherwise, you need the claim code (or claim link) made when it was set up. Only the person who set it up can see it. Where to find it depends on where it runs:</p>
-            <Pills value={hostTab} onChange={setHostTab} options={Object.entries(HOST).map(([k, h]) => [k as HostTab, h.label])} style={{ margin: '24px 0 14px' }} />
+            <h1 style={{ marginTop: 14, fontSize: 44, textWrap: 'pretty' }}>Almost there.</h1>
+            <p style={{ fontSize: 17, maxWidth: 540, textWrap: 'pretty' }}>Your Little Dipper is running. One more step to make it yours.</p>
+            <div style={{ marginTop: 20 }}><a className="btn btn-primary" href={`${BIG_DIPPER}/continue?node=${encodeURIComponent(window.location.origin)}`} style={{ fontSize: 16, padding: '12px 26px' }}>Finish setting up</a></div>
+            {!help ? (
+              <button className="btn btn-ghost" onClick={() => setHelp(true)} style={{ fontSize: 14, marginTop: 18 }}>Having trouble?</button>
+            ) : (
+            <>
+            <h3 style={{ marginTop: 40 }}>Finish by hand</h3>
+            <p style={{ fontSize: 15, maxWidth: 540, textWrap: 'pretty' }}>Copy your setup code from where your Little Dipper runs and paste it below. Only someone who can open that account has it, which is how your Little Dipper knows it’s you.</p>
+            {!hostKnown && <Pills value={hostTab} onChange={setHostTab} options={Object.entries(HOST).map(([k, h]) => [k as HostTab, h.label])} style={{ margin: '24px 0 14px' }} />}
             <div className="card" style={{ padding: '20px 24px', gap: 12 }}>
               <div style={{ fontSize: 14 }}>{host.text}</div>
               <div className="mono" style={{ background: 'var(--color-neutral-900)', color: 'var(--color-neutral-200)', borderRadius: 20, padding: '14px 18px', fontSize: 12.5, lineHeight: 1.7, overflowX: 'auto' }}>
@@ -193,13 +201,15 @@ export default function Setup() {
               <div className="text-muted" style={{ fontSize: 12 }}>{host.note}</div>
             </div>
             <div className="field" style={{ marginTop: 20 }}>
-              <label htmlFor="claim">Paste your claim link or code</label>
+              <label htmlFor="claim">Paste your setup code</label>
               <input id="claim" className="input mono" placeholder="https://…/claim?token=…  or the code itself" value={claimInput} onChange={(e) => { setClaimInput(e.target.value); setClaimError(false); }} onKeyDown={(e) => e.key === 'Enter' && submitClaim()} style={{ fontSize: 13, minHeight: 44 }} />
             </div>
             {claimError && <p style={{ color: 'var(--color-accent-700)', fontSize: 13, marginTop: 8 }}>That link or code isn't valid for this Little Dipper, or it has expired. Check it against the steps above.</p>}
             <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
               <button className="btn btn-primary" disabled={busy || !claimInput.trim()} onClick={submitClaim}>Verify and continue</button>
             </div>
+            </>
+            )}
           </>
         )}
 
