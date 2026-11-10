@@ -111,10 +111,8 @@ export default function ContactAccess({ c, fields, first, onGrants, onPreview }:
         )}
       </div>
 
-      {/* Life categories */}
+      {/* Life categories, then just one item from one */}
       <div style={{ display: 'grid', gap: 8 }}>
-        <SubHead>Single entries</SubHead>
-        <SingleEntries c={c} catalog={catalog ?? []} first={first} send={send} ask={setConfirm} />
         <SubHead>Whole categories</SubHead>
         {!catalog ? <div className="text-muted" style={{ fontSize: 13 }}>Loading…</div> : GROUPS.map((g) => {
           const list = catalog.filter((d) => d.group === g.id && !d.oneAtATime);
@@ -164,6 +162,9 @@ export default function ContactAccess({ c, fields, first, onGrants, onPreview }:
             </div>
           );
         })}
+        <SubHead>Just one item</SubHead>
+        <div className="text-muted" style={{ fontSize: 12, marginTop: -4 }}>Share one job, address or document without the rest of its category.</div>
+        <SingleEntries c={c} catalog={catalog ?? []} first={first} send={send} ask={setConfirm} />
       </div>
       {confirm && <Confirm cfg={confirm} onClose={() => setConfirm(null)} />}
     </div>
@@ -227,8 +228,8 @@ function SingleEntries({ c, catalog, first, send, ask }: { c: ContactDetail; cat
         </div>
       ))}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-        <Select value={domain} onChange={pick} placeholder="Share one entry from…" options={catalog.filter((d) => d.count > 0).map((d) => [d.id, d.label])} />
-        {domain && <Select value="" onChange={(id) => id && share(id)} placeholder="Choose the entry"
+        <Select value={domain} onChange={pick} placeholder="Pick a category…" options={catalog.filter((d) => d.count > 0).map((d) => [d.id, d.label])} />
+        {domain && <Select value="" onChange={(id) => id && share(id)} placeholder="Pick the one to share"
           options={recs.filter((r) => !shared.some((e) => e.id === r.id)).map((r) => [r.id, r.title])} />}
       </div>
     </div>
