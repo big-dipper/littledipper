@@ -4,7 +4,7 @@ import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, s
 import { Confirm, Dialog, ErrorNote, Loading, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
-import { fetchCatalog, fmtRange, PartialDate, RecordEditor, Select, useContactsLite, type Rec } from '../../life';
+import { fetchCatalog, fmtRange, money, PartialDate, RecordEditor, Select, useContactsLite, type Rec } from '../../life';
 import { CopyList, SendCopy } from './Copies';
 import SharedWithYou from './SharedWithYou';
 import { giveList, ShareChooser, toShare, useSharing, type Choice, type Relation, type SharingData } from '../../sharing';
@@ -115,6 +115,7 @@ export default function ContactDetail() {
           {/* One column, top to bottom, like Home: what they see, how you know them, their details, what they share, then the rest. */}
           <div style={{ display: 'grid', gap: 22, marginTop: 22 }}>
             <div style={{ display: 'grid', gap: 22 }}>
+              {catalog && <BetweenYou c={c} />}
               {catalog && <HowYouKnow partyId={c.id} first={first} catalog={catalog} notes={isNode ? { text: c.notes, save: (notes) => run(() => patch(`/api/parties/${c.id}`, { notes }), 'Saved').then(reload) } : undefined} />}
               {/* One contact card: what they share (kept up to date by them), plus anything you added yourself. */}
               <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
@@ -279,6 +280,44 @@ function HowYouKnow({ partyId, first, catalog, notes }: { partyId: string; first
       {data && !mine.length && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>Spouse, family, a reference, a mentor… Add how you know {first} if it helps.</div>}
       {notes && <YourNotes first={first} {...notes} />}
       {editing && <RecordEditor d={d} rec={editing.rec} contacts={contacts} defaults={{ party: partyId }} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+    </div>
+  );
+}
+
+type Money = { amount: number; currency: string };
+/** The money part each money category is about, and how to say it: payments received, receipts spent. */
+const MONEY: Record<string, { part: string; verb: string }> = { income: { part: 'amount', verb: 'received' }, receipts: { part: 'total', verb: 'spent' } };
+
+/**
+ * Everything between you and them, from your own entries: money first (payments received, what you spent), then
+ * accounts, jobs, policies and anything else that names them. Each line opens that category, searched for them.
+ */
+function BetweenYou({ c }: { c: CD }) {
+  const refs = c.usedBy.filter((u) => u.domain !== 'relationships');
+  const ids = new Set(refs.map((u) => u.recordId));
+  const moneyDomains = [...new Set(refs.map((u) => u.domain))].filter((d) => MONEY[d]);
+  const { data: recs } = useAsync(async () => Object.fromEntries(await Promise.all(moneyDomains.map(async (d) => [d, (await get<{ items: Rec[] }>(`/api/data/${d}`)).items.filter((r) => ids.has(r.id))] as const))), [c.id, refs.length]);
+  if (!refs.length) return null;
+  const byDomain = [...refs.reduce((m, u) => m.set(u.domain, [...(m.get(u.domain) ?? []), u]), new Map<string, typeof refs>())]
+    .sort(([a], [b]) => Number(!!MONEY[b]) - Number(!!MONEY[a]));
+  const total = (d: string) => {
+    const by = new Map<string, number>();
+    for (const r of recs?.[d] ?? []) { const m = r.data[MONEY[d].part] as Money | undefined; if (m?.currency) by.set(m.currency, (by.get(m.currency) ?? 0) + m.amount); }
+    return [...by].map(([currency, amount]) => money({ currency, amount: Math.round(amount * 100) / 100 })).join(' + ');
+  };
+  return (
+    <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
+      <div className="card-kicker">Between you</div>
+      {byDomain.map(([d, list]) => {
+        const unique = [...new Map(list.map((u) => [u.recordId, u])).values()];
+        const sum = MONEY[d] ? total(d) : '';
+        return (
+          <Link key={d} to={`/admin/life/${d}?q=${encodeURIComponent(c.name)}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', textDecoration: 'none', color: 'inherit', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 14 }}>{list[0].domainLabel} <span className="text-muted">· {unique.length}</span></span>
+            <span className="text-muted" style={{ fontSize: 13, textAlign: 'right' }}>{sum ? `${sum} ${MONEY[d].verb}` : unique.slice(0, 2).map((u) => u.title).join(' · ') + (unique.length > 2 ? ' …' : '')}</span>
+          </Link>
+        );
+      })}
     </div>
   );
 }

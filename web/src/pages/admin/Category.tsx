@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { get, longDate, post, SENS } from '../../api';
 import { ErrorNote, Loading, useAction, useAsync } from '../../ui';
 import { byWhom, Details, duration, EntryCard, fetchCatalog, fmtRange, groupOf, Lock, money, Mono, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec, type Version } from '../../life';
@@ -72,7 +72,9 @@ export default function Category() {
   const [editing, setEditing] = useState<Rec | 'new' | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(0);
-  const [q, setQ] = useState('');
+  // A relationship's "Between you" links here searched for them.
+  const [params] = useSearchParams();
+  const [q, setQ] = useState(() => params.get('q') ?? '');
   const [year, setYear] = useState('all');
 
   const d = catalog?.find((x) => x.id === domain);
@@ -80,7 +82,7 @@ export default function Category() {
   if (!d || !data) return <Loading />;
   const g = groupOf(d.group);
   // Long lists (payments, receipts) get a search box and, when entries have a date, a year filter.
-  const searchable = data.items.length > 5;
+  const searchable = data.items.length > 5 || !!q;
   const yearOf = (r: Rec) => String((d.sortBy && r.data[d.sortBy]) ?? r.validFrom ?? '').slice(0, 4);
   const years = d.sortBy ? [...new Set(data.items.map(yearOf).filter(Boolean))].sort().reverse() : [];
   const needle = q.trim().toLowerCase();

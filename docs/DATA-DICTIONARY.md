@@ -457,7 +457,7 @@ One entry: payment · Group: money · Default sensitivity: sensitive · Keeps da
 | Received on | `received` | date | yes | follows the entry |  |
 | Amount received | `amount` | money | yes | follows the entry | What reached you, after tax and fees |
 | Kind | `kind` | one of: wages, bonus, overtime, tips, cash_work, self_employment, gig, business, sales, interest, dividends, capital_gains, crypto, rental, royalties, pension, retirement_withdrawal, social_security, unemployment, disability, food_assistance, cash_assistance, tax_credit, benefits, child_support, alimony, family_help, gift, prize, scholarship, other | yes | follows the entry |  |
-| Paid by | `payer` | party |  | follows the entry |  |
+| Paid by | `payer` | party | yes | follows the entry | Who paid you: an employer, a client, an app, an agency, a person |
 | Reported on | `taxForm` | one of: w2, nec, k, misc, int, div, b, r, g, ssa, k1, other, none |  | follows the entry | The tax form this shows up on, if any (US forms for now) |
 | How it was paid | `how` | one of: direct_deposit, check, cash, app, card, other |  | follows the entry |  |
 | Gross amount | `gross` | money |  | follows the entry | Before tax and fees, if the pay stub or statement shows it |

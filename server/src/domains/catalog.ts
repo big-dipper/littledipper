@@ -401,7 +401,7 @@ const DEFS: Def[] = [
         'unemployment=Benefits · Unemployment', 'disability=Benefits · Disability (SSI, SSDI…)', 'food_assistance=Benefits · Food assistance (SNAP, WIC…)', 'cash_assistance=Benefits · Cash assistance (TANF…)', 'tax_credit=Benefits · Tax credit or refund', 'benefits=Benefits · Other government help',
         'child_support=Family · Child support', 'alimony=Family · Alimony or spousal support', 'family_help=Family · Help from family or friends',
         'gift=Other · Gift or inheritance', 'prize=Other · Prize, settlement or winnings', 'scholarship=Other · Scholarship or grant', 'other=Other') },
-      { key: 'payer', label: 'Paid by', type: 'party' },
+      { key: 'payer', label: 'Paid by', type: 'party', required: true, hint: 'Who paid you: an employer, a client, an app, an agency, a person' },
       { key: 'taxForm', label: 'Reported on', type: 'enum', hint: 'The tax form this shows up on, if any (US forms for now)', options: o('w2=W-2', 'nec=1099-NEC', 'k=1099-K', 'misc=1099-MISC', 'int=1099-INT', 'div=1099-DIV', 'b=1099-B', 'r=1099-R', 'g=1099-G', 'ssa=SSA-1099', 'k1=Schedule K-1', 'other=Another form', 'none=No form') },
       { key: 'how', label: 'How it was paid', type: 'enum', options: o('direct_deposit=Direct deposit', 'check=Check', 'cash', 'app=Payment app (Venmo, Cash App…)', 'card=Benefits card (EBT…)', 'other') },
       { key: 'gross', label: 'Gross amount', type: 'money', hint: 'Before tax and fees, if the pay stub or statement shows it' },
