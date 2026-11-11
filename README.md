@@ -79,7 +79,7 @@ Personal data is organised into **domains**, one per category. Each domain has i
 | Life | `residences`, `relationships`, `pets`, `travel`, `life_events` |
 | Work | `employment`, `education`, `credentials` |
 | Health | `health`, `insurance` |
-| Money | `financial_accounts`, `income`, `tax_returns`, `legal`, `vehicles`, `property` |
+| Money | `financial_accounts`, `income`, `tax_returns`, `legal`, `vehicles`, `real_estate`, `valuables` |
 | Personal | `memberships`, `notes`, `preferences` |
 
 - **Definitions** live in `server/src/domains/catalog.ts`: parts, types, sensitivity, whether records are dated and the display title. Owners can add their own categories (`POST /api/catalog`, ids `x_…`).
