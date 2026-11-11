@@ -43,7 +43,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    // One entry. Time and coordinates are optional (astrology charts and maps use them); the zone makes the time exact.
+    // One entry. Time is optional (birth charts use it); the zone makes the time exact.
     id: 'birth', label: 'Birth', noun: 'birth', group: 'identity', sensitivity: 'sensitive', dated: false, publicable: false, single: true, livesOn: 'profile', documents: 'certificate',
     description: 'When and where you were born. Your birthday shows in Calendar.',
     title: '{date}',
@@ -54,7 +54,6 @@ const DEFS: Def[] = [
       { key: 'city', label: 'City', type: 'text' },
       { key: 'region', label: 'State / region', type: 'text' },
       { key: 'country', label: 'Country', type: 'country', hint: 'Today’s country' },
-      { key: 'coordinates', label: 'Coordinates', type: 'geo' },
       { key: 'asWritten', label: 'As written on the birth certificate', type: 'text', hint: 'e.g. Leningrad, USSR, for a country that no longer exists' },
     ],
   },

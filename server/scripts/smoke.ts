@@ -123,7 +123,7 @@ async function main() {
     const legalName = await a.call('POST', '/api/data/names', { data: { kind: 'legal', full: 'Maya Elin Lindqvist', reason: 'birth' }, validFrom: '1984' });
     ok((await line('legal_name'))?.value === 'Maya Elin Lindqvist' && (await line('legal_name'))?.sensitivity === 'sensitive' && (await line('preferred_name'))?.sensitivity === 'standard', 'legal and preferred names are lines of their own, each as sensitive as its entry');
     ok(!(await line('birth_name')), 'no birth-name line while it’s still your legal name');
-    await a.call('POST', '/api/data/birth', { data: { date: '1984-03-09', time: '06:42:17', timeZone: 'America/Chicago', city: 'Peoria', region: 'Illinois', country: 'US', coordinates: { lat: 40.6936, lon: -89.589 } } });
+    await a.call('POST', '/api/data/birth', { data: { date: '1984-03-09', time: '06:42:17', timeZone: 'America/Chicago', city: 'Peoria', region: 'Illinois', country: 'US' } });
     ok((await line('born'))?.value.includes('06:42:17') && (await line('born'))?.value.includes('Peoria, Illinois, United States'), 'birth keeps the time to the second and the place');
     await a.call('POST', '/api/data/birth', { data: { date: '1990-01-01' } }, [400]);
     await a.call('POST', '/api/data/birth', { data: { date: '1984-03-09', time: '6:42pm' } }, [400]);
