@@ -94,11 +94,12 @@ const DEFS: Def[] = [
     title: '{label} {kind}: {value}',
     parts: [
       { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('email', 'phone', 'postal=Mailing address', 'website', 'social', 'messaging') },
-      { key: 'value', label: 'Value', type: 'text', required: true, when: { part: 'kind', in: ['email', 'phone', 'website', 'social', 'messaging'] } },
-      { key: 'address', label: 'Address', type: 'address', required: true, when: { part: 'kind', in: ['postal'] } },
-      { key: 'residence', label: 'Same as', type: 'record', to: ['residences'], when: { part: 'kind', in: ['postal'] }, hint: 'Point to where you live instead of typing it again' },
-      { key: 'service', label: 'Service', type: 'text', required: true, when: { part: 'kind', in: ['social', 'messaging'] }, hint: 'Instagram, Signal…' },
-      { key: 'label', label: 'Label', type: 'text', hint: 'Personal, Work…' },
+      { key: 'value', label: 'Value', type: 'text', required: true, when: { part: 'kind', in: ['email', 'phone', 'website', 'social', 'messaging'] },
+        labelBy: { part: 'kind', labels: { email: 'Email address', phone: 'Phone number', website: 'Web address', social: 'Username or handle', messaging: 'Username or number' } } },
+      // A mailing address is only for mail that goes somewhere other than home (a PO box, work). Home lives in Residences.
+      { key: 'address', label: 'Mailing address', type: 'address', required: true, when: { part: 'kind', in: ['postal'] }, hint: 'Only if mail goes somewhere other than your home' },
+      { key: 'service', label: 'Service', type: 'text', required: true, when: { part: 'kind', in: ['social', 'messaging'] }, suggestions: ['Instagram', 'LinkedIn', 'Facebook', 'TikTok', 'X', 'WhatsApp', 'Signal', 'Telegram'] },
+      { key: 'label', label: 'Label', type: 'text', suggestions: ['Personal', 'Work', 'Mobile', 'Home'] },
       { key: 'primary', label: 'Main one', type: 'boolean' },
     ],
   },

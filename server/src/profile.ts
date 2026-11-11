@@ -133,21 +133,15 @@ export async function profileLines(): Promise<ProfileLine[]> {
     out.push(line('address', [v.street1, v.street2, v.city, [v.region, v.postalCode].filter(Boolean).join(' '), country].filter(Boolean).join(', '), sensOf(res, home, ['street1', 'street2', 'city', 'region', 'postalCode', 'country']), [{ d: res, r: home }]));
   }
 
-  // Mailing address: the main postal contact method, which either points to a home or holds its own address (a PO box).
+  // Mailing address: the main postal contact method, for mail that doesn't go home (a PO box, work).
   const cmAll = dom('contact_methods');
   const postal = current(cmAll, await recordsOf('contact_methods')).filter((r) => plainData(r).kind === 'postal');
   const mainPostal = postal.find((r) => plainData(r).primary === true) ?? postal[0];
   if (mainPostal) {
     const v = plainData(mainPostal);
-    let text = '';
-    if (v.residence) {
-      const h = (await recordsOf('residences')).find((r) => r._id === v.residence);
-      if (h) { const a = plainData(h); text = [a.street1, a.street2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country ? countryName(String(a.country)) : ''].filter(Boolean).join(', '); }
-    } else if (v.address && typeof v.address === 'object') {
-      const a = v.address as Record<string, string>;
-      text = [a.street1, a.street2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country ? countryName(a.country) : ''].filter(Boolean).join(', ');
-    }
-    out.push(line('mailing_address', text, sensOf(cmAll, mainPostal, ['address', 'residence']), [{ d: cmAll, r: mainPostal }]));
+    const a = (v.address && typeof v.address === 'object' ? v.address : {}) as Record<string, string>;
+    const text = [a.street1, a.street2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country ? countryName(a.country) : ''].filter(Boolean).join(', ');
+    out.push(line('mailing_address', text, sensOf(cmAll, mainPostal, ['address']), [{ d: cmAll, r: mainPostal }]));
   }
 
   // Main email and phone.

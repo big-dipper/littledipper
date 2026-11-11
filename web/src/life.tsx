@@ -10,6 +10,8 @@ export type Part = {
   /** money: per what (hour, week, month, year, once). */ periodic?: boolean;
   /** record: the categories it may point to, and whether it holds several. */ to?: string[]; many?: boolean;
   /** Only applies when another part holds one of these values. */ when?: { part: string; in: string[] };
+  /** A label that follows another part (a contact method's value: Email address, Phone number…). */ labelBy?: { part: string; labels: Record<string, string> };
+  /** text: common answers offered as you type. */ suggestions?: string[];
   /** party: what's usually there, so a new one starts as the right type. */ expects?: 'person' | 'organisation';
 };
 /** Whether a part applies, given the values so far (collection details only once an account is in collections). */
@@ -309,9 +311,17 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOn
     case 'number':
       return <input id={id} className="input" inputMode="numeric" placeholder={ph} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} style={{ maxWidth: 200 }} />;
     default:
-      return <input id={id} className="input" type={p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : p.type === 'url' ? 'url' : 'text'} placeholder={ph} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} />;
+      return (
+        <>
+          <input id={id} className="input" list={p.suggestions ? `${id}-list` : undefined} type={p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : p.type === 'url' ? 'url' : 'text'} placeholder={ph} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} />
+          {p.suggestions && <datalist id={`${id}-list`}>{p.suggestions.map((x) => <option key={x} value={x} />)}</datalist>}
+        </>
+      );
   }
 }
+
+/** A part's label, following another part when it says so (by kind: "Email address", "Phone number"). */
+export const labelOf = (p: Part, vals: Record<string, unknown>) => (p.labelBy && p.labelBy.labels[String(vals[p.labelBy.part] ?? '')]) || p.label;
 
 const DAYS: Record<string, string> = { MO: 'Monday', TU: 'Tuesday', WE: 'Wednesday', TH: 'Thursday', FR: 'Friday', SA: 'Saturday', SU: 'Sunday' };
 const NTH: Record<string, string> = { '1': 'first', '2': 'second', '3': 'third', '4': 'fourth', '-1': 'last' };
@@ -710,7 +720,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   const field = (p: Part) => (
     <div key={p.key} className="field">
       <label htmlFor={`part-${p.key}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {p.label}{p.required && <span aria-hidden style={{ color: 'var(--color-accent-500)' }}>*</span>}
+        {labelOf(p, vals)}{p.required && <span aria-hidden style={{ color: 'var(--color-accent-500)' }}>*</span>}
         {p.sensitivity === 'secret' && <span className="tag tag-accent" style={{ padding: '1px 8px', fontSize: 10, gap: 4 }}><Lock style={{ width: 8, height: 9 }} />Secret</span>}
       </label>
       <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} currency={currency} dateOnly={p.type === 'datetime' && vals.allDay === true} />
@@ -811,7 +821,7 @@ export function Details({ d, rec, revealed, contacts, skip = [] }: { d: Domain; 
   if (!rows.length && !docs.length && !lists.length) return null;
   return (
     <>
-      <FieldGrid fields={rows.map(({ p, text, masked }) => ({ key: p.key, label: p.label, text, type: p.type, secret: p.sensitivity === 'secret', masked }))} />
+      <FieldGrid fields={rows.map(({ p, text, masked }) => ({ key: p.key, label: labelOf(p, rec.data), text, type: p.type, secret: p.sensitivity === 'secret', masked }))} />
       {lists.map((p) => <ListTable key={p.key} p={p} rows={(revealed?.[p.key] ?? rec.data[p.key]) as Row[]} contacts={contacts} />)}
       {docs.length > 0 && <div style={{ marginTop: 14 }}><DocTiles docs={docs} /></div>}
     </>
