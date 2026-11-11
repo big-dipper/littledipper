@@ -293,14 +293,14 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'treatments', label: 'Treatments & therapies', noun: 'treatment', group: 'health', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'medical',
+    id: 'treatments', label: 'Surgeries & treatments', noun: 'treatment', group: 'health', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'medical',
     description: 'Surgeries, procedures and therapies of every kind: physical therapy, acupuncture, chiropractic, massage, talk therapy.',
     title: '{name}',
     parts: [
       { key: 'name', label: 'Treatment', type: 'text', required: true },
       { key: 'kind', label: 'Kind', type: 'enum', options: o('surgery', 'procedure', 'physical_therapy=Physical therapy', 'acupuncture', 'chiropractic', 'massage', 'talk_therapy=Talk therapy', 'other') },
       { key: 'by', label: 'By', type: 'party' },
-      { key: 'reason', label: 'What it’s for', type: 'text' },
+      { key: 'condition', label: 'What it’s for', type: 'record', to: ['conditions'], hint: 'The condition it treats, if you keep one' },
     ],
   },
   {
