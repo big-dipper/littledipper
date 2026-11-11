@@ -144,11 +144,12 @@ const DEFS: Def[] = [
   },
   {
     id: 'travel', label: 'Travel history', noun: 'trip', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false,
-    description: 'Countries visited and when. Visa and clearance forms ask for this.',
-    title: '{country} · {purpose}',
+    description: 'Trips near and far, and when. Citizenship, visa and clearance forms ask for trips abroad.',
+    title: '{city} {region} {country} · {purpose}',
     parts: [
       { key: 'country', label: 'Country', type: 'country', required: true },
       { key: 'city', label: 'City', type: 'text' },
+      { key: 'region', label: 'State / region', type: 'text' },
       { key: 'purpose', label: 'Purpose', type: 'enum', options: o('leisure', 'business', 'family', 'study', 'medical', 'transit', 'other') },
     ],
   },
