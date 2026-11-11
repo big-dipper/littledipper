@@ -567,7 +567,7 @@ One entry: item · Group: money · Default sensitivity: sensitive · Keeps dates
 
 | Field | Key | Type | Required | Sensitivity (at least) | Notes |
 |---|---|---|---|---|---|
-| Kind | `kind` | one of: home, land, electronics, jewelry, art, instrument, collectible, other |  | follows the entry |  |
+| Kind | `kind` | one of: home, land, electronics, jewelry, art, instrument, collectible, copyright, other |  | follows the entry |  |
 | Name | `name` | text | yes | follows the entry |  |
 | Address | `address` | address |  | follows the entry | only when kind is home or land |
 | Parcel ID | `parcelId` | text |  | follows the entry | The official land identifier, e.g. the APN; only when kind is home or land |
@@ -575,7 +575,7 @@ One entry: item · Group: money · Default sensitivity: sensitive · Keeps dates
 | Your share (%) | `yourShare` | number |  | follows the entry | only when kind is home or land |
 | Co-owners | `coOwners` | party |  | follows the entry | People, a trust or a company |
 | Kept at | `keptAt` | link to residences |  | follows the entry | only when kind is electronics or jewelry or art or instrument or collectible or other |
-| Serial number | `serialNumber` | text |  | follows the entry |  |
+| Serial number | `serialNumber` | text |  | follows the entry | only when kind is electronics or jewelry or art or instrument or collectible or other |
 | Purchase price | `purchasePrice` | money |  | follows the entry |  |
 | Receipt | `receipt` | link to receipts |  | follows the entry | Its warranty shows from the receipt |
 | Value | `value` | money |  | follows the entry |  |

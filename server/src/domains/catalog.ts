@@ -526,7 +526,7 @@ const DEFS: Def[] = [
     description: 'Homes, land and valuables: where they are, who owns them, what they’re worth and the papers that prove it.',
     title: '{name}',
     parts: [
-      { key: 'kind', label: 'Kind', type: 'enum', options: o('home', 'land', 'electronics', 'jewelry', 'art', 'instrument', 'collectible', 'other') },
+      { key: 'kind', label: 'Kind', type: 'enum', options: o('home', 'land', 'electronics', 'jewelry', 'art', 'instrument', 'collectible', 'copyright=Copyright (a song, book, photo, software…)', 'other') },
       { key: 'name', label: 'Name', type: 'text', required: true },
       { key: 'address', label: 'Address', type: 'address', when: { part: 'kind', in: ['home', 'land'] } },
       { key: 'parcelId', label: 'Parcel ID', type: 'text', when: { part: 'kind', in: ['home', 'land'] }, hint: 'The official land identifier, e.g. the APN' },
@@ -534,7 +534,7 @@ const DEFS: Def[] = [
       { key: 'yourShare', label: 'Your share (%)', type: 'number', when: { part: 'kind', in: ['home', 'land'] } },
       { key: 'coOwners', label: 'Co-owners', type: 'party', many: true, hint: 'People, a trust or a company' },
       { key: 'keptAt', label: 'Kept at', type: 'record', to: ['residences'], when: { part: 'kind', in: ['electronics', 'jewelry', 'art', 'instrument', 'collectible', 'other'] } },
-      { key: 'serialNumber', label: 'Serial number', type: 'text' },
+      { key: 'serialNumber', label: 'Serial number', type: 'text', when: { part: 'kind', in: ['electronics', 'jewelry', 'art', 'instrument', 'collectible', 'other'] } },
       { key: 'purchasePrice', label: 'Purchase price', type: 'money' },
       { key: 'receipt', label: 'Receipt', type: 'record', to: ['receipts'], hint: 'Its warranty shows from the receipt' },
       { key: 'value', label: 'Value', type: 'money' },
