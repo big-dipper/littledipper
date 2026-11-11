@@ -143,7 +143,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'travel', label: 'Travel history', noun: 'trip', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false,
+    id: 'travel', label: 'Travel', noun: 'trip', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false,
     description: 'Trips near and far, and when. Citizenship, visa and clearance forms ask for trips abroad.',
     title: '{city} · {country} · {purpose}',
     parts: [

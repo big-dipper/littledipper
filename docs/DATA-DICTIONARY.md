@@ -176,7 +176,7 @@ One entry: pet · Group: life · Default sensitivity: standard · Keeps dates (v
 | Microchip number | `microchip` | text |  | sensitive |  |
 | Vet | `vet` | party |  | follows the entry |  |
 
-### Travel history `travel`
+### Travel `travel`
 
 Trips near and far, and when. Citizenship, visa and clearance forms ask for trips abroad.
 
