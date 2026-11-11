@@ -553,19 +553,6 @@ const DEFS: Def[] = [
       { key: 'tier', label: 'Tier / status', type: 'text' },
       { key: 'cost', label: 'Cost', type: 'money', periodic: true },
       { key: 'renewsOn', label: 'Renews on', type: 'date', remind: true },
-      { key: 'account', label: 'Online account', type: 'record', to: ['online_accounts'], when: { part: 'kind', in: ['subscription'] } },
-    ],
-  },
-  {
-    id: 'online_accounts', oneAtATime: true, label: 'Online accounts', noun: 'account', group: 'personal', sensitivity: 'sensitive', dated: true, publicable: false,
-    description: 'Which services you use, under what username and with which email or phone. Never passwords.',
-    title: '{service} · {username}',
-    parts: [
-      { key: 'service', label: 'Service', type: 'party', expects: 'organisation', required: true },
-      { key: 'username', label: 'Username', type: 'text' },
-      { key: 'signsInWith', label: 'Signs in with', type: 'record', to: ['contact_methods'], hint: 'Change your email and Little Dipper lists every account still using the old one' },
-      { key: 'twoFactor', label: 'Two-factor on', type: 'boolean' },
-      { key: 'recoveryHint', label: 'Where recovery codes are kept', type: 'text', sensitivity: 'secret', hint: 'A location, never the codes themselves' },
     ],
   },
   // ── personal ─────────────────────────────────────────────────────────

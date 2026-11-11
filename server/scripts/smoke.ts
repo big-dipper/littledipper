@@ -515,8 +515,8 @@ async function main() {
     await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { employment: { scope: 'current' } } });
     await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { ids: true } }, [409]);
     ok(true, 'secret domain needs confirmation');
-    for (const id of ['online_accounts', 'tasks', 'notes']) await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { [id]: true }, confirm: true }, [400]);
-    ok(true, 'online accounts, tasks and notes are never shared as a whole category');
+    for (const id of ['tasks', 'notes']) await a.call('PUT', `/api/parties/${cA.id}/share`, { categories: { [id]: true }, confirm: true }, [400]);
+    ok(true, 'tasks and notes are never shared as a whole category');
     const peek = await a.call('GET', `/api/parties/${cA.id}/preview/employment`);
     const peekSecret = await a.call('GET', `/api/parties/${cA.id}/preview/employment?secret=1`);
     const has = (p: any, key: string) => p.records.some((r: any) => r.fields.some((f: any) => f.key === key));

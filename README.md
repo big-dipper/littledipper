@@ -80,7 +80,7 @@ Personal data is organised into **domains**, one per category. Each domain has i
 | Work | `employment`, `education`, `credentials` |
 | Health | `health`, `insurance` |
 | Money | `financial_accounts`, `income`, `tax_returns`, `legal`, `vehicles`, `property` |
-| Personal | `memberships`, `online_accounts`, `preferences` |
+| Personal | `memberships`, `notes`, `preferences` |
 
 - **Definitions** live in `server/src/domains/catalog.ts`: parts, types, sensitivity, whether records are dated and the display title. Owners can add their own categories (`POST /api/catalog`, ids `x_…`).
 - **Records** are one JSON document each in the `records` collection, with `validFrom`/`validTo` partial dates (`2019`, `2019-06`, `2019-06-14`). "Current" means no end date.
