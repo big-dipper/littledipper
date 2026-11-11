@@ -134,6 +134,34 @@ function Ledger({ d, items, contacts, onEdit }: { d: Domain; items: Rec[]; conta
   );
 }
 
+/**
+ * Health basics' page also shows what's on file elsewhere, so it reads as one emergency summary: allergies,
+ * current medications and conditions, and who to call. Each stays where it lives; nothing is copied.
+ */
+function AlsoOnFile({ contacts }: { contacts: ContactLite[] }) {
+  const { data } = useAsync(() => Promise.all(['allergies', 'medications', 'conditions', 'relationships'].map((d) => get<{ items: Rec[] }>(`/api/data/${d}`).then((r) => r.items.filter((x) => x.current)))), []);
+  if (!data) return null;
+  const [allergies, meds, conditions, rels] = data;
+  const callers = rels.filter((r) => r.data.emergencyContact === true).map((r) => contacts.find((c) => c.id === r.data.party)?.name).filter(Boolean) as string[];
+  const rows: [string, string, string[]][] = [
+    ['allergies', 'Allergies', allergies.map((r) => r.title)],
+    ['medications', 'Medications', meds.map((r) => r.title)],
+    ['conditions', 'Conditions', conditions.map((r) => r.title)],
+    ['relationships', 'Emergency contacts', callers],
+  ];
+  return (
+    <div className="card" style={{ padding: '20px 24px', gap: 4, marginTop: 22 }}>
+      <div className="card-kicker">Also on file</div>
+      {rows.map(([d, label, items]) => (
+        <Link key={d} to={d === 'relationships' ? '/admin/relationships' : `/admin/life/${d}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', textDecoration: 'none', color: 'inherit', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14 }}>{label}</span>
+          <span className={items.length ? '' : 'text-muted'} style={{ fontSize: 13, textAlign: 'right' }}>{items.length ? items.join(' · ') : d === 'relationships' ? 'None marked yet' : 'None on file'}</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 export default function Category() {
   const { domain = '' } = useParams();
   const contacts = useContactsLite();
@@ -245,6 +273,8 @@ export default function Category() {
           )}
         </>
       )}
+
+      {d.id === 'health_basics' && <AlsoOnFile contacts={contacts} />}
 
       {deleted && deleted.items.length > 0 && (
         <div style={{ marginTop: 30 }}>

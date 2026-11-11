@@ -103,7 +103,7 @@ const landlord = await party('Pat Okoro', 'person');
 await add('residences', { street1: '2214 SE Ankeny St', city: 'Portland', region: 'OR', postalCode: '97214', country: 'US', ownership: 'rent', landlord, primary: true }, { validFrom: '2019-06' });
 await add('residences', { street1: '12 Kungsgatan', city: 'Stockholm', country: 'SE', ownership: 'rent' }, { validFrom: '2012-01', validTo: '2019-05' });
 const robin = await party('Robin Lindqvist', 'person', { birthDate: '1983-11-20' });
-await add('relationships', { party: robin, relation: 'spouse' }, { validFrom: '2015-08' });
+await add('relationships', { party: robin, relation: 'spouse', emergencyContact: true }, { validFrom: '2015-08' });
 const alder = await party('Alder Studio');
 const ana = await party('Ana Ruiz', 'person', { affiliations: [{ party: alder, role: 'Design director' }] });
 const job = await add('employment', { employer: alder, title: 'Design lead', arrangement: 'hybrid', location: { city: 'Portland', region: 'OR', country: 'US' }, supervisor: ana, currentPay: { amount: 120000, currency: 'USD', period: 'year' } }, { validFrom: '2021-03' });
@@ -120,6 +120,8 @@ for (const [day, start] of [['2026-09-04', '2026-08-17'], ['2026-09-18', '2026-0
 const etsy = await party('Etsy');
 await add('income', { received: '2026-06-14', amount: { amount: 418.2, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Mugs, spring batch' });
 const lampSale = await add('income', { received: '2026-10-21', amount: { amount: 640, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Lamp bases' });
+await add('allergies', { substance: 'Penicillin', reaction: 'Hives', severity: 'moderate' }, { validFrom: '2002' });
+await add('health_basics', { bloodType: 'O+', organDonor: true, doctor: await party('Dr. Lena Park', 'person'), pharmacy: await party('Walgreens') });
 await add('conditions', { name: 'Gluten sensitivity', status: 'suspected' }, { validFrom: '2025-02' });
 await add('medications', { name: 'Magnesium glycinate', kind: 'supplement', dose: '200 mg', frequency: 'nightly' }, { validFrom: '2025-03' });
 const pdx = (at: string) => ({ at, tz: 'America/Los_Angeles' });

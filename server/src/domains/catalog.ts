@@ -322,11 +322,19 @@ const DEFS: Def[] = [
   },
   {
     id: 'health_basics', label: 'Health basics', noun: 'health basics', group: 'health', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, single: true,
-    description: 'Blood type and organ donor status.',
+    // What a doctor or paramedic needs in a hurry. Allergies, medications, conditions and emergency contacts aren't
+    // repeated here: the page shows them from where they live.
+    description: 'What a doctor or paramedic needs to know about you in an emergency.',
     title: 'Health basics',
     parts: [
-      { key: 'bloodType', label: 'Blood type', type: 'enum', options: o('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-') },
+      { key: 'bloodType', label: 'Blood type', type: 'enum', options: o('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'unknown=Don’t know') },
       { key: 'organDonor', label: 'Organ donor', type: 'boolean' },
+      { key: 'doctor', label: 'Primary doctor', type: 'party' },
+      { key: 'pharmacy', label: 'Pharmacy', type: 'party', expects: 'organisation' },
+      { key: 'hospital', label: 'Preferred hospital', type: 'party', expects: 'organisation' },
+      { key: 'devices', label: 'Implants and devices', type: 'text', hint: 'Pacemaker, insulin pump, metal pins… ERs and MRI need to know' },
+      { key: 'directive', label: 'Advance directive or DNR', type: 'record', to: ['legal'], hint: 'Point to it in Legal documents' },
+      { key: 'careWishes', label: 'Care wishes', type: 'longtext', hint: 'e.g. no blood transfusions, needs a Spanish interpreter' },
     ],
   },
   // ── money ────────────────────────────────────────────────────────────
