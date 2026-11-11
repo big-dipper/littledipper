@@ -112,23 +112,34 @@ await add('relationships', { party: ana, relation: 'reference', job });
 await add('education', { institution: await party('Konstfack'), level: 'master', degree: 'MFA', field: 'Ceramics', outcome: 'graduated', conferredOn: '2014-06-05' }, { validFrom: '2012-09', validTo: '2014-06' });
 // Income: a year from the W-2, then this autumn's paychecks and a couple of ceramics sales.
 await add('income', { received: '2025-12-31', amount: { amount: 82340, currency: 'USD' }, gross: { amount: 116500, currency: 'USD' }, kind: 'wages', payer: alder, source: job, taxForm: 'w2', periodStart: '2025-01-01', periodEnd: '2025-12-31' });
+const paychecks: [string, string][] = [];
 for (const [day, start] of [['2026-09-04', '2026-08-17'], ['2026-09-18', '2026-08-31'], ['2026-10-02', '2026-09-14'], ['2026-10-16', '2026-09-28'], ['2026-10-30', '2026-10-12']]) {
   const end = new Date(Date.parse(start) + 13 * 86400_000).toISOString().slice(0, 10);
-  await add('income', { received: day, amount: { amount: 3412.5, currency: 'USD' }, gross: { amount: 4615.38, currency: 'USD' }, kind: 'wages', payer: alder, source: job, how: 'direct_deposit', periodStart: start, periodEnd: end });
+  paychecks.push([day, await add('income', { received: day, amount: { amount: 3412.5, currency: 'USD' }, gross: { amount: 4615.38, currency: 'USD' }, kind: 'wages', payer: alder, source: job, how: 'direct_deposit', periodStart: start, periodEnd: end })]);
 }
 const etsy = await party('Etsy');
 await add('income', { received: '2026-06-14', amount: { amount: 418.2, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Mugs, spring batch' });
-await add('income', { received: '2026-10-21', amount: { amount: 640, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Lamp bases' });
+const lampSale = await add('income', { received: '2026-10-21', amount: { amount: 640, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Lamp bases' });
 await add('awards', { name: 'Oregon Craft Award', issuer: await party('Oregon Arts Commission'), date: '2023-05' });
 await add('conditions', { name: 'Gluten sensitivity', status: 'suspected' }, { validFrom: '2025-02' });
 await add('medications', { name: 'Magnesium glycinate', kind: 'supplement', dose: '200 mg', frequency: 'nightly' }, { validFrom: '2025-03' });
 await add('observations', { what: 'Energy', value: '6', unit: '1–10', at: { at: '2026-11-05T08:00', tz: 'America/Los_Angeles' } });
 const bank = await party('Harbor Credit Union');
-await add('financial_accounts', { kind: 'checking', institution: bank, nickname: 'Everyday', number: '000123456789', routingNumber: '123000848', status: 'current' }, { validFrom: '2019-07' });
+const checking = await add('financial_accounts', { kind: 'checking', institution: bank, nickname: 'Everyday', number: '000123456789', routingNumber: '123000848', status: 'current' }, { validFrom: '2019-07' });
 const car = await add('vehicles', { kind: 'car', make: 'Subaru', model: 'Outback', year: 2019, vin: '4S4BSANC5K3123456', registeredIn: 'US-OR', registrationExpires: '2027-03', heldAs: 'financed' }, { validFrom: '2019-09' });
-await add('financial_accounts', { kind: 'loan', institution: bank, finances: car, status: 'current' }, { validFrom: '2019-09' });
-await add('insurance', { kind: 'auto', insurer: await party('Northwest Mutual'), premium: { amount: 96, currency: 'USD', period: 'month' }, coversThings: [car], coversPeople: [robin] }, { validFrom: '2025-01' });
-await add('receipts', { merchant: await party('Blue Bottle'), purchased: '2026-10-01', total: { amount: 12.5, currency: 'USD' }, category: 'dining', paymentMethod: 'cash' });
+const loan = await add('financial_accounts', { kind: 'loan', institution: bank, finances: car, status: 'current' }, { validFrom: '2019-09' });
+const nwMutual = await party('Northwest Mutual');
+await add('insurance', { kind: 'auto', insurer: nwMutual, premium: { amount: 96, currency: 'USD', period: 'month' }, coversThings: [car], coversPeople: [robin] }, { validFrom: '2025-01' });
+const blueBottle = await party('Blue Bottle');
+const coffee = await add('receipts', { merchant: blueBottle, purchased: '2026-10-01', total: { amount: 12.5, currency: 'USD' }, category: 'dining', paymentMethod: 'cash' });
+// Transactions: the plain story of money moving, pointing to the income entry or receipt where there is one.
+const usd = (amount: number) => ({ amount, currency: 'USD' });
+for (const [day, id] of paychecks) await add('transactions', { date: day, direction: 'in', amount: usd(3412.5), counterparty: alder, category: 'income', account: checking, method: 'direct_deposit', description: 'ALDER STUDIO PAYROLL', entry: id });
+await add('transactions', { date: '2026-10-22', direction: 'in', amount: usd(640), counterparty: etsy, category: 'income', account: checking, method: 'bank_transfer', description: 'ETSY INC PAYOUT', entry: lampSale });
+for (const day of ['2026-09-01', '2026-10-01', '2026-11-01']) await add('transactions', { date: day, direction: 'out', amount: usd(1850), counterparty: landlord, category: 'housing', account: checking, method: 'app', description: 'Rent' });
+for (const day of ['2026-09-15', '2026-10-15']) await add('transactions', { date: day, direction: 'out', amount: usd(412.37), counterparty: bank, category: 'debt', account: checking, method: 'autopay', description: 'HARBOR CU LOAN PMT', entry: car });
+await add('transactions', { date: '2026-10-01', direction: 'out', amount: usd(12.5), counterparty: blueBottle, category: 'dining', method: 'cash', entry: coffee });
+await add('transactions', { date: '2026-10-28', direction: 'out', amount: usd(96), counterparty: nwMutual, category: 'insurance', account: checking, method: 'autopay', description: 'NW MUTUAL AUTO' });
 await add('events', { title: 'Book club', start: { at: '2026-01-12T19:00', tz: 'America/Los_Angeles' }, end: { at: '2026-01-12T21:00', tz: 'America/Los_Angeles' }, repeat: 'FREQ=MONTHLY;BYDAY=2MO', location: 'Powell’s' });
 await add('preferences', { category: 'drink', name: 'Coffee order', value: 'Oat flat white' });
 await add('contact_methods', { kind: 'website', value: 'mayalind.studio' });

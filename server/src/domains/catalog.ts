@@ -383,6 +383,29 @@ const DEFS: Def[] = [
     ],
   },
   {
+    // Every movement of money, one row each: the plain record of what happened. Income and Receipts stay as they are;
+    // a transaction can point to its income entry or receipt instead of repeating their details. No balances.
+    id: 'transactions', label: 'Transactions', noun: 'transaction', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, sortBy: 'date', documents: 'statement',
+    description: 'Every payment in or out, with who it was with, how and why. The full story of your money, one line at a time.',
+    title: '{counterparty} · {amount}',
+    parts: [
+      { key: 'date', label: 'Date', type: 'date', required: true },
+      { key: 'direction', label: 'Money in or out', type: 'enum', required: true, options: o('out=Money out', 'in=Money in', 'transfer=Moved between your own accounts') },
+      { key: 'amount', label: 'Amount', type: 'money', required: true },
+      { key: 'counterparty', label: 'With', type: 'party', required: true, hint: 'Who you paid or who paid you', when: { part: 'direction', in: ['in', 'out'] } },
+      { key: 'category', label: 'What for', type: 'enum', options: o(
+        'income=Income', 'housing=Rent or mortgage', 'utilities=Utilities and phone', 'groceries', 'dining=Eating out', 'transport=Transport and fuel', 'health=Health and medicine',
+        'insurance', 'debt=Debt or loan payment', 'childcare=Childcare and school', 'education', 'shopping', 'personal=Personal care', 'entertainment', 'travel',
+        'gifts=Gifts and donations', 'family=Money to or from family', 'savings=Savings and investing', 'fees=Fees and interest', 'taxes', 'refund=Refund', 'cash=Cash withdrawal or deposit', 'other') },
+      { key: 'account', label: 'Account', type: 'record', to: ['financial_accounts'], hint: 'The account or card it went through' },
+      { key: 'toAccount', label: 'Into account', type: 'record', to: ['financial_accounts'], when: { part: 'direction', in: ['transfer'] } },
+      { key: 'method', label: 'How', type: 'enum', options: o('card', 'bank_transfer=Bank transfer', 'direct_deposit=Direct deposit', 'check', 'cash', 'app=Payment app (Venmo, Cash App…)', 'benefits_card=Benefits card (EBT…)', 'autopay=Automatic payment', 'other') },
+      { key: 'description', label: 'Description', type: 'text', hint: 'As it reads on your statement' },
+      { key: 'reference', label: 'Reference or check number', type: 'text' },
+      { key: 'entry', label: 'Details in', type: 'record', to: ['income', 'receipts', 'insurance', 'vehicles', 'property', 'residences'], hint: 'The income entry, receipt or bill this payment is' },
+    ],
+  },
+  {
     // Money that actually reached you, one entry per payment (a paycheck, a payout, rent) or per period (a W-2's year).
     // Your rate of pay is on the job. Amounts are sensitive, not secret, so the page can total them.
     id: 'income', label: 'Income', noun: 'payment', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, sortBy: 'received', documents: 'pay_stub',

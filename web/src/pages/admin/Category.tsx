@@ -62,6 +62,78 @@ function IncomeTotals({ items }: { items: Rec[] }) {
   );
 }
 
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const signed = (m: Money, dir: string) => `${dir === 'in' ? '+' : dir === 'out' ? '−' : ''}${money(m)}`;
+
+/**
+ * The master ledger: every transaction as one line, newest first, a heading per month with what came in and went out.
+ * Not a bank: no balances, just the story of where money came from and went.
+ */
+function Ledger({ d, items, contacts, onEdit }: { d: Domain; items: Rec[]; contacts: ContactLite[]; onEdit: (r: Rec) => void }) {
+  const { data: accts } = useAsync(() => get<{ items: Rec[] }>('/api/data/financial_accounts'), []);
+  const [dir, setDir] = useState('all');
+  const acct = (id: unknown) => (accts?.items.find((a) => a.id === id)?.title ?? '');
+  const who = (id: unknown) => contacts.find((c) => c.id === id)?.name ?? '';
+  const label = (key: string, v: unknown) => d.parts.find((p) => p.key === key)?.options?.find(([k]) => k === v)?.[1] ?? '';
+  const rows = items.filter((r) => dir === 'all' || r.data.direction === dir)
+    .sort((a, b) => String(b.data.date ?? '').localeCompare(String(a.data.date ?? '')));
+  const months = [...rows.reduce((m, r) => m.set(String(r.data.date ?? '').slice(0, 7), [...(m.get(String(r.data.date ?? '').slice(0, 7)) ?? []), r]), new Map<string, Rec[]>())];
+  const tot = (list: Rec[], which: string) => { const t = sums(list.filter((r) => r.data.direction === which).map((r) => [r, 1]), 'amount'); return t.length ? t.map(money).join(' + ') : '—'; };
+  return (
+    <div style={{ marginTop: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+        {(['in', 'out'] as const).map((w) => (
+          <div key={w} className="card" style={{ padding: '18px 22px', gap: 4 }}>
+            <div className="card-kicker">{w === 'in' ? 'Money in' : 'Money out'}</div>
+            <div className="card-title" style={{ fontSize: 24 }}>{tot(items, w)}</div>
+            <div className="text-muted" style={{ fontSize: 12 }}>{items.filter((r) => r.data.direction === w).length} transactions shown</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '18px 0 6px' }}>
+        {[['all', 'All'], ['in', 'Money in'], ['out', 'Money out'], ['transfer', 'Transfers']].map(([k, l]) => (
+          <button key={k} className={`btn ${dir === k ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 12, padding: '6px 14px' }} onClick={() => setDir(k)}>{l}</button>
+        ))}
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="table">
+          <thead><tr><th>Date</th><th>With</th><th>What for</th><th>Account</th><th>How</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
+          <tbody>
+            {months.map(([ym, list]) => [
+              <tr key={ym}>
+                <td colSpan={6} style={{ paddingTop: 18, borderBottom: '1px solid var(--color-divider)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <strong>{ym ? `${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}` : 'No date'}</strong>
+                    <span className="text-muted" style={{ fontSize: 12 }}>In {tot(list, 'in')} · Out {tot(list, 'out')}</span>
+                  </div>
+                </td>
+              </tr>,
+              ...list.map((r) => {
+                const m = r.data.amount as Money | undefined;
+                const di = String(r.data.direction ?? '');
+                return (
+                  <tr key={r.id} className="row-btn" tabIndex={0} onClick={() => onEdit(r)} onKeyDown={(e) => e.key === 'Enter' && onEdit(r)} style={{ cursor: 'pointer' }}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{String(r.data.date ?? '').slice(8, 10)} {MONTHS[Number(String(r.data.date ?? '').slice(5, 7)) - 1]?.slice(0, 3)}</td>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{di === 'transfer' ? 'Transfer' : who(r.data.counterparty) || '—'}</div>
+                      {(r.data.description || r.data.entry) ? <div className="text-muted" style={{ fontSize: 12 }}>{[r.data.description as string, r.data.entry ? 'has details' : ''].filter(Boolean).join(' · ')}</div> : null}
+                    </td>
+                    <td>{label('category', r.data.category) || <span className="text-muted">—</span>}</td>
+                    <td style={{ fontSize: 13 }}>{di === 'transfer' ? `${acct(r.data.account) || '?'} → ${acct(r.data.toAccount) || '?'}` : acct(r.data.account) || <span className="text-muted">—</span>}</td>
+                    <td style={{ fontSize: 13 }}>{label('method', r.data.method).replace(/\s*\(.*\)$/, '') || <span className="text-muted">—</span>}</td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: di === 'in' ? 'var(--color-accent-2-700)' : 'inherit' }}>{m ? signed(m, di) : '—'}</td>
+                  </tr>
+                );
+              }),
+            ])}
+          </tbody>
+        </table>
+        {!rows.length && <div className="text-muted" style={{ fontSize: 13, padding: '12px 0' }}>Nothing matches.</div>}
+      </div>
+    </div>
+  );
+}
+
 export default function Category() {
   const { domain = '' } = useParams();
   const contacts = useContactsLite();
@@ -127,7 +199,7 @@ export default function Category() {
         </div>
       )}
 
-      {data.items.length === 0 ? (
+      {d.id === 'transactions' && data.items.length > 0 ? <Ledger d={d} items={shown} contacts={contacts} onEdit={(r) => setEditing(r)} /> : data.items.length === 0 ? (
         <div className="card" style={{ marginTop: 22, padding: '34px 30px', gap: 10, alignItems: 'flex-start', background: g.wash, position: 'relative', overflow: 'hidden' }}>
           <div aria-hidden style={{ position: 'absolute', right: -60, top: -60, width: 200, height: 200, borderRadius: '50%', background: 'var(--color-neutral-100)', opacity: 0.5 }} />
           <div className="card-title" style={{ fontSize: 22, position: 'relative' }}>No {plural(d.noun)} yet</div>
