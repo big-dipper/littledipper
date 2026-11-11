@@ -304,14 +304,19 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'observations', label: 'Observations', noun: 'observation', group: 'health', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, sortBy: 'at',
-    description: 'Measurements and how you feel over time: weight, blood pressure, symptoms, mood, energy, sleep.',
+    // Readings and results over time: what doctors ask for with blood pressure, diabetes, a child's growth.
+    id: 'measurements', label: 'Measurements & lab results', noun: 'measurement', group: 'health', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, sortBy: 'at', documents: 'medical',
+    description: 'Blood pressure, blood sugar, weight and lab results over time, with who measured them.',
     title: '{what}: {value} {unit}',
     parts: [
-      { key: 'what', label: 'What', type: 'text', required: true, hint: 'Weight, blood pressure, headache, energy…' },
-      { key: 'value', label: 'Value', type: 'text', hint: 'A number or a word' },
-      { key: 'unit', label: 'Unit', type: 'text', hint: 'kg, mmHg, 1–10…' },
-      { key: 'at', label: 'When', type: 'datetime' },
+      { key: 'what', label: 'What was measured', type: 'text', required: true, hint: 'Blood pressure, A1C, weight, cholesterol, temperature…' },
+      { key: 'value', label: 'Result', type: 'text', required: true, hint: 'A number or a reading, like 128/82' },
+      { key: 'unit', label: 'Unit', type: 'text', hint: 'mmHg, %, lb, mg/dL…' },
+      { key: 'at', label: 'When', type: 'datetime', required: true },
+      { key: 'kind', label: 'Kind', type: 'enum', options: o('home=Home reading', 'lab=Lab result', 'visit=Taken at a visit', 'device=From a device or app') },
+      { key: 'by', label: 'Measured by', type: 'party', hint: 'The lab, clinic or device maker' },
+      { key: 'range', label: 'Normal range', type: 'text', hint: 'As printed on the lab report' },
+      { key: 'relatedTo', label: 'Related to', type: 'record', to: ['conditions', 'medications'], many: true },
     ],
   },
   {

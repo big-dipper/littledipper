@@ -122,7 +122,9 @@ await add('income', { received: '2026-06-14', amount: { amount: 418.2, currency:
 const lampSale = await add('income', { received: '2026-10-21', amount: { amount: 640, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Lamp bases' });
 await add('conditions', { name: 'Gluten sensitivity', status: 'suspected' }, { validFrom: '2025-02' });
 await add('medications', { name: 'Magnesium glycinate', kind: 'supplement', dose: '200 mg', frequency: 'nightly' }, { validFrom: '2025-03' });
-await add('observations', { what: 'Energy', value: '6', unit: '1–10', at: { at: '2026-11-05T08:00', tz: 'America/Los_Angeles' } });
+const pdx = (at: string) => ({ at, tz: 'America/Los_Angeles' });
+for (const [at, v] of [['2026-10-20T07:30', '132/86'], ['2026-10-27T07:40', '128/84'], ['2026-11-03T07:35', '124/80']]) await add('measurements', { what: 'Blood pressure', value: v, unit: 'mmHg', at: pdx(at), kind: 'home' });
+await add('measurements', { what: 'A1C', value: '5.4', unit: '%', at: pdx('2026-09-12T09:00'), kind: 'lab', by: await party('Providence Lab Services'), range: 'Below 5.7' });
 const bank = await party('Harbor Credit Union');
 const checking = await add('financial_accounts', { kind: 'checking', institution: bank, nickname: 'Everyday', number: '000123456789', routingNumber: '123000848', status: 'current' }, { validFrom: '2019-07' });
 const car = await add('vehicles', { kind: 'car', make: 'Subaru', model: 'Outback', year: 2019, vin: '4S4BSANC5K3123456', registeredIn: 'US-OR', registrationExpires: '2027-03', heldAs: 'financed' }, { validFrom: '2019-09' });
