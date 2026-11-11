@@ -242,18 +242,6 @@ const DEFS: Def[] = [
       { key: 'url', label: 'Verification link', type: 'url', hint: 'Where anyone can check it' },
     ],
   },
-  {
-    id: 'awards', label: 'Awards & honors', noun: 'award', group: 'work', sensitivity: 'standard', dated: false, publicable: true, sortBy: 'date', documents: 'certificate',
-    description: 'Prizes, honors and recognitions, for résumés and applications.',
-    title: '{name}',
-    parts: [
-      { key: 'name', label: 'Award', type: 'text', required: true },
-      { key: 'issuer', label: 'Given by', type: 'party', expects: 'organisation' },
-      { key: 'date', label: 'Date', type: 'date' },
-      { key: 'description', label: 'What it was for', type: 'longtext' },
-      { key: 'url', label: 'Verification link', type: 'url' },
-    ],
-  },
   // ── health ───────────────────────────────────────────────────────────
   // Shaped after the FHIR health-records standard, so patient-portal imports map exactly. Little Dipper records who
   // says what (you, a doctor, a naturopath…) and never ranks one practice over another.

@@ -120,7 +120,6 @@ for (const [day, start] of [['2026-09-04', '2026-08-17'], ['2026-09-18', '2026-0
 const etsy = await party('Etsy');
 await add('income', { received: '2026-06-14', amount: { amount: 418.2, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Mugs, spring batch' });
 const lampSale = await add('income', { received: '2026-10-21', amount: { amount: 640, currency: 'USD' }, kind: 'gig', payer: etsy }, { notes: 'Lamp bases' });
-await add('awards', { name: 'Oregon Craft Award', issuer: await party('Oregon Arts Commission'), date: '2023-05' });
 await add('conditions', { name: 'Gluten sensitivity', status: 'suspected' }, { validFrom: '2025-02' });
 await add('medications', { name: 'Magnesium glycinate', kind: 'supplement', dose: '200 mg', frequency: 'nightly' }, { validFrom: '2025-03' });
 await add('observations', { what: 'Energy', value: '6', unit: '1–10', at: { at: '2026-11-05T08:00', tz: 'America/Los_Angeles' } });
