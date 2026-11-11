@@ -293,7 +293,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'treatments', label: 'Surgeries & treatments', noun: 'treatment', group: 'health', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'medical',
+    id: 'treatments', label: 'Treatments & therapies', noun: 'treatment', group: 'health', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'medical',
     description: 'Surgeries, procedures and therapies of every kind: physical therapy, acupuncture, chiropractic, massage, talk therapy.',
     title: '{name}',
     parts: [

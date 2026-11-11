@@ -343,7 +343,7 @@ One entry: immunization · Group: health · Default sensitivity: sensitive · Ke
 | Lot | `lot` | text |  | follows the entry |  |
 | Given by | `givenBy` | party |  | follows the entry |  |
 
-### Surgeries & treatments `treatments`
+### Treatments & therapies `treatments`
 
 Surgeries, procedures and therapies of every kind: physical therapy, acupuncture, chiropractic, massage, talk therapy.
 
