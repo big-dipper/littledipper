@@ -27,6 +27,9 @@ export type PartType =
   | 'contact'   // old name for party, kept until every caller says party
   | 'list';     // rows of sub-parts (`of`), e.g. a receipt's line items
 
+/** A condition on another part's value. */
+export type When = { part: string; in: string[] };
+
 export type PartDef = {
   key: string;
   label: string;
@@ -46,8 +49,9 @@ export type PartDef = {
   to?: string[];
   /** record: a list of links rather than one. */
   many?: boolean;
-  /** Only applies when another part holds one of these values, e.g. collection details when status is in_collections. */
-  when?: { part: string; in: string[] };
+  /** Only applies when another part holds one of these values, e.g. collection details when status is in_collections.
+   *  A list means any of them: "Owned with" shows for a shared home or for a valuable. */
+  when?: When | When[];
   /** A label that follows another part, e.g. a contact method's value reads "Email address" or "Phone number" by kind. */
   labelBy?: { part: string; labels: Record<string, string> };
   /** text: common answers offered as you type (Personal, Work…). Anything else is still fine. */

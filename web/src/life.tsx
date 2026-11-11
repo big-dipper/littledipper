@@ -9,13 +9,13 @@ export type Part = {
   key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean; deprecated?: boolean; system?: boolean;
   /** money: per what (hour, week, month, year, once). */ periodic?: boolean;
   /** record: the categories it may point to, and whether it holds several. */ to?: string[]; many?: boolean;
-  /** Only applies when another part holds one of these values. */ when?: { part: string; in: string[] };
+  /** Only applies when another part holds one of these values (a list: any of them). */ when?: { part: string; in: string[] } | { part: string; in: string[] }[];
   /** A label that follows another part (a contact method's value: Email address, Phone number…). */ labelBy?: { part: string; labels: Record<string, string> };
   /** text: common answers offered as you type. */ suggestions?: string[];
   /** party: what's usually there, so a new one starts as the right type. */ expects?: 'person' | 'organisation';
 };
 /** Whether a part applies, given the values so far (collection details only once an account is in collections). */
-export const applies = (p: Part, vals: Record<string, unknown>) => !p.when || p.when.in.includes(String(vals[p.when.part] ?? ''));
+export const applies = (p: Part, vals: Record<string, unknown>) => !p.when || (Array.isArray(p.when) ? p.when : [p.when]).some((w) => w.in.includes(String(vals[w.part] ?? '')));
 export type Address = { street1?: string; street2?: string; city?: string; region?: string; postalCode?: string; country?: string };
 const PERIODS: [string, string][] = [['hour', 'an hour'], ['week', 'a week'], ['month', 'a month'], ['year', 'a year'], ['once', 'once']];
 /** One entry in a record's history: the record as it stood after a change (before it, for a delete). */

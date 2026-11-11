@@ -66,7 +66,7 @@ function domainSection(d: DomainDef) {
     '',
     '| Field | Key | Type | Required | Sensitivity (at least) | Notes |',
     '|---|---|---|---|---|---|',
-    ...d.parts.map((p) => `| ${cell(p.label)} | \`${p.key}\` | ${cell(partType(p))} | ${yes(p.required)} | ${p.sensitivity ?? 'follows the entry'} | ${cell([p.hint, p.when && `only when ${p.when.part} is ${p.when.in.join(' or ')}`, p.remind && 'reminder before it passes', p.deprecated && 'deprecated'].filter(Boolean).join('; '))} |`),
+    ...d.parts.map((p) => `| ${cell(p.label)} | \`${p.key}\` | ${cell(partType(p))} | ${yes(p.required)} | ${p.sensitivity ?? 'follows the entry'} | ${cell([p.hint, p.when && `only when ${(Array.isArray(p.when) ? p.when : [p.when]).map((w) => `${w.part} is ${w.in.join(' or ')}`).join(', or ')}`, p.remind && 'reminder before it passes', p.deprecated && 'deprecated'].filter(Boolean).join('; '))} |`),
     '',
   ];
   if (d.companions?.length) lines.push(`Invites: ${d.companions.map((c) => c.label).join('; ')}.`, '');

@@ -370,7 +370,7 @@ const DEFS: Def[] = [
       { key: 'finances', label: 'What it pays for', type: 'record', to: ['vehicles', 'property', 'residences'], when: { part: 'kind', in: ['loan', 'mortgage'] } },
       { key: 'balance', label: 'Balance', type: 'money', sensitivity: 'secret' },
       { key: 'balanceAsOf', label: 'Balance as of', type: 'date' },
-      { key: 'jointWith', label: 'Joint with', type: 'party', many: true },
+      { key: 'ownedWith', label: 'Owned with', type: 'party', many: true, hint: 'Anyone on the account with you' },
       { key: 'status', label: 'Status', type: 'enum', options: o('current', 'past_due=Past due', 'charged_off=Charged off', 'in_collections=In collections', 'settled', 'paid_in_full=Paid in full', 'closed') },
       { key: 'statusSince', label: 'Status since', type: 'date' },
       // A debt that went wrong: the details live on the account itself, not in a separate category.
@@ -511,6 +511,7 @@ const DEFS: Def[] = [
       { key: 'registeredIn', label: 'Registered in', type: 'region' },
       { key: 'registrationExpires', label: 'Registration expires', type: 'date', remind: true },
       { key: 'heldAs', label: 'Held as', type: 'enum', options: o('owned', 'financed', 'leased', 'company=Company car') },
+      { key: 'ownedWith', label: 'Owned with', type: 'party', many: true, hint: 'Anyone else on the title' },
     ],
     companions: [
       { document: 'title', label: 'The title (proof you own it)' },
@@ -531,8 +532,10 @@ const DEFS: Def[] = [
       { key: 'address', label: 'Address', type: 'address', when: { part: 'kind', in: ['home', 'land'] } },
       { key: 'parcelId', label: 'Parcel ID', type: 'text', when: { part: 'kind', in: ['home', 'land'] }, hint: 'The official land identifier, e.g. the APN' },
       { key: 'heldAs', label: 'How it’s held', type: 'enum', when: { part: 'kind', in: ['home', 'land'] }, options: o('sole', 'joint', 'tenancy_in_common=Tenancy in common', 'trust', 'company') },
-      { key: 'yourShare', label: 'Your share (%)', type: 'number', when: { part: 'kind', in: ['home', 'land'] } },
-      { key: 'coOwners', label: 'Co-owners', type: 'party', many: true, hint: 'People, a trust or a company' },
+      { key: 'yourShare', label: 'Your share (%)', type: 'number', when: { part: 'heldAs', in: ['joint', 'tenancy_in_common', 'trust', 'company'] } },
+      // For a home or land, only once it isn't yours alone; for a valuable, whenever it's shared.
+      { key: 'ownedWith', label: 'Owned with', type: 'party', many: true, hint: 'People, a trust or a company',
+        when: [{ part: 'heldAs', in: ['joint', 'tenancy_in_common', 'trust', 'company'] }, { part: 'kind', in: ['electronics', 'jewelry', 'art', 'instrument', 'collectible', 'copyright', 'other'] }] },
       { key: 'keptAt', label: 'Kept at', type: 'record', to: ['residences'], when: { part: 'kind', in: ['electronics', 'jewelry', 'art', 'instrument', 'collectible', 'other'] } },
       { key: 'serialNumber', label: 'Serial number', type: 'text', when: { part: 'kind', in: ['electronics', 'jewelry', 'art', 'instrument', 'collectible', 'other'] } },
       { key: 'purchasePrice', label: 'Purchase price', type: 'money' },

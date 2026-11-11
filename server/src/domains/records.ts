@@ -247,7 +247,8 @@ const CHECKS: Record<string, (data: Record<string, unknown>) => void> = {
 
 export type RecordInput = { data?: Record<string, unknown>; validFrom?: string | null; validTo?: string | null; notes?: string; sensitivity?: Sensitivity | null };
 
-const applies = (p: PartDef, data: Record<string, unknown>) => !p.when || p.when.in.includes(String(data[p.when.part]));
+const conds = (p: PartDef) => (p.when ? (Array.isArray(p.when) ? p.when : [p.when]) : []);
+const applies = (p: PartDef, data: Record<string, unknown>) => !p.when || conds(p).some((w) => w.in.includes(String(data[w.part])));
 
 /**
  * Build the stored form of a record from input (create) or input merged onto an existing record (patch).
@@ -273,9 +274,11 @@ export async function buildRecord(d: DomainDef, input: RecordInput, existing: Re
   // A part that only applies in some states can't be set outside them. Values already stored stay: they were true.
   const misplaced = d.parts.filter((p) => p.key in inData && !empty(inData[p.key]) && !applies(p, plain));
   if (misplaced.length) {
-    const w = misplaced[0].when!, on = d.parts.find((x) => x.key === w.part);
-    const values = w.in.map((v) => on?.options?.find(([k]) => k === v)?.[1] ?? v).join(' or ');
-    throw bad('not_applicable', `${misplaced.map((p) => p.label).join(', ')} only applies when ${on?.label.toLowerCase() ?? w.part} is ${values}`);
+    const when = conds(misplaced[0]).map((w) => {
+      const on = d.parts.find((x) => x.key === w.part);
+      return `${on?.label.toLowerCase() ?? w.part} is ${w.in.map((v) => on?.options?.find(([k]) => k === v)?.[1] ?? v).join(' or ')}`;
+    }).join(', or ');
+    throw bad('not_applicable', `${misplaced.map((p) => p.label).join(', ')} only applies when ${when}`);
   }
   const missing = d.parts.filter((p) => p.required && applies(p, plain) && empty(plain[p.key]));
   if (missing.length) throw bad('required', `${d.label} needs ${missing.map((p) => p.label.toLowerCase()).join(', ')}`);
