@@ -453,19 +453,20 @@ const DEFS: Def[] = [
   },
   {
     id: 'legal', label: 'Legal documents', noun: 'document', group: 'money', sensitivity: 'sensitive', confirmShare: true, dated: true, publicable: false, documents: 'contract',
-    description: 'Wills, powers of attorney, directives, trusts, deeds, titles and leases, the people they name and where the originals are.',
-    title: '{title}',
+    // Documents that give someone authority or decide who gets what. Deeds, titles and leases are documents on the home, car or property they prove.
+    description: 'Wills, powers of attorney, healthcare directives, trusts and court orders: the people they name and where the originals are.',
+    title: '{kind} · {title}',
     parts: [
-      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('will', 'power_of_attorney=Power of attorney', 'healthcare_proxy=Healthcare proxy', 'advance_directive=Advance directive / living will', 'trust', 'beneficiary=Beneficiary designation', 'prenup=Prenuptial agreement', 'court_order=Court order', 'deed', 'vehicle_title=Vehicle title', 'lease', 'other') },
-      { key: 'title', label: 'Title', type: 'text', required: true },
+      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('will', 'power_of_attorney=Power of attorney', 'healthcare_proxy=Healthcare proxy', 'advance_directive=Advance directive / living will', 'trust', 'beneficiary=Beneficiary designation', 'prenup=Prenuptial agreement', 'court_order=Court order', 'other') },
+      { key: 'title', label: 'Title', type: 'text', hint: 'Only if you need to tell two apart, like “2024 update”' },
       { key: 'attorney', label: 'Attorney', type: 'party' },
       { key: 'executors', label: 'Executors', type: 'party', many: true, when: { part: 'kind', in: ['will'] } },
       { key: 'beneficiaries', label: 'Beneficiaries', type: 'party', many: true, when: { part: 'kind', in: ['will', 'trust', 'beneficiary'] } },
       { key: 'agents', label: 'Agents', type: 'party', many: true, when: { part: 'kind', in: ['power_of_attorney', 'healthcare_proxy', 'advance_directive'] } },
       { key: 'trustees', label: 'Trustees', type: 'party', many: true, when: { part: 'kind', in: ['trust'] } },
       { key: 'guardians', label: 'Guardians', type: 'party', many: true, when: { part: 'kind', in: ['will'] } },
-      { key: 'witnesses', label: 'Witnesses', type: 'party', many: true },
       { key: 'originalLocation', label: 'Where the original is', type: 'text', sensitivity: 'secret' },
+      { key: 'witnesses', label: 'Witnesses', type: 'party', many: true },
     ],
   },
   {
@@ -512,11 +513,11 @@ const DEFS: Def[] = [
       { key: 'heldAs', label: 'Held as', type: 'enum', options: o('owned', 'financed', 'leased', 'company=Company car') },
     ],
     companions: [
-      { domain: 'legal', label: 'The title (proof you own it)' },
+      { document: 'title', label: 'The title (proof you own it)' },
       { document: 'registration', label: 'The registration' },
       { domain: 'insurance', label: 'Is it insured?' },
       { domain: 'financial_accounts', label: 'The loan', when: { part: 'heldAs', in: ['financed'] } },
-      { domain: 'legal', label: 'The lease', when: { part: 'heldAs', in: ['leased'] } },
+      { document: 'contract', label: 'The lease', when: { part: 'heldAs', in: ['leased'] } },
     ],
   },
   {
@@ -532,7 +533,6 @@ const DEFS: Def[] = [
       { key: 'heldAs', label: 'How it’s held', type: 'enum', when: { part: 'kind', in: ['home', 'land'] }, options: o('sole', 'joint', 'tenancy_in_common=Tenancy in common', 'trust', 'company') },
       { key: 'yourShare', label: 'Your share (%)', type: 'number', when: { part: 'kind', in: ['home', 'land'] } },
       { key: 'coOwners', label: 'Co-owners', type: 'party', many: true, hint: 'People, a trust or a company' },
-      { key: 'deed', label: 'Deed', type: 'record', to: ['legal'], when: { part: 'kind', in: ['home', 'land'] } },
       { key: 'keptAt', label: 'Kept at', type: 'record', to: ['residences'], when: { part: 'kind', in: ['electronics', 'jewelry', 'art', 'instrument', 'collectible', 'other'] } },
       { key: 'serialNumber', label: 'Serial number', type: 'text' },
       { key: 'purchasePrice', label: 'Purchase price', type: 'money' },
@@ -542,7 +542,7 @@ const DEFS: Def[] = [
       { key: 'valuedBy', label: 'Valued by', type: 'party', hint: 'An appraiser. Leave empty if it’s your own estimate' },
     ],
     companions: [
-      { domain: 'legal', label: 'The deed', when: { part: 'kind', in: ['home', 'land'] } },
+      { document: 'deed', label: 'The deed', when: { part: 'kind', in: ['home', 'land'] } },
       { domain: 'financial_accounts', label: 'The mortgage', when: { part: 'kind', in: ['home', 'land'] } },
       { domain: 'insurance', label: 'Is it insured?' },
       { document: 'statement', label: 'Property tax bills', when: { part: 'kind', in: ['home', 'land'] } },
