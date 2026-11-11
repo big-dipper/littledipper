@@ -44,7 +44,7 @@ const DEFS: Def[] = [
   },
   {
     // One entry. Time and coordinates are optional (astrology charts and maps use them); the zone makes the time exact.
-    id: 'birth', label: 'Birth', noun: 'birth', group: 'identity', sensitivity: 'sensitive', dated: false, publicable: false, single: true, documents: 'certificate',
+    id: 'birth', label: 'Birth', noun: 'birth', group: 'identity', sensitivity: 'sensitive', dated: false, publicable: false, single: true, livesOn: 'profile', documents: 'certificate',
     description: 'When and where you were born. Your birthday shows in Calendar.',
     title: '{date}',
     parts: [

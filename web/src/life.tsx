@@ -26,7 +26,7 @@ export type Domain = {
   parts: Part[]; title: string; count: number; currentCount: number; sharedWith: number;
   /** The profile reads this category (names, birth, where you live…). */
   feedsProfile?: boolean;
-  livesOn?: 'party' | 'actions';
+  livesOn?: 'party' | 'actions' | 'profile';
   oneAtATime?: boolean;
   /** Newest first by this date part (receipts: purchase date, income: received on). */
   sortBy?: string;
