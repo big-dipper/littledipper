@@ -159,7 +159,10 @@ export default function Category() {
   const years = d.sortBy ? [...new Set(data.items.map(yearOf).filter(Boolean))].sort().reverse() : [];
   const needle = q.trim().toLowerCase();
   const shown = data.items.filter((r) => (year === 'all' || yearOf(r) === year) && (!needle || r.title.toLowerCase().includes(needle) || JSON.stringify(r.data).toLowerCase().includes(needle) || (r.notes ?? '').toLowerCase().includes(needle)));
-  const current = d.dated ? shown.filter((r) => r.current) : shown;
+  // Dated entries that haven't started yet (a trip next month, a new job) are upcoming, soonest first.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const upcoming = d.dated ? shown.filter((r) => r.validFrom && r.validFrom.length === 10 && r.validFrom > todayStr).sort((a, b) => a.validFrom!.localeCompare(b.validFrom!)) : [];
+  const current = d.dated ? shown.filter((r) => r.current && !upcoming.includes(r)) : shown;
   const past = d.dated ? shown.filter((r) => !r.current) : [];
   const done = () => { setEditing(null); reload(); reloadCatalog(); reloadDeleted(); };
   const bringBack = async (v: Version) => { if (await run(() => post(`/api/data/${d.id}/${v.record.id}/history/${v.version}/restore`))) done(); };
@@ -208,9 +211,17 @@ export default function Category() {
         </div>
       ) : (
         <>
+          {upcoming.length > 0 && (
+            <div style={{ marginTop: 22 }}>
+              <h4>Upcoming</h4>
+              <div style={{ display: 'grid', gap: 14 }}>
+                {upcoming.map((r) => <RecordCard key={r.id} d={d} r={r} contacts={contacts} onEdit={() => setEditing(r)} />)}
+              </div>
+            </div>
+          )}
           {current.length > 0 && (
             <div style={{ marginTop: 22 }}>
-              {d.dated && <h4>Current</h4>}
+              {d.dated && <h4>{d.id === 'travel' ? 'Now' : 'Current'}</h4>}
               <div style={{ display: 'grid', gap: 14 }}>
                 {current.map((r) => <RecordCard key={r.id} d={d} r={r} contacts={contacts} onEdit={() => setEditing(r)} />)}
               </div>

@@ -14,7 +14,7 @@ export type Action = { label: string; go: () => void; quiet?: boolean };
 export type NeedsYouItem = { key: string; initials: string; title: string; sub: string; actions: Action[] };
 
 type TaskAsk = { messageId: string; party: { id: string; name: string }; title: string; due: string | null; at: string };
-type Attention = { domain: string; id: string; title: string; part: string; kind?: 'expiry' | 'deadline'; date: string; expired: boolean };
+type Attention = { domain: string; id: string; title: string; part: string; kind?: 'expiry' | 'deadline' | 'trip'; date: string; expired: boolean };
 
 export function useNeedsYou(): { items: NeedsYouItem[] | null } {
   const { node, refresh, version } = useAdmin();
@@ -48,7 +48,7 @@ export function useNeedsYou(): { items: NeedsYouItem[] | null } {
     }),
     ...attention.items.slice(0, 3).map((a) => ({
       key: a.id + a.part, initials: initials(catalog.find((d) => d.id === a.domain)?.label.replace('&', '') || a.domain),
-      title: a.kind === 'deadline' ? `${a.part}: ${a.title}` : `${a.title} ${a.expired ? 'has expired' : 'expires soon'}`,
+      title: a.kind === 'trip' ? a.title : a.kind === 'deadline' ? `${a.part}: ${a.title}` : `${a.title} ${a.expired ? 'has expired' : 'expires soon'}`,
       sub: a.kind === 'deadline' && a.expired ? `Passed ${fmtDate(a.date)}` : `${a.part} ${fmtDate(a.date)}`, actions: [{ label: 'Open', go: () => nav(`/admin/life/${a.domain}`) }],
     })),
     // The recovery kit first: without it, no backup can be restored anywhere else.

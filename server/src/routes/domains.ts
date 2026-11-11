@@ -180,6 +180,7 @@ export default async function domainRoutes(app: FastifyInstance) {
         }
       }
     }
+    items.push(...(await passportForTrips(today)));
     items.sort((a, b) => a.date.localeCompare(b.date));
     return { items, days };
   });
@@ -420,4 +421,36 @@ export default async function domainRoutes(app: FastifyInstance) {
     await audit({ actor: ownerActor(p.key._id), action: 'review.reject', resource: `reviews/${r._id}`, text: `You turned down ${r.by}'s suggestion`, tone: 'owner' });
     return reviewOut({ ...r, status: 'rejected', decidedAt: new Date().toISOString() }, true);
   });
+}
+
+/** The last day of a full or partial date: 2031 → 2031-12-31, 2031-04 → 2031-04-30. */
+const lastDay = (v: string) => (v.length === 4 ? `${v}-12-31` : v.length === 7 ? new Date(Date.UTC(+v.slice(0, 4), +v.slice(5, 7), 0)).toISOString().slice(0, 10) : v);
+const addMonths = (v: string, n: number) => { const d = new Date(`${v}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+
+/**
+ * Trips abroad in the next year that your passport won't cover: many countries turn you away when it has less than
+ * six months left after you arrive. "Abroad" is a country other than the one you live in (your primary home).
+ */
+async function passportForTrips(today: string) {
+  const travel = await getDomain('travel'), ids = await getDomain('ids'), homes = await getDomain('residences');
+  if (!travel || !ids || !homes) return [];
+  const yearOut = addMonths(today, 12);
+  const home = (await recordsOf('residences')).filter((r) => isCurrent(homes, r)).map((r) => plainData(r)).find((v) => v.primary)?.country;
+  const passports = (await recordsOf('ids')).filter((r) => isCurrent(ids, r) && plainData(r).kind === 'passport');
+  const out = [];
+  for (const t of await recordsOf('travel')) {
+    const v = plainData(t);
+    const start = t.validFrom ?? '';
+    if (start.length !== 10 || start < today || start > yearOut || !v.country || v.country === home) continue;
+    const back = t.validTo && t.validTo.length === 10 ? t.validTo : start;
+    const trip = recordOut(travel, t).title.split(' · ').slice(0, -1).join(', ') || recordOut(travel, t).title;
+    const ok = passports.some((p) => { const e = plainData(p).expires; return typeof e === 'string' && lastDay(e) >= addMonths(back, 6); });
+    if (ok) continue;
+    const p = passports[0];
+    out.push({
+      domain: 'ids', domainLabel: ids.label, id: p?._id ?? t._id, title: p ? `Your passport expires within 6 months of your trip to ${trip}` : `No passport on file for your trip to ${trip}`,
+      part: 'Trip starts', kind: 'trip', date: start, expired: false,
+    });
+  }
+  return out;
 }

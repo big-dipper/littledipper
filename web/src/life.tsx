@@ -126,7 +126,13 @@ export function duration(from: string | null, to: string | null) {
   if (!from) return '';
   const a = new Date(from.length === 4 ? `${from}-01-01` : from.length === 7 ? `${from}-01` : from);
   const b = to ? new Date(to.length === 4 ? `${to}-12-31` : to.length === 7 ? `${to}-28` : to) : new Date();
-  const months = Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth());
+  // Full dates under two months long read in days, both ends counted (a trip from the 1st to the 3rd is 3 days).
+  if (from.length === 10 && to?.length === 10) {
+    const days = Math.round((b.getTime() - a.getTime()) / 86400_000) + 1;
+    if (days > 0 && days < 60) return `${days} day${days === 1 ? '' : 's'}`;
+  }
+  // UTC throughout: a date-only value is midnight UTC, which local time would push into the previous month.
+  const months = Math.max(0, (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + b.getUTCMonth() - a.getUTCMonth());
   const y = Math.floor(months / 12), m = months % 12;
   return [y ? `${y} yr${y === 1 ? '' : 's'}` : '', m ? `${m} mo${m === 1 ? '' : 's'}` : ''].filter(Boolean).join(' ') || 'under a month';
 }
