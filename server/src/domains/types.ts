@@ -61,6 +61,8 @@ export type PartDef = {
   labelBy?: { part: string; labels: Record<string, string> };
   /** text: common answers offered as you type (Personal, Work…). Anything else is still fine. */
   suggestions?: string[];
+  /** country: a new entry starts with the country you live in (your passport, your license), changeable as ever. */
+  prefill?: 'home_country';
   /** timezone: filled in from the place (these parts) until the owner picks one, so nobody has to know "America/Chicago". */
   zoneFrom?: { country: string; region?: string };
   /** true: always under More details, however early it comes (name parts most people never need). false: always up

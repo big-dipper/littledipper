@@ -62,18 +62,21 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'ids', label: 'Government IDs', noun: 'ID', group: 'identity', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, documents: 'id',
-    description: 'Passport, driver’s license, SSN and every other government-issued number. Numbers are encrypted.',
-    title: '{kind} · {issuer}',
+    // Four kinds cover most people; the rest wait behind "Another ID". Each kind only asks what it has: a license a
+    // state, a passport a country, a Social Security number neither.
+    id: 'ids', label: 'IDs', noun: 'ID', group: 'identity', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, documents: 'id',
+    description: 'Passport, driver’s license, Social Security number and your other IDs. Numbers are encrypted.',
+    title: '{otherKind|kind} · {authority|issuer}',
     parts: [
-      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('passport', 'drivers_license=Driver’s license', 'state_id=State ID', 'national_id=National ID', 'ssn=Social Security number', 'tax_id=Tax ID', 'visa', 'residence_permit=Residence permit / green card', 'work_permit=Work permit', 'known_traveler=Known traveler number', 'military_id=Military ID', 'birth_certificate=Birth certificate', 'naturalization_certificate=Naturalization certificate', 'citizenship_certificate=Certificate of citizenship', 'consular_birth_report=Consular report of birth abroad', 'voter_registration=Voter registration', 'other') },
-      { key: 'number', label: 'Number', type: 'text', required: true, sensitivity: 'secret' },
-      { key: 'issuer', label: 'Issuing country', type: 'country' },
-      { key: 'authority', label: 'Issuing state / authority', type: 'text' },
-      { key: 'nameOnDocument', label: 'Name on document', type: 'text', hint: 'As printed, which can differ from your legal name' },
-      { key: 'class', label: 'Class / category', type: 'text', hint: 'License class, visa category (work, student…)' },
-      { key: 'issued', label: 'Issued', type: 'date' },
-      { key: 'expires', label: 'Expires', type: 'date' },
+      { key: 'kind', label: 'Kind', ask: 'What kind of ID?', type: 'enum', required: true, options: o('passport', 'drivers_license=Driver’s license', 'state_id=State ID', 'ssn=Social Security number', 'other=Another ID') },
+      { key: 'otherKind', label: 'Which', ask: 'Which one?', type: 'enum', required: true, when: { part: 'kind', in: ['other'] }, options: o('national_id=National ID card', 'residence_permit=Green card or residence permit', 'visa', 'work_permit=Work permit', 'known_traveler=Trusted Traveler (Global Entry, TSA PreCheck)', 'birth_certificate=Birth certificate', 'naturalization_certificate=Naturalization certificate', 'citizenship_certificate=Certificate of citizenship', 'consular_birth_report=Consular report of birth abroad', 'military_id=Military ID', 'voter_registration=Voter registration', 'tax_id=Tax ID', 'other') },
+      { key: 'number', label: 'Number', type: 'text', required: true, sensitivity: 'secret', labelBy: { part: 'kind', labels: { passport: 'Passport number', drivers_license: 'License number', state_id: 'ID number', ssn: 'Social Security number' } } },
+      { key: 'expires', label: 'Expires', type: 'date', more: false, when: { part: 'kind', in: ['passport', 'drivers_license', 'state_id', 'other'] }, hint: 'We’ll remind you before it runs out' },
+      { key: 'issuer', label: 'Country', ask: 'Which country?', type: 'country', more: false, prefill: 'home_country', when: { part: 'kind', in: ['passport', 'drivers_license', 'state_id', 'other'] } },
+      { key: 'authority', label: 'State', ask: 'Which state?', type: 'text', more: false, when: [{ part: 'kind', in: ['drivers_license', 'state_id'] }, { part: 'otherKind', in: ['birth_certificate', 'voter_registration', 'other'] }], labelBy: { part: 'kind', labels: { other: 'Issued by' } } },
+      { key: 'class', label: 'Class', type: 'text', when: [{ part: 'kind', in: ['drivers_license'] }, { part: 'otherKind', in: ['visa'] }], labelBy: { part: 'kind', labels: { drivers_license: 'License class', other: 'Visa type' } }, hint: 'e.g. C, or work, student' },
+      { key: 'issued', label: 'Issued', type: 'date', more: true },
+      { key: 'nameOnDocument', label: 'Name as printed', type: 'text', more: true, hint: 'If it differs from your legal name' },
     ],
   },
   {

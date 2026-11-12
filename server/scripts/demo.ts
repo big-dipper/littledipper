@@ -96,6 +96,7 @@ const add = async (domain: string, data: Record<string, unknown>, more = {}) => 
 await add('names', { kind: 'legal', full: 'Maya Elin Lindqvist', given: 'Maya', middle: 'Elin', family: 'Lindqvist', reason: 'birth' }, { validFrom: '1984-03-09' });
 await add('birth', { date: '1984-03-09', time: '06:42:17', timeZone: 'America/Chicago', city: 'Peoria', region: 'Illinois', country: 'US' });
 const passport = await add('ids', { kind: 'passport', number: 'X1234567', issuer: 'US', expires: '2031-04' });
+await add('ids', { kind: 'drivers_license', number: 'WL7720413', issuer: 'US', authority: 'Oregon', class: 'C', expires: '2029-03-09' });
 await add('citizenship', { country: 'US', status: 'citizen', acquiredBy: 'birth', provenBy: [passport] }, { validFrom: '1984' });
 await add('citizenship', { country: 'CA', status: 'permanent_resident' }, { validFrom: '2020' });
 await add('contact_methods', { kind: 'phone', value: '(503) 555-0148', label: 'Mobile', primary: true });

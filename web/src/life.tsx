@@ -15,6 +15,7 @@ export type Part = {
   /** text: common answers offered as you type. */ suggestions?: string[];
   /** The question the form asks; label is what cards show. */ ask?: string;
   /** true: always under More details; false: always up front. */ more?: boolean;
+  /** country: a new entry starts with the country you live in. */ prefill?: 'home_country';
   /** timezone: filled in from the place until the owner picks one. */ zoneFrom?: { country: string; region?: string };
   /** party: what's usually there, so a new one starts as the right type. */ expects?: 'person' | 'organisation';
 };
@@ -604,6 +605,16 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
     return Object.fromEntries(Object.entries(rec.data).filter(([k]) => !rec.masked.includes(k)));
   });
   const [touched, setTouched] = useState<Set<string>>(new Set());
+  // A new passport or license starts in the country you live in (your current main home, else this browser's region).
+  useEffect(() => {
+    const keys = rec ? [] : d.parts.filter((p) => p.prefill === 'home_country' && !defaults?.[p.key]).map((p) => p.key);
+    if (!keys.length) return;
+    get<{ items: Rec[] }>('/api/data/residences').then((r) => {
+      const now = r.items.filter((x) => !x.validTo);
+      const home = String((now.find((x) => x.data.primary) ?? now[0])?.data.country ?? new Intl.Locale(navigator.language).maximize().region ?? '').toUpperCase();
+      if (home) setVals((v) => ({ ...Object.fromEntries(keys.filter((k) => !v[k]).map((k) => [k, home])), ...v }));
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [from, setFrom] = useState(rec?.validFrom ?? '');
   const [to, setTo] = useState(rec?.validTo ?? '');
   const [current, setCurrent] = useState(rec ? !rec.validTo : true);
@@ -733,7 +744,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   const field = (p: Part) => (
     <div key={p.key} className="field">
       <label htmlFor={`part-${p.key}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {p.ask ?? labelOf(p, vals)}{p.required && <span aria-hidden style={{ color: 'var(--color-accent-500)' }}>*</span>}
+        {(p.labelBy && p.labelBy.labels[String(vals[p.labelBy.part] ?? '')]) || p.ask || p.label}{p.required && <span aria-hidden style={{ color: 'var(--color-accent-500)' }}>*</span>}
         {p.sensitivity === 'secret' && <span className="tag tag-accent" style={{ padding: '1px 8px', fontSize: 10, gap: 4 }}><Lock style={{ width: 8, height: 9 }} />Secret</span>}
       </label>
       <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} currency={currency} dateOnly={p.type === 'datetime' && vals.allDay === true} />
