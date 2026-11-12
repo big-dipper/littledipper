@@ -12,6 +12,7 @@ export type Part = {
   /** Only applies when another part holds one of these values (a list: any of them). */ when?: { part: string; in: string[] } | { part: string; in: string[] }[];
   /** A label that follows another part (a contact method's value: Email address, Phone number…). */ labelBy?: { part: string; labels: Record<string, string> };
   /** text: common answers offered as you type. */ suggestions?: string[];
+  /** Always under More details. */ more?: boolean;
   /** party: what's usually there, so a new one starts as the right type. */ expects?: 'person' | 'organisation';
 };
 /** Whether a part applies, given the values so far (collection details only once an account is in collections). */
@@ -589,7 +590,7 @@ function cleanRows(p: Part, rows: Row[]): Row[] {
   }).filter((r) => Object.keys(r).length);
 }
 
-const titleKeys = (d: Domain) => [...d.title.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+const titleKeys = (d: Domain) => [...d.title.matchAll(/\{([\w|]+)\}/g)].flatMap((m) => m[1].split('|'));
 
 // ── the editor: a side panel generated from the domain's schema ───────
 export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: { d: Domain; rec: Rec | null; contacts: ContactLite[]; onClose: () => void; onSaved: (saved?: Rec) => void; defaults?: Record<string, unknown> }) {
@@ -650,7 +651,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   const tKeys = titleKeys(d);
   // Deprecated parts stay editable on records that already use them, but aren't offered otherwise.
   const offered = d.parts.filter((p) => !p.system && applies(p, vals) && (!p.deprecated || (vals[p.key] !== undefined && vals[p.key] !== '') || rec?.masked.includes(p.key)));
-  const essential = offered.filter((p, i) => p.required || tKeys.includes(p.key) || i < 4);
+  const essential = offered.filter((p, i) => !p.more && (p.required || tKeys.includes(p.key) || i < 4));
   const extra = offered.filter((p) => !essential.includes(p));
   const extraFilled = extra.some((p) => vals[p.key] !== undefined && vals[p.key] !== '' || rec?.masked.includes(p.key));
 

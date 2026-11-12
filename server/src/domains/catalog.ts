@@ -27,19 +27,21 @@ const DEFS: Def[] = [
   {
     // The single source for every name. The profile's legal and preferred names, the account name and the public
     // name all come from here. Kind says what a name is for, dates say when it applied, reason says why it changed:
-    // a birth name is the legal name whose reason is birth.
+    // a birth name is the legal name whose reason is birth. Most people only ever need the first two kinds, so the
+    // rest wait behind "Another name".
     id: 'names', label: 'Names', noun: 'name', group: 'identity', sensitivity: 'sensitive', dated: true, publicable: false,
-    sensitivityBy: { part: 'kind', values: { preferred: 'standard', professional: 'standard', nickname: 'standard' } },
-    description: 'Every name you have used: legal, preferred, professional, aliases and nicknames, with when each applied and why it changed.',
-    title: '{full} ({kind})',
+    sensitivityBy: [{ part: 'kind', values: { preferred: 'standard' } }, { part: 'otherKind', values: { professional: 'standard', nickname: 'standard' } }],
+    description: 'The name you go by, your legal name, and any others, with when each applied.',
+    title: '{full} ({otherKind|kind})',
     parts: [
-      { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('legal', 'preferred', 'professional', 'religious', 'alias', 'nickname') },
-      { key: 'full', label: 'Full name', type: 'text', required: true, hint: 'As you write it. The parts below are optional, for forms that split names.' },
-      { key: 'given', label: 'Given name', type: 'text' },
-      { key: 'middle', label: 'Middle name(s)', type: 'text' },
-      { key: 'family', label: 'Family name', type: 'text' },
-      { key: 'suffix', label: 'Suffix', type: 'text' },
-      { key: 'reason', label: 'Reason', type: 'enum', hint: 'Why this name began: birth, marriage…', options: o('birth', 'marriage', 'divorce', 'adoption', 'court_order=Court order', 'naturalization', 'other') },
+      { key: 'kind', label: 'What’s this name?', type: 'enum', required: true, options: o('preferred=The name I go by', 'legal=My legal name', 'other=Another name') },
+      { key: 'full', label: 'Full name', type: 'text', required: true, hint: 'As you write it' },
+      { key: 'otherKind', label: 'What kind', type: 'enum', required: true, when: { part: 'kind', in: ['other'] }, options: o('professional=Work or stage name', 'nickname', 'religious=Religious name', 'other') },
+      { key: 'reason', label: 'How you got this name', type: 'enum', when: { part: 'kind', in: ['legal'] }, options: o('birth', 'marriage', 'divorce', 'adoption', 'court_order=Court order', 'naturalization', 'other') },
+      { key: 'given', label: 'Given name', type: 'text', more: true, hint: 'The parts are for forms that split a name' },
+      { key: 'middle', label: 'Middle name(s)', type: 'text', more: true },
+      { key: 'family', label: 'Family name', type: 'text', more: true },
+      { key: 'suffix', label: 'Suffix', type: 'text', more: true },
     ],
   },
   {

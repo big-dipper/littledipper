@@ -30,6 +30,8 @@ export type PartType =
 /** A condition on another part's value. */
 export type When = { part: string; in: string[] };
 
+export type SensitivityBy = { part: string; values: Record<string, Sensitivity> };
+
 export type PartDef = {
   key: string;
   label: string;
@@ -56,6 +58,8 @@ export type PartDef = {
   labelBy?: { part: string; labels: Record<string, string> };
   /** text: common answers offered as you type (Personal, Work…). Anything else is still fine. */
   suggestions?: string[];
+  /** Always under More details, however early it comes: name parts (given, middle, family) most people never need. */
+  more?: boolean;
   /** party: what's usually there (an employer is an organisation), so a new one starts as the right type. */
   expects?: 'person' | 'organisation';
   /** Replaced by another part. It keeps working (old records and clients use it), but new UIs shouldn't offer it. Parts are never removed. */
@@ -77,8 +81,8 @@ export type DomainDef = {
    * parts that declare a sensitivity (a passport number is always secret) keep it whatever the entry says.
    */
   sensitivity: Sensitivity;
-  /** A default per kind of entry, e.g. names: preferred is standard, legal is sensitive. */
-  sensitivityBy?: { part: string; values: Record<string, Sensitivity> };
+  /** A default per kind of entry, e.g. names: preferred is standard, legal is sensitive. A list: the first that matches. */
+  sensitivityBy?: SensitivityBy | SensitivityBy[];
   /** Sharing or sending the whole category needs an explicit confirm, even without secret details (IDs, health, money). */
   confirmShare?: boolean;
   /** At most one entry (Birth, Health basics). */

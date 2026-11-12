@@ -452,7 +452,7 @@ async function main() {
     const maker2 = rest(await wideKey('make'));
     const pending = async (r: { status: number; body: any }) => r.status === 202 && r.body.status === 'pending_review' && r.body.message.includes('core identity');
     ok(await pending(await maker2('POST', '/api/data/names', { data: { kind: 'legal', full: 'Alex Q. Sample' } })), 'in make mode a legal name still waits for the owner');
-    ok((await maker2('POST', '/api/data/names', { data: { kind: 'nickname', full: 'Lex' } })).status === 201, 'a nickname follows the mode');
+    ok((await maker2('POST', '/api/data/names', { data: { kind: 'other', otherKind: 'nickname', full: 'Lex' } })).status === 201, 'a nickname follows the mode');
     ok(await pending(await maker2('POST', '/api/data/contact_methods', { data: { kind: 'email', value: 'alex@example.com' } })), 'a new email or phone always waits for the owner');
     ok(await pending(await maker2('POST', '/api/data/residences', { data: { street1: '1 New St', city: 'Boise', country: 'US' }, validFrom: '2026-01' })), 'a new current address always waits for the owner');
     ok((await maker2('POST', '/api/data/residences', { data: { street1: '9 Old Rd', city: 'Boise', country: 'US' }, validFrom: '2001-01', validTo: '2003-01' })).status === 201, 'a past address follows the mode');

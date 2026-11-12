@@ -104,7 +104,7 @@ async function domainItems(s: Extract<PublicSection, { type: 'domain' }>) {
   const d = await getDomain(s.domain);
   if (!d || !d.publicable) return null;
   const shown = publicParts(d).filter((p) => s.parts.includes(p.key));
-  const titleKeys = new Set([...d.title.matchAll(/\{(\w+)\}/g)].map((m) => m[1]));
+  const titleKeys = new Set([...d.title.matchAll(/\{([\w|]+)\}/g)].flatMap((m) => m[1].split('|')));
   const recs = sortRecords(d, await recordsOf(d.id)).filter((r) => !s.hidden.includes(r._id) && (s.scope === 'all' || isCurrent(d, r)));
   // Ways to reach you read best in a steady order: email, phone, web, social, messaging, post; the main one first.
   if (d.id === 'contact_methods') {

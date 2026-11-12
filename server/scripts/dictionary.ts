@@ -62,7 +62,7 @@ function domainSection(d: DomainDef) {
     '',
     d.description,
     '',
-    `One entry: ${d.noun} · Group: ${d.group} · Default sensitivity: ${d.sensitivity}${d.sensitivityBy ? ` (by ${d.sensitivityBy.part}: ${Object.entries(d.sensitivityBy.values).map(([k, v]) => `${k} ${v}`).join(', ')})` : ''} · Keeps dates (validFrom/validTo): ${d.dated ? 'yes' : 'no'}${d.single ? ' · One entry only' : ''} · Can be public: ${d.publicable ? 'yes' : 'no'}${d.confirmShare ? ' · Sharing needs a confirm' : ''}${d.documents ? ` · Takes documents: ${d.documents}` : ''}`,
+    `One entry: ${d.noun} · Group: ${d.group} · Default sensitivity: ${d.sensitivity}${d.sensitivityBy ? ` (${[d.sensitivityBy].flat().map((b) => `by ${b.part}: ${Object.entries(b.values).map(([k, v]) => `${k} ${v}`).join(', ')}`).join('; ')})` : ''} · Keeps dates (validFrom/validTo): ${d.dated ? 'yes' : 'no'}${d.single ? ' · One entry only' : ''} · Can be public: ${d.publicable ? 'yes' : 'no'}${d.confirmShare ? ' · Sharing needs a confirm' : ''}${d.documents ? ` · Takes documents: ${d.documents}` : ''}`,
     '',
     '| Field | Key | Type | Required | Sensitivity (at least) | Notes |',
     '|---|---|---|---|---|---|',

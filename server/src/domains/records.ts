@@ -17,8 +17,8 @@ export const SENS: Sensitivity[] = ['standard', 'sensitive', 'secret'];
 
 /** The category's default for an entry with these values: per kind where it says so (names: preferred is standard). */
 export function defaultSens(d: DomainDef, plain: Record<string, unknown> = {}): Sensitivity {
-  const by = d.sensitivityBy;
-  return (by && by.values[String(plain[by.part])]) || d.sensitivity;
+  const by = d.sensitivityBy ? [d.sensitivityBy].flat() : [];
+  return by.map((b) => b.values[String(plain[b.part])]).find(Boolean) || d.sensitivity;
 }
 
 /** How sensitive an entry is: the owner's choice for it, or the default for its kind. */
@@ -377,7 +377,9 @@ export function describeRepeat(rule: string): string {
 export function renderTitle(d: DomainDef, raw: Record<string, unknown>, hidden: Set<string> = new Set()): string {
   // A phone reads as people write it, not as stored (+12065550199 → (206) 555-0199).
   const values = d.id === 'contact_methods' && raw.kind === 'phone' && typeof raw.value === 'string' ? { ...raw, value: displayPhone(raw.value) } : raw;
-  const out = d.title.replace(/\{(\w+)\}/g, (_, k) => {
+  // {a|b}: the first of them that has a value (a name's "Nickname" rather than "Another name").
+  const out = d.title.replace(/\{([\w|]+)\}/g, (_, ks: string) => {
+    const k = ks.split('|').find((x) => values[x] !== undefined && values[x] !== '') ?? ks.split('|')[0];
     if (hidden.has(k)) return '••••';
     const p = d.parts.find((x) => x.key === k);
     return p ? displayValue(p, values[k]) : '';
