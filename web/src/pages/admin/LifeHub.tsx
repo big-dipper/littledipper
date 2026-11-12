@@ -8,7 +8,7 @@ type Attention = { domain: string; domainLabel: string; id: string; title: strin
 
 export default function LifeHub() {
   const nav = useNavigate();
-  // Relationships live on each person's page, tasks in the action bar and Birth on Profile basics (its Born line), not here.
+  // Relationships live on each person's page, tasks in the action bar, events on the Calendar and Birth on Profile basics (its Born line), not here.
   const { data: domains, error, reload } = useAsync(() => fetchCatalog().then((ds) => ds.filter((d) => !d.livesOn)), []);
   const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/profile'), []);
   const { data: attention } = useAsync(() => get<{ items: Attention[] }>('/api/attention'), []);

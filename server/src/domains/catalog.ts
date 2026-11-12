@@ -164,7 +164,7 @@ const DEFS: Def[] = [
   {
     // The owner's own calendar. Times are datetimes with their zone; an all-day event ends on its last day.
     // Repeats are iCalendar rules (RFC 5545), so calendars import and export exactly.
-    id: 'events', label: 'Events', noun: 'event', group: 'life', sensitivity: 'sensitive', dated: false, publicable: false, sortBy: 'start',
+    id: 'events', label: 'Events', noun: 'event', group: 'life', sensitivity: 'sensitive', dated: false, publicable: false, livesOn: 'calendar', sortBy: 'start',
     description: 'Appointments, plans and anything with a date and time. They show on your calendar beside the dates your data already holds.',
     title: '{title}',
     parts: [
