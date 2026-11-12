@@ -28,7 +28,7 @@ export const PROFILE_DOMAINS = new Set(['names', 'birth', 'citizenship', 'reside
 
 /** Every line the profile can have, in order, with its label: what other screens offer before a value exists. */
 export const PROFILE_LINES: [string, string][] = [
-  ['little_dipper', 'Little Dipper'], ['preferred_name', 'Preferred name'], ['legal_name', 'Legal name'], ['birth_name', 'Birth name'], ['born', 'Born'],
+  ['little_dipper', 'Little Dipper'], ['preferred_name', 'Name'], ['legal_name', 'Legal name'], ['birth_name', 'Birth name'], ['born', 'Born'],
   ['citizenship', 'Citizenship'], ['nationality', 'Non-citizen nationality'], ['residency', 'Residency status'],
   ['marital_status', 'Marital status'], ['lives_in', 'Lives in'], ['address', 'Home address'], ['mailing_address', 'Mailing address'], ['email', 'Email'], ['phone', 'Phone'],
 ];

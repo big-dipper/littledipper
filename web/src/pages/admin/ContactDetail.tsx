@@ -221,7 +221,7 @@ function saveContact(id: string, e: Edit) {
 }
 
 /** Their side of the exchange, in words: "Where they live", not "Their lives in". */
-const THEIRS: Record<string, string> = { 'Little Dipper': 'Their Little Dipper address', 'Preferred name': 'Their name', 'Lives in': 'Where they live', 'Home address': 'Their home address', Email: 'Their email', Phone: 'Their phone', Born: 'Their birthday', 'Legal name': 'Their legal name', 'Mailing address': 'Their mailing address' };
+const THEIRS: Record<string, string> = { 'Little Dipper': 'Their Little Dipper address', Name: 'Their name', 'Preferred name': 'Their name', 'Lives in': 'Where they live', 'Home address': 'Their home address', Email: 'Their email', Phone: 'Their phone', Born: 'Their birthday', 'Legal name': 'Their legal name', 'Mailing address': 'Their mailing address' };
 const theirs = (label: string) => THEIRS[label] ?? `Their ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 
 /** One detail in the connect card. A Little Dipper line shows its address with the Node ID beneath, to compare. */

@@ -119,7 +119,7 @@ export default function PublicEditor() {
               {pp.view.avatarUrl && <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={dropPhoto}>Remove</button>}
             </div>
             <div className="field"><label htmlFor="dn">Name shown</label>
-              <Select id="dn" value={pp.nameId ?? ''} onChange={(v) => save({ nameId: v || null })} placeholder="Your preferred name" options={(names?.items ?? []).map((n) => [n.id, n.title])} />
+              <Select id="dn" value={pp.nameId ?? ''} onChange={(v) => save({ nameId: v || null })} placeholder="The name you go by" options={(names?.items ?? []).map((n) => [n.id, n.title])} />
               <div className="text-muted" style={{ fontSize: 12 }}>One of your names, from Names. A professional or pen name is fine.</div>
             </div>
             <div className="field"><label htmlFor="hl">Headline</label><input id="hl" className="input" value={header.headline} placeholder="What you'd like people to know first" onChange={(e) => editHeader('headline', e.target.value)} /></div>

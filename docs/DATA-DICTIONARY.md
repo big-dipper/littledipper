@@ -13,7 +13,7 @@ Nothing is stored on the profile: each line is worked out from the categories ev
 | Line | Key |
 |---|---|
 | Little Dipper | `little_dipper` |
-| Preferred name | `preferred_name` |
+| Name | `preferred_name` |
 | Legal name | `legal_name` |
 | Birth name | `birth_name` |
 | Born | `born` |
