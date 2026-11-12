@@ -85,7 +85,9 @@ export async function profileLines(): Promise<ProfileLine[]> {
   if (b) {
     const v = plainData(b);
     const place = [v.city, v.region, v.country ? countryName(String(v.country)) : ''].filter(Boolean).join(', ');
-    const when = [friendlyDate(String(v.date)), v.time ? String(v.time) : ''].filter(Boolean).join(', ');
+    // 06:42:17 reads as "6:42 am"; the seconds stay in the entry for anyone who needs them.
+    const clock = (t: string) => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`; };
+    const when = [friendlyDate(String(v.date)), v.time ? clock(String(v.time)) : ''].filter(Boolean).join(', ');
     out.push(line('born', [when, place].filter(Boolean).join(', '), sensOf(birth, b, ['date', 'time', 'city', 'region', 'country']), [{ d: birth, r: b }]));
   }
 

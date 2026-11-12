@@ -72,7 +72,16 @@ export default function ContactAccess({ c, fields, first, onGrants, onPreview }:
   };
 
   const sharedDomains = catalog?.filter((d) => dg[d.id]) ?? [];
-  const summary = [grants.basic ? 'Basic profile' : null, extraOn ? `${extraOn} extra field${extraOn === 1 ? '' : 's'}` : null, sharedDomains.length ? `${sharedDomains.length} categor${sharedDomains.length === 1 ? 'y' : 'ies'}` : null].filter(Boolean).join(' + ') || 'Nothing';
+  // What they get, named the way you'd say it: "Your basic profile, plus phone and Health basics".
+  const extraNames = grants.lines.map((k) => fields.find((f) => f.key === k)?.label.toLowerCase() ?? k);
+  const named = [
+    ...(extraNames.length > 3 ? [`${extraNames.length} more details`] : extraNames),
+    ...(sharedDomains.length > 2 ? [`${sharedDomains.length} categories`] : sharedDomains.map((d) => d.label)),
+  ];
+  const and = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}` : xs[0] ?? '');
+  const summary = grants.basic
+    ? `Your basic profile${named.length ? `, plus ${and(named)}` : ''}`
+    : named.length ? and(named).replace(/^./, (x) => x.toUpperCase()) : 'Nothing';
 
   return (
     <div className="card" style={{ padding: '22px 24px', gap: 14, marginTop: 22 }}>
