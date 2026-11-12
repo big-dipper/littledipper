@@ -120,6 +120,11 @@ async function main() {
     ok(acct.name === 'Maya Lindqvist' && acct.email === 'maya@example.com', 'the account name and email are worked out from Names and Contact methods');
     await a.call('PATCH', '/api/owner', { name: 'Someone' }, [400]);
     ok(true, 'the account name can’t be set directly: it comes from Names');
+    const goBy = (await a.call('GET', '/api/data/names')).items.find((n: any) => n.data.kind === 'preferred');
+    await a.call('PATCH', `/api/data/names/${goBy.id}`, { data: { kind: 'preferred', full: 'Maya Lindqvist', alsoLegal: true } });
+    ok((await line('legal_name'))?.value === 'Maya Lindqvist' && (await line('legal_name'))?.sensitivity === 'sensitive' && (await line('preferred_name'))?.sensitivity === 'standard', 'the name you go by can also be your legal name: one entry, two lines, the legal one sensitive');
+    await a.call('PATCH', `/api/data/names/${goBy.id}`, { data: { kind: 'preferred', full: 'Maya Lindqvist', alsoLegal: false } });
+    ok(!(await line('legal_name'))?.value, 'unchecked, there is no legal name until you add one');
     const legalName = await a.call('POST', '/api/data/names', { data: { kind: 'legal', full: 'Maya Elin Lindqvist', reason: 'birth' }, validFrom: '1984' });
     ok((await line('legal_name'))?.value === 'Maya Elin Lindqvist' && (await line('legal_name'))?.sensitivity === 'sensitive' && (await line('preferred_name'))?.sensitivity === 'standard', 'legal and preferred names are lines of their own, each as sensitive as its entry');
     ok(!(await line('birth_name')), 'no birth-name line while it’s still your legal name');

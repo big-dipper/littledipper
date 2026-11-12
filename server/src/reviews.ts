@@ -66,7 +66,7 @@ const IDENTITY_NAMES = new Set(['legal']);
  */
 export function isIdentityChange(d: DomainDef, input: RecordInput, existing: RecordDoc | null) {
   if (['ids', 'citizenship', 'contact_methods', 'birth'].includes(d.id)) return true;
-  if (d.id === 'names') return [input.data?.kind, existing && plainData(existing).kind].some((k) => IDENTITY_NAMES.has(String(k)));
+  if (d.id === 'names') return [input.data, existing && plainData(existing)].some((v) => !!v && (IDENTITY_NAMES.has(String(v.kind)) || v.alsoLegal === true));
   if (d.id === 'residences') {
     const validTo = input.validTo !== undefined ? input.validTo : existing?.validTo ?? null;
     return (!!existing && isCurrent(d, existing)) || isCurrent(d, { validTo } as RecordDoc);

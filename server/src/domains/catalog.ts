@@ -36,8 +36,9 @@ const DEFS: Def[] = [
     parts: [
       { key: 'kind', label: 'What’s this name?', type: 'enum', required: true, options: o('preferred=The name I go by', 'legal=My legal name', 'other=Another name') },
       { key: 'full', label: 'Full name', type: 'text', required: true, hint: 'As you write it' },
+      { key: 'alsoLegal', label: 'This is also my legal name', type: 'boolean', when: { part: 'kind', in: ['preferred'] }, hint: 'So you don’t add the same name twice' },
       { key: 'otherKind', label: 'What kind', type: 'enum', required: true, when: { part: 'kind', in: ['other'] }, options: o('professional=Work or stage name', 'nickname', 'religious=Religious name', 'other') },
-      { key: 'reason', label: 'How you got this name', type: 'enum', when: { part: 'kind', in: ['legal'] }, options: o('birth', 'marriage', 'divorce', 'adoption', 'court_order=Court order', 'naturalization', 'other') },
+      { key: 'reason', label: 'How you got this name', type: 'enum', when: [{ part: 'kind', in: ['legal'] }, { part: 'alsoLegal', in: ['true'] }], options: o('birth', 'marriage', 'divorce', 'adoption', 'court_order=Court order', 'naturalization', 'other') },
       { key: 'given', label: 'Given name', type: 'text', more: true, hint: 'The parts are for forms that split a name' },
       { key: 'middle', label: 'Middle name(s)', type: 'text', more: true },
       { key: 'family', label: 'Family name', type: 'text', more: true },

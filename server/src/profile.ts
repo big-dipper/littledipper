@@ -70,10 +70,13 @@ export async function profileLines(): Promise<ProfileLine[]> {
   const nameOf = (r: RecordDoc) => String(plainData(r).full ?? '');
   const cur = current(names, allNames);
   const preferred = cur.find((r) => plainData(r).kind === 'preferred');
-  const legal = cur.find((r) => plainData(r).kind === 'legal');
-  const birthName = sortRecords(names, allNames.filter((r) => { const v = plainData(r); return v.kind === 'legal' && v.reason === 'birth'; })).at(-1);
+  // A legal name is its own entry, or the name you go by when you've said it's also your legal name.
+  const isLegal = (r: RecordDoc) => { const v = plainData(r); return v.kind === 'legal' || (v.kind === 'preferred' && v.alsoLegal === true); };
+  const legal = cur.find((r) => plainData(r).kind === 'legal') ?? cur.find(isLegal);
+  const birthName = sortRecords(names, allNames.filter((r) => isLegal(r) && plainData(r).reason === 'birth')).at(-1);
   if (preferred) out.push(line('preferred_name', nameOf(preferred), sensOf(names, preferred, ['full']), [{ d: names, r: preferred }]));
-  if (legal) out.push(line('legal_name', nameOf(legal), sensOf(names, legal, ['full']), [{ d: names, r: legal }]));
+  // Sensitive like any legal name, unless you set the entry yourself.
+  if (legal) out.push(line('legal_name', nameOf(legal), legal.sensitivity ? sensOf(names, legal, ['full']) : maxSens('sensitive', sensOf(names, legal, ['full'])), [{ d: names, r: legal }]));
   if (birthName && (!legal || nameOf(birthName) !== nameOf(legal))) out.push(line('birth_name', nameOf(birthName), maxSens('sensitive', sensOf(names, birthName, ['full'])), [{ d: names, r: birthName }]));
 
   // Birth: "9 Mar 1984, 06:42:17, Peoria, Illinois, United States". The time only if it was given.
