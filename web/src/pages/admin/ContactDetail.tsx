@@ -225,10 +225,17 @@ const THEIRS: Record<string, string> = { 'Little Dipper': 'Their Little Dipper a
 const theirs = (label: string) => THEIRS[label] ?? `Their ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 
 /** One detail in the connect card. A Little Dipper line shows its address with the Node ID beneath, to compare. */
+/** One line of the exchange: a quiet label over its value, so "Lives in" and "Home address" don't read as the same thing twice. */
 const Given = ({ label, value }: { label: string; value: string }) => {
-  if (label !== 'Little Dipper') return <div style={{ fontSize: 14 }}>{value}</div>;
-  const [addr, id] = value.split(' · ');
-  return <div style={{ fontSize: 14 }}>{addr}{id && <div className="mono text-muted" style={{ fontSize: 11, overflowWrap: 'anywhere' }}>{id}</div>}</div>;
+  const [addr, id] = label === 'Little Dipper' ? value.split(' · ') : [value];
+  return (
+    <div style={{ fontSize: 14, marginBottom: 4 }}>
+      {/* A whole category has no value to show: its name is the line, with no label over it. */}
+      {value !== label && <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-neutral-500)', marginBottom: 1 }}>{label}</div>}
+      {addr}
+      {id && <div className="mono text-muted" style={{ fontSize: 11, overflowWrap: 'anywhere' }}>{id}</div>}
+    </div>
+  );
 };
 
 /**
