@@ -62,19 +62,19 @@ const DEFS: Def[] = [
     ],
   },
   {
-    // Four kinds cover most people; the rest wait behind "Another ID". Each kind only asks what it has: a license a
-    // state, a passport a country, a Social Security number neither.
+    // Four kinds cover most people anywhere; the rest wait behind "Another ID". Each kind only asks what it has: a
+    // license or ID card a state or region (where there are any), never anything US-only by default.
     id: 'ids', label: 'IDs', noun: 'ID', group: 'identity', sensitivity: 'sensitive', confirmShare: true, dated: false, publicable: false, documents: 'id',
-    description: 'Passport, driver’s license, Social Security number and your other IDs. Numbers are encrypted.',
+    description: 'Passport, driver’s license, ID card, tax or social security number and your other IDs. Numbers are encrypted.',
     title: '{otherKind|kind} · {authority|issuer}',
     parts: [
-      { key: 'kind', label: 'Kind', ask: 'What kind of ID?', type: 'enum', required: true, options: o('passport', 'drivers_license=Driver’s license', 'state_id=State ID', 'ssn=Social Security number', 'other=Another ID') },
-      { key: 'otherKind', label: 'Which', ask: 'Which one?', type: 'enum', required: true, when: { part: 'kind', in: ['other'] }, options: o('national_id=National ID card', 'residence_permit=Green card or residence permit', 'visa', 'work_permit=Work permit', 'known_traveler=Trusted Traveler (Global Entry, TSA PreCheck)', 'birth_certificate=Birth certificate', 'naturalization_certificate=Naturalization certificate', 'citizenship_certificate=Certificate of citizenship', 'consular_birth_report=Consular report of birth abroad', 'military_id=Military ID', 'voter_registration=Voter registration', 'tax_id=Tax ID', 'other') },
-      { key: 'number', label: 'Number', type: 'text', required: true, sensitivity: 'secret', labelBy: { part: 'kind', labels: { passport: 'Passport number', drivers_license: 'License number', state_id: 'ID number', ssn: 'Social Security number' } } },
-      { key: 'expires', label: 'Expires', type: 'date', more: false, when: { part: 'kind', in: ['passport', 'drivers_license', 'state_id', 'other'] }, hint: 'We’ll remind you before it runs out' },
-      { key: 'issuer', label: 'Country', ask: 'Which country?', type: 'country', more: false, prefill: 'home_country', when: { part: 'kind', in: ['passport', 'drivers_license', 'state_id', 'other'] } },
-      { key: 'authority', label: 'State', ask: 'Which state?', type: 'text', more: false, when: [{ part: 'kind', in: ['drivers_license', 'state_id'] }, { part: 'otherKind', in: ['birth_certificate', 'voter_registration', 'other'] }], labelBy: { part: 'kind', labels: { other: 'Issued by' } } },
-      { key: 'class', label: 'Class', type: 'text', when: [{ part: 'kind', in: ['drivers_license'] }, { part: 'otherKind', in: ['visa'] }], labelBy: { part: 'kind', labels: { drivers_license: 'License class', other: 'Visa type' } }, hint: 'e.g. C, or work, student' },
+      { key: 'kind', label: 'Kind', ask: 'What kind of ID?', type: 'enum', required: true, options: o('passport', 'drivers_license=Driver’s license', 'id_card=ID card', 'tax_number=Tax or social security number', 'other=Another ID'), hint: 'An ID card is a state or national ID. A tax or social security number is an SSN, National Insurance, SIN, TFN and the like.' },
+      { key: 'otherKind', label: 'Which', ask: 'Which one?', type: 'enum', required: true, when: { part: 'kind', in: ['other'] }, options: o('residence_permit=Residence permit or green card', 'visa', 'work_permit=Work permit', 'known_traveler=Trusted traveler program', 'birth_certificate=Birth certificate', 'naturalization_certificate=Naturalization certificate', 'citizenship_certificate=Certificate of citizenship', 'consular_birth_report=Consular report of birth abroad', 'military_id=Military ID', 'voter_registration=Voter registration', 'other'), hint: 'A trusted traveler program is Global Entry, NEXUS, Registered Traveller and the like' },
+      { key: 'number', label: 'Number', type: 'text', required: true, sensitivity: 'secret', labelBy: { part: 'kind', labels: { passport: 'Passport number', drivers_license: 'License number', id_card: 'ID number', tax_number: 'Tax or social security number' } } },
+      { key: 'expires', label: 'Expires', type: 'date', more: false, when: { part: 'kind', in: ['passport', 'drivers_license', 'id_card', 'other'] }, hint: 'We’ll remind you before it runs out' },
+      { key: 'issuer', label: 'Country', ask: 'Which country?', type: 'country', more: false, prefill: 'home_country' },
+      { key: 'authority', label: 'State / region', type: 'text', more: false, when: [{ part: 'kind', in: ['drivers_license', 'id_card'] }, { part: 'otherKind', in: ['birth_certificate', 'voter_registration', 'other'] }], labelBy: { part: 'kind', labels: { other: 'Issued by' } }, hint: 'If it was issued by a state, province or region' },
+      { key: 'class', label: 'Class', type: 'text', when: [{ part: 'kind', in: ['drivers_license'] }, { part: 'otherKind', in: ['visa'] }], labelBy: { part: 'kind', labels: { drivers_license: 'License class', other: 'Visa type' } }, hint: 'e.g. B, or work, student' },
       { key: 'issued', label: 'Issued', type: 'date', more: true },
       { key: 'nameOnDocument', label: 'Name as printed', type: 'text', more: true, hint: 'If it differs from your legal name' },
     ],

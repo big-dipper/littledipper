@@ -73,19 +73,19 @@ Feeds the owner’s profile.
 
 ### IDs `ids`
 
-Passport, driver’s license, Social Security number and your other IDs. Numbers are encrypted.
+Passport, driver’s license, ID card, tax or social security number and your other IDs. Numbers are encrypted.
 
 One entry: ID · Group: identity · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): no · Can be public: no · Sharing needs a confirm · Takes documents: id
 
 | Field | Key | Type | Required | Sensitivity (at least) | Notes |
 |---|---|---|---|---|---|
-| Kind | `kind` | one of: passport, drivers_license, state_id, ssn, other | yes | follows the entry |  |
-| Which | `otherKind` | one of: national_id, residence_permit, visa, work_permit, known_traveler, birth_certificate, naturalization_certificate, citizenship_certificate, consular_birth_report, military_id, voter_registration, tax_id, other | yes | follows the entry | only when kind is other |
+| Kind | `kind` | one of: passport, drivers_license, id_card, tax_number, other | yes | follows the entry | An ID card is a state or national ID. A tax or social security number is an SSN, National Insurance, SIN, TFN and the like. |
+| Which | `otherKind` | one of: residence_permit, visa, work_permit, known_traveler, birth_certificate, naturalization_certificate, citizenship_certificate, consular_birth_report, military_id, voter_registration, other | yes | follows the entry | A trusted traveler program is Global Entry, NEXUS, Registered Traveller and the like; only when kind is other |
 | Number | `number` | text | yes | secret |  |
-| Expires | `expires` | date |  | follows the entry | We’ll remind you before it runs out; only when kind is passport or drivers_license or state_id or other |
-| Country | `issuer` | country |  | follows the entry | only when kind is passport or drivers_license or state_id or other |
-| State | `authority` | text |  | follows the entry | only when kind is drivers_license or state_id, or otherKind is birth_certificate or voter_registration or other |
-| Class | `class` | text |  | follows the entry | e.g. C, or work, student; only when kind is drivers_license, or otherKind is visa |
+| Expires | `expires` | date |  | follows the entry | We’ll remind you before it runs out; only when kind is passport or drivers_license or id_card or other |
+| Country | `issuer` | country |  | follows the entry |  |
+| State / region | `authority` | text |  | follows the entry | If it was issued by a state, province or region; only when kind is drivers_license or id_card, or otherKind is birth_certificate or voter_registration or other |
+| Class | `class` | text |  | follows the entry | e.g. B, or work, student; only when kind is drivers_license, or otherKind is visa |
 | Issued | `issued` | date |  | follows the entry |  |
 | Name as printed | `nameOnDocument` | text |  | follows the entry | If it differs from your legal name |
 
