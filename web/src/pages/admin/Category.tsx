@@ -17,7 +17,6 @@ const WHY: Record<string, string> = {
   insurance: 'Policy and member numbers when you need to file a claim.',
   relationships: 'The people closest to you, and who to call in an emergency.',
   contact_methods: 'Every way to reach you. Your primary email and phone show in your profile.',
-  preferences: 'Sizes, tastes and habits: what lets an assistant actually help.',
   travel: 'Visa and clearance applications ask where you’ve been and when.',
 };
 

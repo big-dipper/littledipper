@@ -596,23 +596,10 @@ const DEFS: Def[] = [
   // ── personal ─────────────────────────────────────────────────────────
   {
     // Anything worth remembering, in your own words: the action bar's third kind of thing to add.
-    id: 'notes', oneAtATime: true, label: 'Notes', noun: 'note', group: 'personal', sensitivity: 'sensitive', dated: false, publicable: false,
+    id: 'notes', oneAtATime: true, label: 'Notes', noun: 'note', group: 'personal', sensitivity: 'sensitive', dated: false, publicable: false, livesOn: 'menu',
     description: 'Anything you want to remember, in your own words.',
     title: '{text}',
     parts: [{ key: 'text', label: 'Note', type: 'longtext', required: true }],
-  },
-  {
-    // Free-form on purpose: preferences are open-ended, and interpreting them is what assistants are for.
-    id: 'preferences', label: 'Preferences', noun: 'preference', group: 'personal', sensitivity: 'standard', dated: false, publicable: true,
-    sensitivityBy: { part: 'category', values: { accessibility: 'sensitive' } },
-    description: 'Sizes, food, gifts, how you like to be contacted. What makes an assistant feel like it knows you.',
-    title: '{name}: {value}',
-    parts: [
-      { key: 'category', label: 'Category', type: 'enum', required: true, options: o('clothing', 'food', 'drink', 'gifts', 'travel', 'communication', 'accessibility', 'entertainment', 'work', 'other') },
-      { key: 'name', label: 'Preference', type: 'text', required: true, hint: 'Shirt size, coffee order, seat…' },
-      { key: 'value', label: 'Value', type: 'text', required: true },
-      { key: 'allergy', label: 'Because of', type: 'record', to: ['allergies'], when: { part: 'category', in: ['food', 'drink'] }, hint: 'A food allergy lives in Allergies; point to it' },
-    ],
   },
 ];
 

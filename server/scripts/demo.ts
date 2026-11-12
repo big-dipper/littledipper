@@ -146,7 +146,6 @@ for (const day of ['2026-09-15', '2026-10-15']) await add('transactions', { date
 await add('transactions', { date: '2026-10-01', direction: 'out', amount: usd(12.5), counterparty: blueBottle, category: 'dining', method: 'cash', entry: coffee });
 await add('transactions', { date: '2026-10-28', direction: 'out', amount: usd(96), counterparty: nwMutual, category: 'insurance', account: checking, method: 'autopay', description: 'NW MUTUAL AUTO' });
 await add('events', { title: 'Book club', start: { at: '2026-01-12T19:00', tz: 'America/Los_Angeles' }, end: { at: '2026-01-12T21:00', tz: 'America/Los_Angeles' }, repeat: 'FREQ=MONTHLY;BYDAY=2MO', location: 'Powell’s' });
-await add('preferences', { category: 'drink', name: 'Coffee order', value: 'Oat flat white' });
 await add('contact_methods', { kind: 'website', value: 'mayalind.studio' });
 await add('contact_methods', { kind: 'social', service: 'Instagram', value: '@maya.makes' });
 await add('contact_methods', { kind: 'messaging', service: 'Signal', value: 'maya.07' });

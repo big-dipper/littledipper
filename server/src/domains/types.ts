@@ -95,8 +95,8 @@ export type DomainDef = {
   confirmShare?: boolean;
   /** At most one entry (Birth, Health basics). */
   single?: boolean;
-  /** Shown somewhere other than My data: on each person's page (relationships), in the action bar (tasks), on the Calendar (events) or on Profile basics (birth). Still records. */
-  livesOn?: 'party' | 'actions' | 'profile' | 'calendar';
+  /** Shown somewhere other than My data: on each person's page (relationships), in the action bar (tasks), on the Calendar (events), on its own page in the menu (notes) or on Profile basics (birth). Still records. */
+  livesOn?: 'party' | 'actions' | 'profile' | 'calendar' | 'menu';
   /** Shared one entry at a time, never as a whole live category: too revealing together (online accounts) or not a thing to share (tasks, notes). */
   oneAtATime?: boolean;
   /** Related entries and documents this category invites, e.g. a vehicle invites its title, insurance and loan. Never required. */

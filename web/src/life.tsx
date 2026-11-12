@@ -33,7 +33,7 @@ export type Domain = {
   parts: Part[]; title: string; count: number; currentCount: number; sharedWith: number;
   /** The profile reads this category (names, birth, where you live…). */
   feedsProfile?: boolean;
-  livesOn?: 'party' | 'actions' | 'profile' | 'calendar';
+  livesOn?: 'party' | 'actions' | 'profile' | 'calendar' | 'menu';
   oneAtATime?: boolean;
   /** Newest first by this date part (receipts: purchase date, income: received on). */
   sortBy?: string;
