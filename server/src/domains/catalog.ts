@@ -34,7 +34,7 @@ const DEFS: Def[] = [
     description: 'The name you go by, your legal name, and any others, with when each applied.',
     title: '{full} ({otherKind|kind})',
     parts: [
-      { key: 'kind', label: 'What’s this name?', type: 'enum', required: true, options: o('preferred=The name I go by', 'legal=My legal name', 'other=Another name') },
+      { key: 'kind', label: 'Which name', ask: 'What’s this name?', type: 'enum', required: true, options: o('preferred=The name I go by', 'legal=My legal name', 'other=Another name') },
       { key: 'full', label: 'Full name', type: 'text', required: true, hint: 'As you write it' },
       { key: 'alsoLegal', label: 'This is also my legal name', type: 'boolean', when: { part: 'kind', in: ['preferred'] }, hint: 'So you don’t add the same name twice' },
       { key: 'otherKind', label: 'What kind', type: 'enum', required: true, when: { part: 'kind', in: ['other'] }, options: o('professional=Work or stage name', 'nickname', 'religious=Religious name', 'other') },
@@ -46,18 +46,19 @@ const DEFS: Def[] = [
     ],
   },
   {
-    // One entry. Time is optional (birth charts use it); the zone makes the time exact.
-    id: 'birth', label: 'Birth', noun: 'birth', group: 'identity', sensitivity: 'sensitive', dated: false, publicable: false, single: true, livesOn: 'profile', documents: 'certificate',
+    // One entry. Place before time: most people know where, few know when to the minute. The zone follows the
+    // place, so the time is exact without anyone knowing what "America/Chicago" means.
+    id: 'birth', label: 'Birth', noun: 'birth', group: 'identity', sensitivity: 'sensitive', dated: false, publicable: true, single: true, livesOn: 'profile', documents: 'certificate',
     description: 'When and where you were born. Your birthday shows in Calendar.',
     title: '{date}',
     parts: [
-      { key: 'date', label: 'Date of birth', type: 'date', required: true },
-      { key: 'time', label: 'Time of birth', type: 'time', hint: 'Local time, to the second if you know it' },
-      { key: 'timeZone', label: 'Time zone at birth', type: 'timezone', hint: 'e.g. America/Chicago. Daylight saving on that date is worked out from it.' },
+      { key: 'date', label: 'Born', ask: 'When were you born?', type: 'date', required: true },
       { key: 'city', label: 'City', type: 'text' },
       { key: 'region', label: 'State / region', type: 'text' },
       { key: 'country', label: 'Country', type: 'country', hint: 'Today’s country' },
-      { key: 'asWritten', label: 'As written on the birth certificate', type: 'text', hint: 'e.g. Leningrad, USSR, for a country that no longer exists' },
+      { key: 'time', label: 'Time', ask: 'What time?', type: 'time', more: false, hint: 'If you know it. Astrologers and some cultures care.' },
+      { key: 'timeZone', label: 'Time zone', type: 'timezone', when: { part: 'time', in: ['*'] }, zoneFrom: { country: 'country', region: 'region' }, more: false, hint: 'Filled in from the place. Change it if you were born near a border.' },
+      { key: 'asWritten', label: 'Place name on your birth certificate', type: 'text', more: true, hint: 'If it’s changed since, like Leningrad, USSR' },
     ],
   },
   {

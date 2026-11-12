@@ -248,7 +248,7 @@ const CHECKS: Record<string, (data: Record<string, unknown>) => void> = {
 export type RecordInput = { data?: Record<string, unknown>; validFrom?: string | null; validTo?: string | null; notes?: string; sensitivity?: Sensitivity | null };
 
 const conds = (p: PartDef) => (p.when ? (Array.isArray(p.when) ? p.when : [p.when]) : []);
-const applies = (p: PartDef, data: Record<string, unknown>) => !p.when || conds(p).some((w) => w.in.includes(String(data[w.part])));
+const applies = (p: PartDef, data: Record<string, unknown>) => !p.when || conds(p).some((w) => (w.in.includes('*') ? !empty(data[w.part]) : w.in.includes(String(data[w.part]))));
 
 /**
  * Build the stored form of a record from input (create) or input merged onto an existing record (patch).
@@ -276,6 +276,7 @@ export async function buildRecord(d: DomainDef, input: RecordInput, existing: Re
   if (misplaced.length) {
     const when = conds(misplaced[0]).map((w) => {
       const on = d.parts.find((x) => x.key === w.part);
+      if (w.in.includes('*')) return `${on?.label.toLowerCase() ?? w.part} is given`;
       return `${on?.label.toLowerCase() ?? w.part} is ${w.in.map((v) => on?.options?.find(([k]) => k === v)?.[1] ?? v).join(' or ')}`;
     }).join(', or ');
     throw bad('not_applicable', `${misplaced.map((p) => p.label).join(', ')} only applies when ${when}`);

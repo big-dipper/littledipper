@@ -41,7 +41,7 @@ One entry: name · Group: identity · Default sensitivity: sensitive (by kind: p
 
 | Field | Key | Type | Required | Sensitivity (at least) | Notes |
 |---|---|---|---|---|---|
-| What’s this name? | `kind` | one of: preferred, legal, other | yes | follows the entry |  |
+| Which name | `kind` | one of: preferred, legal, other | yes | follows the entry |  |
 | Full name | `full` | text | yes | follows the entry | As you write it |
 | This is also my legal name | `alsoLegal` | boolean |  | follows the entry | So you don’t add the same name twice; only when kind is preferred |
 | What kind | `otherKind` | one of: professional, nickname, religious, other | yes | follows the entry | only when kind is other |
@@ -57,17 +57,17 @@ Feeds the owner’s profile.
 
 When and where you were born. Your birthday shows in Calendar.
 
-One entry: birth · Group: identity · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): no · One entry only · Can be public: no · Takes documents: certificate
+One entry: birth · Group: identity · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): no · One entry only · Can be public: yes · Takes documents: certificate
 
 | Field | Key | Type | Required | Sensitivity (at least) | Notes |
 |---|---|---|---|---|---|
-| Date of birth | `date` | date | yes | follows the entry |  |
-| Time of birth | `time` | time |  | follows the entry | Local time, to the second if you know it |
-| Time zone at birth | `timeZone` | timezone |  | follows the entry | e.g. America/Chicago. Daylight saving on that date is worked out from it. |
+| Born | `date` | date | yes | follows the entry |  |
 | City | `city` | text |  | follows the entry |  |
 | State / region | `region` | text |  | follows the entry |  |
 | Country | `country` | country |  | follows the entry | Today’s country |
-| As written on the birth certificate | `asWritten` | text |  | follows the entry | e.g. Leningrad, USSR, for a country that no longer exists |
+| Time | `time` | time |  | follows the entry | If you know it. Astrologers and some cultures care. |
+| Time zone | `timeZone` | timezone |  | follows the entry | Filled in from the place. Change it if you were born near a border.; only when time is * |
+| Place name on your birth certificate | `asWritten` | text |  | follows the entry | If it’s changed since, like Leningrad, USSR |
 
 Feeds the owner’s profile.
 

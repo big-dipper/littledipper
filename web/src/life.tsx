@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { del, FILE_ACCEPT, get, longDate, patch, post, uploadDocument, type DocRef, type Sensitivity } from './api';
 import { DocTiles } from './docs';
 import { Confirm, Pills, Toggle, useAction, useToast, type ConfirmCfg } from './ui';
+import { zoneFor, zoneLabel } from './zones';
 
 // ── types ──────────────────────────────────────────────────────────────
 export type Part = {
@@ -12,11 +13,13 @@ export type Part = {
   /** Only applies when another part holds one of these values (a list: any of them). */ when?: { part: string; in: string[] } | { part: string; in: string[] }[];
   /** A label that follows another part (a contact method's value: Email address, Phone number…). */ labelBy?: { part: string; labels: Record<string, string> };
   /** text: common answers offered as you type. */ suggestions?: string[];
-  /** Always under More details. */ more?: boolean;
+  /** The question the form asks; label is what cards show. */ ask?: string;
+  /** true: always under More details; false: always up front. */ more?: boolean;
+  /** timezone: filled in from the place until the owner picks one. */ zoneFrom?: { country: string; region?: string };
   /** party: what's usually there, so a new one starts as the right type. */ expects?: 'person' | 'organisation';
 };
 /** Whether a part applies, given the values so far (collection details only once an account is in collections). */
-export const applies = (p: Part, vals: Record<string, unknown>) => !p.when || (Array.isArray(p.when) ? p.when : [p.when]).some((w) => w.in.includes(String(vals[w.part] ?? '')));
+export const applies = (p: Part, vals: Record<string, unknown>) => !p.when || (Array.isArray(p.when) ? p.when : [p.when]).some((w) => (w.in.includes('*') ? String(vals[w.part] ?? '') !== '' : w.in.includes(String(vals[w.part] ?? ''))));
 export type Address = { street1?: string; street2?: string; city?: string; region?: string; postalCode?: string; country?: string };
 const PERIODS: [string, string][] = [['hour', 'an hour'], ['week', 'a week'], ['month', 'a month'], ['year', 'a year'], ['once', 'once']];
 /** One entry in a record's history: the record as it stood after a change (before it, for a delete). */
@@ -102,7 +105,7 @@ let zones: [string, string][] | null = null;
 const timeZones = () => {
   if (!zones) {
     const all = Intl.supportedValuesOf('timeZone');
-    zones = (all.includes(localZone()) ? all : [localZone(), ...all]).map((z) => [z, z.replace(/_/g, ' ')]);
+    zones = (all.includes(localZone()) ? all : [localZone(), ...all]).map((z) => [z, zoneLabel(z)]);
   }
   return zones;
 };
@@ -171,7 +174,7 @@ export function show(p: Part, v: unknown, contacts: ContactLite[]): string {
     case 'address': { const a = v as Address; return [a.street1, a.street2, a.city, [a.region, a.postalCode].filter(Boolean).join(' '), a.country ? countryName(a.country) : ''].filter(Boolean).join(', '); }
     case 'region': { const [c, r] = String(v).split('-'); return r ? `${r}, ${countryName(c)}` : countryName(c); }
     case 'geo': { const g = v as { lat: number; lon: number }; return `${Math.abs(g.lat)}° ${g.lat >= 0 ? 'N' : 'S'}, ${Math.abs(g.lon)}° ${g.lon >= 0 ? 'E' : 'W'}`; }
-    case 'timezone': return String(v).replace(/_/g, ' ');
+    case 'timezone': return zoneLabel(String(v));
     case 'repeat': return describeRepeat(String(v));
     case 'record': { const n = Array.isArray(v) ? v.length : 1; return `${n} linked ${n === 1 ? 'entry' : 'entries'}`; }
     case 'list': { const n = (v as unknown[]).length; return n ? `${n} ${n === 1 ? 'row' : 'rows'}` : ''; }
@@ -651,7 +654,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   const tKeys = titleKeys(d);
   // Deprecated parts stay editable on records that already use them, but aren't offered otherwise.
   const offered = d.parts.filter((p) => !p.system && applies(p, vals) && (!p.deprecated || (vals[p.key] !== undefined && vals[p.key] !== '') || rec?.masked.includes(p.key)));
-  const essential = offered.filter((p, i) => !p.more && (p.required || tKeys.includes(p.key) || i < 4));
+  const essential = offered.filter((p, i) => p.more === false || (!p.more && (p.required || tKeys.includes(p.key) || i < 4)));
   const extra = offered.filter((p) => !essential.includes(p));
   const extraFilled = extra.some((p) => vals[p.key] !== undefined && vals[p.key] !== '' || rec?.masked.includes(p.key));
 
@@ -659,6 +662,9 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   const currency = d.parts.filter((p) => p.type === 'money').map((p) => (vals[p.key] as { currency?: string } | undefined)?.currency).find(Boolean) || 'USD';
 
   // Moving an event's start moves its end too, so it keeps how long it lasts (as calendars do).
+  // Zones still following the place: not picked by hand (a saved zone that isn't the place's own counts as picked).
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(d.parts.filter((p) => p.zoneFrom && rec?.data[p.key] && rec.data[p.key] !== zoneFor(rec.data[p.zoneFrom.country], p.zoneFrom.region ? rec.data[p.zoneFrom.region] : '')).map((p) => p.key)));
+  const guessed = d.parts.filter((p) => p.zoneFrom && !picked.has(p.key));
   const shiftsEnd = (k: string) => k === 'start' && d.parts.some((p) => p.key === 'end' && p.type === 'datetime');
   const set = (k: string, v: unknown) => {
     setVals((s) => {
@@ -668,9 +674,15 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
         const wall = (x: string) => Date.parse(`${x.slice(0, 16)}Z`); // wall-clock minutes; zones don't matter for a shift
         next.end = { at: new Date(wall(end.at) + wall(now.at) - wall(was.at)).toISOString().slice(0, 16), tz: end.tz ?? now.tz };
       }
+      // A time zone follows the place until the owner picks one themselves.
+      for (const z of guessed) {
+        const zone = zoneFor(next[z.zoneFrom!.country], z.zoneFrom!.region ? next[z.zoneFrom!.region] : '');
+        if (zone) next[z.key] = zone;
+      }
       return next;
     });
-    setTouched((t) => { const n = new Set(t).add(k); if (shiftsEnd(k) && vals.end) n.add('end'); return n; });
+    setTouched((t) => { const n = new Set(t).add(k); if (shiftsEnd(k) && vals.end) n.add('end'); guessed.forEach((z) => n.add(z.key)); return n; });
+    if (d.parts.some((p) => p.key === k && p.zoneFrom)) setPicked((x) => new Set(x).add(k));
   };
 
   const save = async () => {
@@ -721,7 +733,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   const field = (p: Part) => (
     <div key={p.key} className="field">
       <label htmlFor={`part-${p.key}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {labelOf(p, vals)}{p.required && <span aria-hidden style={{ color: 'var(--color-accent-500)' }}>*</span>}
+        {p.ask ?? labelOf(p, vals)}{p.required && <span aria-hidden style={{ color: 'var(--color-accent-500)' }}>*</span>}
         {p.sensitivity === 'secret' && <span className="tag tag-accent" style={{ padding: '1px 8px', fontSize: 10, gap: 4 }}><Lock style={{ width: 8, height: 9 }} />Secret</span>}
       </label>
       <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} currency={currency} dateOnly={p.type === 'datetime' && vals.allDay === true} />

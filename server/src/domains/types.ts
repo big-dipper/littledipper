@@ -27,14 +27,17 @@ export type PartType =
   | 'contact'   // old name for party, kept until every caller says party
   | 'list';     // rows of sub-parts (`of`), e.g. a receipt's line items
 
-/** A condition on another part's value. */
+/** A condition on another part's value. ['*'] means any value at all (a birth's time zone once a time is given). */
 export type When = { part: string; in: string[] };
 
 export type SensitivityBy = { part: string; values: Record<string, Sensitivity> };
 
 export type PartDef = {
   key: string;
+  /** What cards, shares and copies call it ("Born"). */
   label: string;
+  /** The question the form asks instead, in plain words ("When were you born?"). */
+  ask?: string;
   type: PartType;
   required?: boolean;
   /** Defaults to the domain's sensitivity. Only secret parts are encrypted at rest. */
@@ -58,7 +61,10 @@ export type PartDef = {
   labelBy?: { part: string; labels: Record<string, string> };
   /** text: common answers offered as you type (Personal, Work…). Anything else is still fine. */
   suggestions?: string[];
-  /** Always under More details, however early it comes: name parts (given, middle, family) most people never need. */
+  /** timezone: filled in from the place (these parts) until the owner picks one, so nobody has to know "America/Chicago". */
+  zoneFrom?: { country: string; region?: string };
+  /** true: always under More details, however early it comes (name parts most people never need). false: always up
+   *  front, however late it comes (a birth's time, after the place). Otherwise the form decides. */
   more?: boolean;
   /** party: what's usually there (an employer is an organisation), so a new one starts as the right type. */
   expects?: 'person' | 'organisation';
