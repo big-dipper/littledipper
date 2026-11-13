@@ -391,6 +391,23 @@ async function main() {
     const edit = (await suggester('update_record', { kind: 'employment', id: initech.id, notes: 'Left for a startup' })).structuredContent;
     await a.call('POST', `/api/reviews/${edit.reviewId}/reject`);
     ok((await a.call('GET', `/api/data/employment/${initech.id}`)).notes === '' && (await a.call('GET', '/api/reviews?status=rejected')).items.length === 1, 'a turned-down suggestion changes nothing');
+    // A suggestion can bring the new organisations it needs; they exist only once the owner approves (BRY-114).
+    const partyNames = async () => (await a.call('GET', '/api/parties')).items.map((x: any) => x.name);
+    const withNew = (await suggester('add_record', { kind: 'employment', data: { employer: 'new:pp', title: 'Engineer' }, newParties: [{ ref: 'pp', type: 'organisation', name: 'Pied Piper' }] })).structuredContent;
+    ok(withNew.status === 'pending_review' && !(await partyNames()).includes('Pied Piper'), 'a suggestion can name a new organisation, and nothing is created yet');
+    const npItem = (await a.call('GET', '/api/reviews')).items.find((r: any) => r.id === withNew.reviewId);
+    ok(npItem.changes.some((c: any) => c.label === 'New organisation' && c.to === 'Pied Piper') && npItem.changes.some((c: any) => c.key === 'employer' && c.to === 'Pied Piper (new)'), 'the owner sees the new organisation as part of the suggestion');
+    const npSaved = await a.call('POST', `/api/reviews/${withNew.reviewId}/approve`);
+    const pp = (await a.call('GET', '/api/parties')).items.find((x: any) => x.name === 'Pied Piper');
+    ok(pp && pp.type === 'organisation' && npSaved.record.data.employer === pp.id, 'approving creates the organisation and the entry together');
+    const ppAgain = (await suggester('add_record', { kind: 'employment', data: { employer: 'new:x', title: 'Again' }, newParties: [{ ref: 'x', type: 'organisation', name: 'pied piper' }] })).structuredContent;
+    const reused = await a.call('POST', `/api/reviews/${ppAgain.reviewId}/approve`);
+    ok(reused.record.data.employer === pp.id && (await partyNames()).filter((n: string) => n.toLowerCase() === 'pied piper').length === 1, 'an organisation already on the node is used, not added twice');
+    const declined = (await suggester('add_record', { kind: 'employment', data: { employer: 'new:h', title: 'Analyst' }, newParties: [{ ref: 'h', type: 'organisation', name: 'Hooli XYZ' }] })).structuredContent;
+    await a.call('POST', `/api/reviews/${declined.reviewId}/reject`);
+    ok(!(await partyNames()).includes('Hooli XYZ'), 'turning it down creates nothing');
+    ok((await suggester('add_record', { kind: 'employment', data: { employer: 'new:nobody', title: 'X' } })).isError, 'a new: name that isn\'t listed is refused');
+    for (const r of (await a.call('GET', '/api/data/employment')).items.filter((x: any) => x.data.employer === pp.id)) await a.call('DELETE', `/api/data/employment/${r.id}`);
     const noDelete = await fetch(`${a.base}/api/data/employment/${initech.id}`, { method: 'DELETE', headers: { authorization: `Bearer ${suggesterSecret}` } });
     ok(noDelete.status === 403 && (await noDelete.json()).code === 'owner_only', 'an assistant can never delete, even through the API');
     const maker = as(await asKey('make'));

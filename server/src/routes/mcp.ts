@@ -20,7 +20,7 @@ const INSTRUCTIONS = `This is the owner's Little Dipper: their records (addresse
 - Call whoami first to see which kinds of records your key can read or change, and your mode: answer (read only), suggest (your changes wait for the owner to approve them) or make (your changes are saved, except secret values and core identity, which always wait for approval: legal names, birth, citizenship, IDs, the current address, email and phone). In suggest mode, documents you upload wait unfiled in the owner's inbox.
 - When a change comes back "pending_review", tell the owner it's waiting for them in Review. Don't say it's saved. list_review_items shows what's still waiting.
 - Call get_profile for the owner's current facts (names, birth, citizenship, where they live, main email and phone). The profile is worked out from their records: to change a line, change the record it comes from (each line says which).
-- Call list_kinds to learn each kind's fields before adding or updating records. Use the field keys it gives you. A party field takes the id of a person or organisation, never a typed name: find_parties, then add_party if they're new; a record field takes the id of another record of the kinds it lists.
+- Call list_kinds to learn each kind's fields before adding or updating records. Use the field keys it gives you. A party field takes the id of a person or organisation, never a typed name: find_parties first. If they're new and you can't add them (suggest mode), bring them with the record: list them in newParties ({ ref, type, name }) and put "new:<ref>" in the field; the owner approves them together with the record, and nothing is created if they turn it down; a record field takes the id of another record of the kinds it lists.
 - Record only what's true and what the owner said. Don't work out legal conclusions (tax residency, marital or immigration status) from other facts: ask the owner, or suggest it to them.
 - Dated kinds keep history: when something ends (a move, a job change), set validTo on the old record and add a new one, rather than overwriting it.
 - Fields marked secret come back masked unless the owner has let you read that field.
@@ -37,6 +37,11 @@ const recordFields = {
   validFrom: str('When it started applying, YYYY-MM-DD (or YYYY-MM, YYYY). Dated kinds only.'),
   validTo: str('When it stopped applying. Leave out while it still applies.'),
   notes: str('Free-text notes.'),
+  newParties: {
+    type: 'array', maxItems: 10,
+    description: 'People and organisations this record needs that aren\'t on the node yet (check find_parties first). Refer to each in data as "new:<ref>". They are created only when the owner approves; someone already on the node with the same kind and name is used instead.',
+    items: obj({ ref: str('A short id you choose, e.g. "bonneville".'), type: { type: 'string', enum: ['person', 'organisation'] }, name: str('Their name as they write it') }, ['ref', 'type', 'name']),
+  },
 };
 
 /** The REST answer, or a ToolError the assistant can read and explain. */
@@ -55,7 +60,7 @@ const q = (params: Record<string, unknown>) => {
   return s ? `?${s}` : '';
 };
 const kindOf = (args: Json) => encodeURIComponent(String(args.kind || ''));
-const recordInput = (args: Json) => ({ data: args.data, validFrom: args.validFrom, validTo: args.validTo, notes: args.notes });
+const recordInput = (args: Json) => ({ data: args.data, validFrom: args.validFrom, validTo: args.validTo, notes: args.notes, ...(args.newParties !== undefined ? { newParties: args.newParties } : {}) });
 const brief = (r: Json) => ({ id: r.id, kind: r.domain, title: r.title, current: r.current, validFrom: r.validFrom, validTo: r.validTo, data: r.data, masked: r.masked });
 const day = (d: Date) => d.toISOString().slice(0, 10);
 /** A saved record, or the note that it's waiting in Review. */

@@ -9,6 +9,7 @@ import type { ShareDoc } from '../shares.js';
 import { audit, ownerActor, systemActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner, requireSession, type ApiKeyDoc } from '../auth.js';
 import { canAddTo, canSeeRecord } from '../access.js';
+import { checkNewParties, createParties, existingParty, NEW, refsIn, substitute, type NewParty } from '../newParties.js';
 import { isIdentityChange, pendingReply, propose, reviewInput, type ReviewDoc } from '../reviews.js';
 import { mask } from '../fields.js';
 import { undoOnRecord } from '../undo.js';
@@ -96,6 +97,35 @@ function catalogEntry(d: DomainDef, sum: Summary) {
     endpoint: `/api/data/${d.id}`,
     feedsProfile: PROFILE_DOMAINS.has(d.id),
   };
+}
+
+/**
+ * A suggestion's new people and organisations (BRY-114): checked, matched to anyone already on the node (those are
+ * used as they are), the rest kept as "new:<ref>" until the owner approves. Only keys send them; the owner adds people directly.
+ */
+async function prepareNew(input: RecordInput, isSession: boolean) {
+  const used = refsIn(input.data);
+  if (input.newParties === undefined && !used.size) return { input, pending: new Set<string>() };
+  if (isSession) throw bad('invalid_value', 'Add people and organisations in Relationships, then choose them here.');
+  const list = checkNewParties(input.newParties);
+  for (const r of used) if (!list.some((x) => x.ref === r)) throw bad('invalid_value', `${NEW}${r} isn't in newParties`);
+  const known = new Map<string, string>();
+  const pending: NewParty[] = [];
+  for (const x of list.filter((x) => used.has(x.ref))) {
+    const e = await existingParty(x);
+    if (e) known.set(x.ref, e._id); else pending.push(x);
+  }
+  const { newParties: _drop, ...rest } = input;
+  const out: RecordInput = { ...rest, data: substitute(input.data, known), ...(pending.length ? { newParties: pending } : {}) };
+  return { input: out, pending: new Set(pending.map((x) => `${NEW}${x.ref}`)) };
+}
+
+/** Create a suggestion's new parties now (an approval, or a key allowed to make changes) and point the entry at them. */
+async function settleNew(input: RecordInput): Promise<RecordInput> {
+  if (!input.newParties?.length) return input;
+  const ids = await createParties(input.newParties);
+  const { newParties: _drop, ...rest } = input;
+  return { ...rest, data: substitute(input.data, ids) };
 }
 
 /** Who made a change, for the activity feed: "You", or the app or assistant's name. */
@@ -255,14 +285,16 @@ export default async function domainRoutes(app: FastifyInstance) {
   app.post(base, async (req, reply) => {
     const { d, p, by } = await ctxFor(req, true);
     if (!canAddTo(p.key, d)) throw new HttpError(403, 'not_shared', `You can change the ${d.label.toLowerCase()} entries shared with you, but not add new ones.`);
-    const input = (req.body || {}) as RecordInput;
+    const prep = await prepareNew((req.body || {}) as RecordInput, p.isSession);
+    let input = prep.input;
     const a = p.key.assistant;
     if (a) {
       // Check it now, so the assistant hears about a mistake straight away rather than at approval.
-      await buildRecord(d, input, null, by);
+      await buildRecord(d, input, null, by, { newParties: prep.pending });
       const reason = a.mode === 'suggest' ? 'suggest' : isIdentityChange(d, input, null) ? 'identity' : input.sensitivity !== undefined ? 'protection' : secretKeys(d, input).length ? 'secret' : null;
       if (reason) { reply.code(202); return pendingReply(await proposeChange(p, d, null, input, reason)); }
     }
+    input = await settleNew(input);
     reply.code(201);
     return createRecord(d, input, by, actorName(p));
   });
@@ -278,14 +310,17 @@ export default async function domainRoutes(app: FastifyInstance) {
   app.patch(`${base}/:id`, async (req, reply) => {
     const { d, p, id, by } = await ctxFor(req, true);
     const existing = await visibleOr404(p, d, id!);
-    const input = (req.body || {}) as RecordInput;
+    const prep = await prepareNew((req.body || {}) as RecordInput, p.isSession);
+    let input = prep.input;
     const a = p.key.assistant;
     if (a) {
-      await buildRecord(d, input, existing, by);
+      await buildRecord(d, input, existing, by, { newParties: prep.pending });
       if (a.mode === 'suggest') { reply.code(202); return pendingReply(await proposeChange(p, d, existing._id, input, 'suggest')); }
       if (isIdentityChange(d, input, existing)) { reply.code(202); return pendingReply(await proposeChange(p, d, existing._id, input, 'identity')); }
       // How an entry is protected is the owner's call.
       if (input.sensitivity !== undefined) { reply.code(202); return pendingReply(await proposeChange(p, d, existing._id, input, 'protection')); }
+      // Make changes: its new people and organisations are added now, like the rest of the change.
+      input = await settleNew(input);
       // Make changes: everything else goes in except secret values, which wait in Review.
       const secrets = secretKeys(d, input, existing);
       if (secrets.length) {
@@ -295,6 +330,7 @@ export default async function domainRoutes(app: FastifyInstance) {
         return { ...saved, pendingReview: pendingReply(review) };
       }
     }
+    input = await settleNew(input);
     return updateRecord(d, existing, input, by, actorName(p));
   });
 
@@ -398,11 +434,19 @@ export default async function domainRoutes(app: FastifyInstance) {
       recordTitle: d && current ? recordOut(d, current).title : null, recordGone: !!r.recordId && !current,
       action: r.action, reason: r.reason, status: r.status, createdAt: r.createdAt, decidedAt: r.decidedAt, resultId: r.resultId ?? null,
       changes: [
+        // New people and organisations it brings: created only if the owner approves.
+        ...(input.newParties ?? []).map((n) => ({ key: `${NEW}${n.ref}`, label: n.type === 'organisation' ? 'New organisation' : 'New person', secret: false, to: n.name })),
         ...Object.entries(input.data ?? {}).map(([k, v]) => {
           const part = d?.parts.find((x) => x.key === k);
           const secret = !!(d && part && partSens(d, part) === 'secret');
           // People and organisations by name, not id; choices by their label ("In collections", not in_collections).
-          const named = (x: unknown) => (part && ['party', 'contact', 'enum'].includes(part.type) && x !== null && x !== undefined ? displayValue(part, x) : x);
+          // One that comes with the suggestion reads "Bonneville Collections (new)".
+          const fresh = (x: unknown): unknown => (typeof x === 'string' && x.startsWith(NEW) ? `${input.newParties?.find((n) => `${NEW}${n.ref}` === x)?.name ?? x} (new)` : Array.isArray(x) ? x.map(fresh) : x);
+          const named = (x: unknown) => {
+            if (x === null || x === undefined || !part) return x;
+            if (['party', 'contact'].includes(part.type) && JSON.stringify(x).includes(NEW)) { const f = fresh(x); return Array.isArray(f) ? f.join(', ') : f; }
+            return ['party', 'contact', 'enum'].includes(part.type) ? displayValue(part, x) : x;
+          };
           return { key: k, label: part?.label ?? k, secret, to: named(show(k, v)), from: r.recordId && owner ? named(plainNow[k] ?? null) : undefined };
         }),
         ...(input.sensitivity !== undefined ? [{ key: 'sensitivity', label: 'Who can see this', secret: false, to: input.sensitivity ?? 'default', from: current && owner ? current.sensitivity ?? 'default' : undefined }] : []),
@@ -439,8 +483,8 @@ export default async function domainRoutes(app: FastifyInstance) {
     if (r.recordId) {
       const existing = await ctx.store.get<RecordDoc>('records', r.recordId);
       if (!existing) throw new HttpError(409, 'record_gone', 'That entry was deleted since. Reject this suggestion instead.');
-      saved = await updateRecord(d, existing, reviewInput(r), by, `${r.by} (approved by you)`);
-    } else saved = await createRecord(d, reviewInput(r), by, `${r.by} (approved by you)`);
+      saved = await updateRecord(d, existing, await settleNew(reviewInput(r)), by, `${r.by} (approved by you)`);
+    } else saved = await createRecord(d, await settleNew(reviewInput(r)), by, `${r.by} (approved by you)`); // its new people and organisations, created now
     await ctx.store.update('reviews', r._id, { status: 'approved', decidedAt: new Date().toISOString(), resultId: saved.id });
     await audit({ actor: ownerActor(p.key._id), action: 'review.approve', resource: `reviews/${r._id}`, text: `You approved ${r.by}'s suggestion for ${d.label}`, tone: 'owner' });
     return { ...(await reviewOut({ ...r, status: 'approved', decidedAt: new Date().toISOString(), resultId: saved.id }, true)), record: saved };

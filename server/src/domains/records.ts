@@ -119,7 +119,8 @@ const DATE = /^\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?)?$/;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 export const isPartialDate = (v: unknown) => typeof v === 'string' && DATE.test(v);
 
-type PartCtx = { domain: string; recordId: string | null };
+/** newParties: "new:<ref>" values that stand for people or organisations a suggestion will create when approved. */
+type PartCtx = { domain: string; recordId: string | null; newParties?: Set<string> };
 const MAX_ROWS = 200;
 
 async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> {
@@ -166,7 +167,7 @@ async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> 
     case 'party': case 'contact': {
       const ids = p.many ? (Array.isArray(v) ? v.map(String) : fail('expected a list of people or organisations')) : [String(v)];
       if (new Set(ids).size !== ids.length) fail('the same person twice');
-      for (const id of ids) if (!(await partyExists(id))) fail('no such person or organisation');
+      for (const id of ids) if (!cx.newParties?.has(id) && !(await partyExists(id))) fail('no such person or organisation');
       return p.many ? ids : ids[0];
     }
     case 'record': {
@@ -245,7 +246,9 @@ const CHECKS: Record<string, (data: Record<string, unknown>) => void> = {
   },
 };
 
-export type RecordInput = { data?: Record<string, unknown>; validFrom?: string | null; validTo?: string | null; notes?: string; sensitivity?: Sensitivity | null };
+export type RecordInput = { data?: Record<string, unknown>; validFrom?: string | null; validTo?: string | null; notes?: string; sensitivity?: Sensitivity | null;
+  /** People and organisations a suggestion brings with it, referred to in data as "new:<ref>". Created only when the owner approves. */
+  newParties?: import('../newParties.js').NewParty[] };
 
 const conds = (p: PartDef) => (p.when ? (Array.isArray(p.when) ? p.when : [p.when]) : []);
 const applies = (p: PartDef, data: Record<string, unknown>) => !p.when || conds(p).some((w) => (w.in.includes('*') ? !empty(data[w.part]) : w.in.includes(String(data[w.part]))));
@@ -257,7 +260,7 @@ const applies = (p: PartDef, data: Record<string, unknown>) => !p.when || conds(
  * sensitive an entry is re-protects every part.
  */
 /** `by` is whoever is making this change: the creator on a new record, the latest editor on an existing one. */
-export async function buildRecord(d: DomainDef, input: RecordInput, existing: RecordDoc | null, by: Actor): Promise<RecordDoc> {
+export async function buildRecord(d: DomainDef, input: RecordInput, existing: RecordDoc | null, by: Actor, opts: { newParties?: Set<string> } = {}): Promise<RecordDoc> {
   const inData = (input.data ?? {}) as Record<string, unknown>;
   const unknownKeys = Object.keys(inData).filter((k) => !d.parts.some((p) => p.key === k));
   if (unknownKeys.length) throw bad('unknown_parts', `${d.label} has no ${unknownKeys.join(', ')}`);
@@ -267,7 +270,7 @@ export async function buildRecord(d: DomainDef, input: RecordInput, existing: Re
     if (!(p.key in inData)) continue;
     const v = inData[p.key];
     if (empty(v)) { delete plain[p.key]; continue; }
-    const clean = await checkPart(p, v, { domain: d.id, recordId: existing?._id ?? null });
+    const clean = await checkPart(p, v, { domain: d.id, recordId: existing?._id ?? null, newParties: opts.newParties });
     if (Array.isArray(clean) && !clean.length) { delete plain[p.key]; continue; }
     plain[p.key] = clean;
   }
