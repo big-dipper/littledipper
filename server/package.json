@@ -17,7 +17,8 @@
     "engine": "tsx scripts/engine.ts",
     "demo": "tsx scripts/demo.ts",
     "compat": "tsx scripts/compat.ts",
-    "dictionary": "tsx scripts/dictionary.ts"
+    "dictionary": "tsx scripts/dictionary.ts",
+    "upgrade": "tsx scripts/upgrade.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.3",

@@ -34,6 +34,9 @@ jobs:
       - name: Smoke test (two nodes, end to end)
         run: npm run smoke -w server
 
+      - name: Upgrade test (the previous release, full of data, updated to this code changes nothing)
+        run: npm run upgrade -w server
+
   image:
     # The image friends deploy: it builds, boots on an empty volume and can be claimed with a preset code.
     runs-on: ubuntu-latest
