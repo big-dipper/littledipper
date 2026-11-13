@@ -40,7 +40,7 @@ export default function Home() {
         <div style={{ flex: 1, minWidth: 260, position: 'relative' }}>
           <div className="card-kicker" style={{ color: 'var(--color-accent-300)' }}>AI assistants</div>
           <div className="card-title" style={{ fontSize: 22, marginTop: 4 }}>Let an assistant do the tedious part</div>
-          <div style={{ fontSize: 13, color: 'var(--color-neutral-400)', marginTop: 4, maxWidth: 560 }}>Claude, ChatGPT or another assistant can fill in your Little Dipper from documents you already have and answer questions about your own life. You decide what it sees.</div>
+          <div style={{ fontSize: 13, color: 'var(--color-neutral-400)', marginTop: 4, maxWidth: 560 }}>Muse, Claude, ChatGPT or another assistant can fill in your Little Dipper from documents you already have and answer questions about your own life. You decide what it sees.</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
           <Link className="btn btn-primary" to="/admin/assistants" style={{ background: 'var(--color-accent-2-600)' }}>See what it can do</Link>

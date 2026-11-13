@@ -197,10 +197,10 @@ const ASSISTANTS: { name: string; status: 'Tested' | 'Should work'; how: string 
 ];
 
 /** Steps to connect each assistant, with the address to paste. `bare`: no card or heading (the AI assistants page has its own). */
-export function ConnectAssistant({ bare = false }: { bare?: boolean }) {
+export function ConnectAssistant({ bare = false, featured }: { bare?: boolean; featured?: string }) {
   const toast = useToast();
   const { node } = useAdmin();
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(featured ?? null);
   // The node's own address, not the browser's: assistants must reach the server, and it's the one OAuth uses.
   const mcp = `${node.address}/api/mcp`;
   return (

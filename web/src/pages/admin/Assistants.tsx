@@ -7,6 +7,7 @@ import { ConnectAssistant } from './Apps';
 
 const FOR_YOU = [
   'Fills in your Little Dipper from things you already have. Hand it a lease, a pay stub or an insurance card and it files the details in the right places.',
+  'Already uses your email and other accounts? An assistant like Muse can bring in what’s there, like bookings, bills and renewals, without you digging for them.',
   'Brings over what lives elsewhere, like a list of accounts or past addresses, in one go instead of typing each one.',
   'Keeps things current. Tell it you moved or changed jobs and it updates what that touches.',
   'Answers questions about your own life: when does my passport expire, what’s my car insurance deductible, where did I live in 2019?',
@@ -26,7 +27,7 @@ const MODES = [
 ];
 
 const THINGS_TO_KNOW = [
-  'What it reads goes to the assistant’s company (Anthropic for Claude, OpenAI for ChatGPT) so it can answer you, under their privacy terms. Your Little Dipper can’t control what happens after that, so start with a few categories.',
+  'When an assistant reads something to answer you, that text goes to the company that runs it. Their privacy settings decide what happens next, including whether your chats can train their models, so check yours. Your Little Dipper can’t control that, so start with a few categories.',
   'Assistants make mistakes. With Suggest changes you check each one before it’s saved.',
   'Claude and ChatGPT reach your Little Dipper over the internet, so it has to be online at its own address (a Little Dipper on Railway is).',
   'This is new. Each assistant follows the standard, but not every step has been tried with every one yet. Tell us how it goes.',
@@ -45,7 +46,7 @@ export default function Assistants() {
         <span className="card-kicker" style={{ position: 'relative', color: 'var(--color-accent-300)' }}>AI assistants · optional</span>
         <h2 style={{ position: 'relative', margin: 0, fontSize: 'clamp(30px, 4vw, 40px)', lineHeight: 1.05, maxWidth: 560 }}>A helper that knows your life, because you let it.</h2>
         <p style={{ position: 'relative', margin: 0, fontSize: 15, color: 'var(--color-neutral-400)', maxWidth: 580, lineHeight: 1.55, textWrap: 'pretty' }}>
-          Connect Claude, ChatGPT or another assistant you already use. It does the tedious part of filling in and looking after your Little Dipper, and you decide exactly what it sees.
+          Connect Muse, Claude, ChatGPT or another assistant you already use. It does the tedious part of filling in and looking after your Little Dipper, and you decide exactly what it sees.
         </p>
       </section>
 
@@ -89,7 +90,7 @@ export default function Assistants() {
       <section aria-labelledby="ai-how" style={{ display: 'grid', gap: 4 }}>
         <h3 id="ai-how" style={{ margin: 0 }}>Connect one</h3>
         <p className="text-muted" style={{ margin: 0, fontSize: 14 }}>Pick your assistant for the steps. When it opens your Little Dipper, you’ll choose what it may see and do.</p>
-        <ConnectAssistant bare />
+        <ConnectAssistant bare featured="Muse" />
         <div className="text-muted" style={{ fontSize: 13, marginTop: 10 }}>
           Connected assistants, their activity and keys for other apps are in <Link to="/admin/settings/apps">Settings › Apps and access</Link>.
         </div>
