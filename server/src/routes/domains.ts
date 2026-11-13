@@ -401,8 +401,8 @@ export default async function domainRoutes(app: FastifyInstance) {
         ...Object.entries(input.data ?? {}).map(([k, v]) => {
           const part = d?.parts.find((x) => x.key === k);
           const secret = !!(d && part && partSens(d, part) === 'secret');
-          // People and organisations by name, not id.
-          const named = (x: unknown) => (part && ['party', 'contact'].includes(part.type) && x !== null && x !== undefined ? displayValue(part, x) : x);
+          // People and organisations by name, not id; choices by their label ("In collections", not in_collections).
+          const named = (x: unknown) => (part && ['party', 'contact', 'enum'].includes(part.type) && x !== null && x !== undefined ? displayValue(part, x) : x);
           return { key: k, label: part?.label ?? k, secret, to: named(show(k, v)), from: r.recordId && owner ? named(plainNow[k] ?? null) : undefined };
         }),
         ...(input.sensitivity !== undefined ? [{ key: 'sensitivity', label: 'Who can see this', secret: false, to: input.sensitivity ?? 'default', from: current && owner ? current.sensitivity ?? 'default' : undefined }] : []),
