@@ -252,7 +252,7 @@ One entry: note · Group: life · Default sensitivity: sensitive · Keeps dates 
 
 ### Employment `employment`
 
-Current and past employers, roles, supervisors and pay.
+Current and past employers, roles, managers and pay.
 
 One entry: job · Group: work · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): yes · Can be public: yes · Takes documents: contract
 
@@ -264,7 +264,7 @@ One entry: job · Group: work · Default sensitivity: sensitive · Keeps dates (
 | Type | `type` | one of: full_time, part_time, contract, self_employed, internship, volunteer, seasonal, other |  | follows the entry |  |
 | Where you work | `arrangement` | one of: onsite, hybrid, remote |  | follows the entry |  |
 | Work location | `location` | address |  | follows the entry | The site you worked at, which can differ from head office |
-| Supervisor | `supervisor` | party |  | follows the entry |  |
+| Manager | `supervisor` | party |  | follows the entry |  |
 | Employer may be contacted | `mayContact` | boolean |  | follows the entry |  |
 | Employee ID | `employeeId` | text |  | secret |  |
 | Starting pay | `startingPay` | money per period |  | secret |  |

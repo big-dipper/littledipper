@@ -10,7 +10,7 @@ import { CopyList, SendCopy } from './Copies';
 /** A sentence that explains why a category is worth filling in. */
 const WHY: Record<string, string> = {
   residences: 'Rental applications, background checks and government forms ask for 5–10 years of addresses.',
-  employment: 'Job applications, loans and clearance forms all want your work history with dates and supervisors.',
+  employment: 'Job applications, loans and clearance forms all want your work history with dates and managers.',
   ids: 'Keep every number and expiry date in one place. You’ll get a heads-up before anything expires.',
   education: 'Degrees and dates for applications and your résumé.',
   health: 'Allergies, medications and directives, ready for a new doctor or an emergency.',

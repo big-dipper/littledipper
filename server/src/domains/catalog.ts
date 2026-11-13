@@ -199,7 +199,7 @@ const DEFS: Def[] = [
   {
     id: 'employment', label: 'Employment', noun: 'job', group: 'work', sensitivity: 'sensitive', dated: true, publicable: true, documents: 'contract',
     documentsHint: 'Offer letter, employment contract, pay stubs…',
-    description: 'Current and past employers, roles, supervisors and pay.',
+    description: 'Current and past employers, roles, managers and pay.',
     title: '{title} at {employer}',
     parts: [
       { key: 'employer', label: 'Employer', type: 'party', expects: 'organisation', required: true },
@@ -208,7 +208,7 @@ const DEFS: Def[] = [
       { key: 'type', label: 'Type', type: 'enum', options: o('full_time=Full-time', 'part_time=Part-time', 'contract', 'self_employed=Self-employed', 'internship', 'volunteer', 'seasonal', 'other') },
       { key: 'arrangement', label: 'Where you work', type: 'enum', more: true, options: o('onsite=On-site', 'hybrid', 'remote') },
       { key: 'location', label: 'Work location', type: 'address', more: true, hint: 'The site you worked at, which can differ from head office' },
-      { key: 'supervisor', label: 'Supervisor', type: 'party', more: false },
+      { key: 'supervisor', label: 'Manager', type: 'party', more: true },
       { key: 'mayContact', label: 'Employer may be contacted', type: 'boolean', more: true },
       { key: 'employeeId', label: 'Employee ID', type: 'text', more: true, sensitivity: 'secret' },
       { key: 'startingPay', label: 'Starting pay', type: 'money', more: false, periodic: true, sensitivity: 'secret' },
