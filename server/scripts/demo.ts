@@ -85,6 +85,13 @@ async function node(port: number, name: string, who: string) {
   return { base, call, link: `${base}/api/auth/demo?t=${signin}` };
 }
 
+// `-- blank`: one freshly set-up node with nothing in it, to see what a new owner sees right after setup.
+if (process.argv.includes('blank')) {
+  const fresh = await node(PORT, 'Sam Rivera', 'sam');
+  console.log(`\nA blank Little Dipper, just set up, nothing in it yet.\n  Sam, one click:  ${fresh.link}\nStop with Ctrl-C (its data is deleted).\n`);
+  await new Promise(() => {});
+}
+
 const maya = await node(PORT, 'Maya Lindqvist', 'maya');
 const theo = await node(PORT + 1, 'Theo Nakamura', 'theo');
 const call = maya.call;
