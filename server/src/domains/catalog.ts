@@ -580,7 +580,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'memberships', label: 'Memberships & loyalty', noun: 'membership', group: 'personal', sensitivity: 'standard', dated: true, publicable: true, documents: 'card',
+    id: 'memberships', label: 'Memberships & loyalty', noun: 'membership', group: 'life', sensitivity: 'standard', dated: true, publicable: true, documents: 'card',
     sensitivityBy: { part: 'kind', values: { union: 'sensitive', religious: 'sensitive', political: 'sensitive' } },
     description: 'Frequent flyer, hotel and loyalty numbers, clubs, associations, unions and subscriptions.',
     title: '{organization}',
@@ -593,10 +593,10 @@ const DEFS: Def[] = [
       { key: 'renewsOn', label: 'Renews on', type: 'date', remind: true },
     ],
   },
-  // ── personal ─────────────────────────────────────────────────────────
+  // ── also life: memberships and notes (Personal folded in, Nov 12) ─────
   {
     // Anything worth remembering, in your own words: the action bar's third kind of thing to add.
-    id: 'notes', oneAtATime: true, label: 'Notes', noun: 'note', group: 'personal', sensitivity: 'sensitive', dated: false, publicable: false, livesOn: 'menu',
+    id: 'notes', oneAtATime: true, label: 'Notes', noun: 'note', group: 'life', sensitivity: 'sensitive', dated: false, publicable: false, livesOn: 'menu',
     description: 'Anything you want to remember, in your own words.',
     title: '{text}',
     parts: [{ key: 'text', label: 'Note', type: 'longtext', required: true }],

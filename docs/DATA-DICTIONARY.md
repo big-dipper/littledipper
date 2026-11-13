@@ -223,6 +223,31 @@ One entry: task · Group: life · Default sensitivity: sensitive · Keeps dates 
 | Their answer | `answer` | one of: asked, accepted, not_now |  | follows the entry |  |
 | Their task | `ref` | text |  | follows the entry |  |
 
+### Memberships & loyalty `memberships`
+
+Frequent flyer, hotel and loyalty numbers, clubs, associations, unions and subscriptions.
+
+One entry: membership · Group: life · Default sensitivity: standard (by kind: union sensitive, religious sensitive, political sensitive) · Keeps dates (validFrom/validTo): yes · Can be public: yes · Takes documents: card
+
+| Field | Key | Type | Required | Sensitivity (at least) | Notes |
+|---|---|---|---|---|---|
+| Kind | `kind` | one of: frequent_flyer, hotel, loyalty, club, association, union, religious, political, subscription, other |  | follows the entry |  |
+| Organization | `organization` | party | yes | follows the entry |  |
+| Member number | `memberNumber` | text |  | sensitive |  |
+| Tier / status | `tier` | text |  | follows the entry |  |
+| Cost | `cost` | money per period |  | follows the entry |  |
+| Renews on | `renewsOn` | date |  | follows the entry | reminder before it passes |
+
+### Notes `notes`
+
+Anything you want to remember, in your own words.
+
+One entry: note · Group: life · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): no · Can be public: no
+
+| Field | Key | Type | Required | Sensitivity (at least) | Notes |
+|---|---|---|---|---|---|
+| Note | `text` | longtext | yes | follows the entry |  |
+
 ## Group: work
 
 ### Employment `employment`
@@ -607,33 +632,6 @@ One entry: item · Group: money · Default sensitivity: sensitive · Keeps dates
 | Valued by | `valuedBy` | party |  | follows the entry | An appraiser. Leave empty if it’s your own estimate |
 
 Invites: Is it insured?; The receipt.
-
-## Group: personal
-
-### Memberships & loyalty `memberships`
-
-Frequent flyer, hotel and loyalty numbers, clubs, associations, unions and subscriptions.
-
-One entry: membership · Group: personal · Default sensitivity: standard (by kind: union sensitive, religious sensitive, political sensitive) · Keeps dates (validFrom/validTo): yes · Can be public: yes · Takes documents: card
-
-| Field | Key | Type | Required | Sensitivity (at least) | Notes |
-|---|---|---|---|---|---|
-| Kind | `kind` | one of: frequent_flyer, hotel, loyalty, club, association, union, religious, political, subscription, other |  | follows the entry |  |
-| Organization | `organization` | party | yes | follows the entry |  |
-| Member number | `memberNumber` | text |  | sensitive |  |
-| Tier / status | `tier` | text |  | follows the entry |  |
-| Cost | `cost` | money per period |  | follows the entry |  |
-| Renews on | `renewsOn` | date |  | follows the entry | reminder before it passes |
-
-### Notes `notes`
-
-Anything you want to remember, in your own words.
-
-One entry: note · Group: personal · Default sensitivity: sensitive · Keeps dates (validFrom/validTo): no · Can be public: no
-
-| Field | Key | Type | Required | Sensitivity (at least) | Notes |
-|---|---|---|---|---|---|
-| Note | `text` | longtext | yes | follows the entry |  |
 
 ## Stored collections
 

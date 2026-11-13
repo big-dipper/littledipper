@@ -64,11 +64,10 @@ export const fetchCatalog = () => get<{ domains: Domain[] }>('/api/catalog').the
 export type Group = { id: string; label: string; blurb: string; ink: string; wash: string };
 export const GROUPS: Group[] = [
   { id: 'identity', label: 'Identity', blurb: 'Who you are, on paper', ink: 'var(--color-accent-700)', wash: 'var(--color-accent-100)' },
-  { id: 'life', label: 'Life', blurb: 'Where you live, who you live with, where you’ve been', ink: 'var(--color-accent-2-600)', wash: 'var(--color-accent-2-100)' },
+  { id: 'life', label: 'Life', blurb: 'Where you live, who you live with, where you’ve been, what you belong to', ink: 'var(--color-accent-2-600)', wash: 'var(--color-accent-2-100)' },
   { id: 'work', label: 'Work', blurb: 'What you do and what you’ve learned', ink: 'var(--color-accent-500)', wash: 'var(--color-accent-200)' },
   { id: 'health', label: 'Health', blurb: 'Your body, your care, your cover', ink: 'var(--color-accent-2-800)', wash: 'var(--color-accent-2-200)' },
   { id: 'money', label: 'Money', blurb: 'Accounts, income, what you own, taxes and your estate', ink: 'var(--color-neutral-800)', wash: 'var(--color-neutral-200)' },
-  { id: 'personal', label: 'Personal', blurb: 'Your memberships, online accounts and the details that make you you', ink: 'var(--color-accent-2-500)', wash: 'var(--color-accent-2-100)' },
   { id: 'custom', label: 'Your categories', blurb: 'Anything else you want to keep track of', ink: 'var(--color-neutral-600)', wash: 'var(--color-neutral-200)' },
 ];
 export const groupOf = (id: string) => GROUPS.find((g) => g.id === id) ?? GROUPS[GROUPS.length - 1];

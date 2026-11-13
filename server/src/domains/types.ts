@@ -82,7 +82,7 @@ export type DomainDef = {
   label: string;
   /** Singular noun for one record, e.g. "residence". */
   noun: string;
-  group: 'identity' | 'life' | 'work' | 'health' | 'money' | 'personal' | 'custom';
+  group: 'identity' | 'life' | 'work' | 'health' | 'money' | 'custom';
   description: string;
   /**
    * How sensitive an entry is unless the owner says otherwise. Each entry can be set on its own;
