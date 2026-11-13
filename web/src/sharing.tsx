@@ -31,6 +31,9 @@ export function itemLabel(item: string, data: SharingData) {
     if (!d) return item;
     return cat[2] === 'current' ? `Your current ${d.noun}` : `All your ${d.label.toLowerCase()}`;
   }
+  // A few lines don't read as "Your …" by their label alone ("Your born").
+  const SAID: Record<string, string> = { born: 'Your birth date and place' };
+  if (SAID[item]) return SAID[item];
   const l = data.profile.lines.find((x) => x.key === item)?.label ?? item;
   return `Your ${l.charAt(0).toLowerCase()}${l.slice(1)}`;
 }
