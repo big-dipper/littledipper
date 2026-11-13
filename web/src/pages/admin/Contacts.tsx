@@ -16,12 +16,15 @@ export const shareSummary = (c: Contact) => {
   return c.share.basic ? (n ? `Basic profile + ${n}` : 'Basic profile') : n ? `${n} item${n === 1 ? '' : 's'} only` : 'Nothing';
 };
 
+/** Relations that make someone family (the Family filter). Friends, colleagues and references aren't. */
+const FAMILY = new Set(['spouse', 'civil_union', 'domestic_partner', 'partner', 'child', 'parent', 'sibling', 'grandparent', 'grandchild', 'guardian', 'other_family']);
+
 export default function Contacts() {
   const nav = useNavigate();
   const { refresh } = useAdmin();
   const { run } = useAction();
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<'all' | 'node' | 'person' | 'organisation'>('all');
+  const [filter, setFilter] = useState<'all' | 'family' | 'node' | 'person' | 'organisation'>('all');
   // ?connect=<invite or address>: someone's invite, opened from their page or after setup, ready to send.
   const [params, setParams] = useSearchParams();
   const [connect] = useState(() => params.get('connect') || '');
@@ -32,8 +35,12 @@ export default function Contacts() {
     const [{ items }, catalog] = await Promise.all([get<{ items: Rec[] }>('/api/data/relationships'), fetchCatalog()]);
     const opts = catalog.find((d) => d.id === 'relationships')?.parts.find((p) => p.key === 'relation')?.options ?? [];
     const by = new Map<string, string[]>();
-    for (const r of items) if (r.current) by.set(String(r.data.party), [...(by.get(String(r.data.party)) ?? []), opts.find(([k]) => k === r.data.relation)?.[1] ?? String(r.data.relation)]);
-    return by;
+    const family = new Set<string>();
+    for (const r of items) if (r.current) {
+      by.set(String(r.data.party), [...(by.get(String(r.data.party)) ?? []), opts.find(([k]) => k === r.data.relation)?.[1] ?? String(r.data.relation)]);
+      if (FAMILY.has(String(r.data.relation))) family.add(String(r.data.party));
+    }
+    return { by, family };
   }, []);
   const { data: reqs, reload: reloadReqs } = useAsync(() => get<{ items: Req[] }>('/api/federation/requests?status=pending&direction=in'), []);
 
@@ -41,7 +48,9 @@ export default function Contacts() {
   const term = q.toLowerCase();
   const names = new Map((data?.items || []).map((c) => [c.id, c.name]));
   const worksAt = (c: Contact) => c.affiliations.map((a) => names.get(a.party)).filter(Boolean).join(', ');
-  const rows = (data?.items || []).filter((c) => (filter === 'all' || (filter === 'node' ? !!c.node : c.type === filter)) && (!term || c.name.toLowerCase().includes(term) || worksAt(c).toLowerCase().includes(term)));
+  const how = (c: Contact) => (rels?.by.get(c.id) ?? []).join(', ');
+  const kept = (c: Contact) => filter === 'all' || (filter === 'family' ? !!rels?.family.has(c.id) : filter === 'node' ? !!c.node : c.type === filter);
+  const rows = (data?.items || []).filter((c) => kept(c) && (!term || [c.name, worksAt(c), how(c)].some((s) => s.toLowerCase().includes(term))));
 
   const decline = async (r: Req) => {
     if (await run(() => post(`/api/federation/requests/${r._id}/decline`), 'Request declined')) {
@@ -79,7 +88,7 @@ export default function Contacts() {
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '24px 0 12px', flexWrap: 'wrap' }}>
         <input className="input" aria-label="Search relationships" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 320 }} />
-        <Pills value={filter} options={[['all', 'All'], ['node', 'On Little Dipper'], ['person', 'People'], ['organisation', 'Organisations']]} onChange={setFilter} />
+        <Pills value={filter} options={[['all', 'All'], ['family', 'Family'], ['node', 'On Little Dipper'], ['person', 'People'], ['organisation', 'Organisations']]} onChange={setFilter} />
       </div>
       {!data ? <Loading /> : (
         <div style={{ overflowX: 'auto' }}>
@@ -95,7 +104,7 @@ export default function Contacts() {
                       <div><div style={{ fontWeight: 600 }}>{c.name}</div><div className="text-muted" style={{ fontSize: 12, fontFamily: c.node ? 'var(--mono)' : 'inherit' }}>{sub}</div></div>
                     </div></td>
                     <td><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {(rels?.get(c.id) ?? [c.type === 'organisation' ? 'Organisation' : 'Person']).map((l) => <span key={l} className="tag tag-neutral">{l}</span>)}
+                      {(rels?.by.get(c.id) ?? [c.type === 'organisation' ? 'Organisation' : 'Person']).map((l) => <span key={l} className="tag tag-neutral">{l}</span>)}
                       {c.node && <span className="tag tag-accent-2">Little Dipper</span>}
                     </div></td>
                     <td><span className={`tag ${STATUS[c.status][1]}`}>{STATUS[c.status][0]}</span></td>
