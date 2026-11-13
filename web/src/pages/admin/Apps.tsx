@@ -163,9 +163,9 @@ export default function Apps({ embedded = false }: { embedded?: boolean }) {
 
 /** How to connect each assistant. */
 const ASSISTANTS: { name: string; how: string }[] = [
-  { name: 'Muse', how: 'Ask Muse to connect to your Little Dipper and give it the address below. Muse sends you a link: open it, and your Little Dipper asks what Muse may do.' },
-  { name: 'Claude', how: 'In Claude’s settings, add a custom connector and paste the address below. Claude opens your Little Dipper so you can approve it.' },
-  { name: 'ChatGPT', how: 'In ChatGPT’s settings, add a connector (it may need developer mode turned on) and paste the address below. ChatGPT opens your Little Dipper so you can approve it.' },
+  { name: 'Muse', how: 'Ask Muse to connect to your Little Dipper and give it the address above. Muse sends you a link: open it, and your Little Dipper asks what Muse may do.' },
+  { name: 'Claude', how: 'In Claude’s settings, add a custom connector and paste the address above. Claude opens your Little Dipper so you can approve it.' },
+  { name: 'ChatGPT', how: 'In ChatGPT’s settings, add a connector (it may need developer mode turned on) and paste the address above. ChatGPT opens your Little Dipper so you can approve it.' },
 ];
 
 /** Steps to connect each assistant, with the address to paste. `bare`: no card or heading (the AI assistants page has its own). */
@@ -179,9 +179,18 @@ export function ConnectAssistant({ bare = false, featured }: { bare?: boolean; f
     <div className={bare ? undefined : 'card'} style={bare ? { marginTop: 12, display: 'grid', gap: 12 } : { marginTop: 24, padding: '18px 22px', gap: 12 }}>
       {!bare && <div>
         <div style={{ fontWeight: 600 }}>Connect an AI assistant</div>
-        <div className="text-muted" style={{ fontSize: 13.5 }}>It asks you here, on your Little Dipper, what it may see and do. You can watch what it does, undo it, and disconnect it any time. <Link to="/admin/assistants">Why connect one?</Link></div>
+        <div className="text-muted" style={{ fontSize: 13.5 }}>It asks you here, on your Little Dipper, what it may see and do. You can watch what it does, undo it, and end its access any time. <Link to="/admin/assistants">Why connect one?</Link></div>
       </div>}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {/* One address for every assistant; each one only differs in where you paste it. */}
+      <div style={{ display: 'grid', gap: 6 }}>
+        <div style={{ fontSize: 14 }}>Every assistant uses the same address, your Little Dipper’s address for assistants:</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="mono" style={{ fontSize: 13, background: 'var(--color-neutral-100)', padding: '6px 12px', borderRadius: 999, overflowWrap: 'anywhere' }}>{mcp}</span>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { await copy(mcp); toast('Address copied'); }}>Copy</button>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span className="text-muted" style={{ fontSize: 13 }}>Where to paste it:</span>
         {ASSISTANTS.map((x) => (
           <button key={x.name} className={`btn ${open === x.name ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 13 }} onClick={() => setOpen(open === x.name ? null : x.name)}>
             {x.name}
@@ -190,13 +199,7 @@ export function ConnectAssistant({ bare = false, featured }: { bare?: boolean; f
         <button className={`btn ${open === 'other' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 13 }} onClick={() => setOpen(open === 'other' ? null : 'other')}>Another assistant</button>
       </div>
       {open && (
-        <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{ fontSize: 14 }}>{ASSISTANTS.find((x) => x.name === open)?.how ?? 'Any assistant that supports MCP connectors can connect with this address. If it can’t open your Little Dipper to ask you, create a key below for it instead.'}</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className="mono" style={{ fontSize: 13, background: 'var(--color-neutral-100)', padding: '6px 12px', borderRadius: 999, overflowWrap: 'anywhere' }}>{mcp}</span>
-            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { await copy(mcp); toast('Address copied'); }}>Copy</button>
-          </div>
-        </div>
+        <div style={{ fontSize: 14 }}>{ASSISTANTS.find((x) => x.name === open)?.how ?? 'Any assistant that supports MCP connectors can use this address. If it can’t open your Little Dipper to ask you, add it in Relationships as an assistant and make it a key on its page.'}</div>
       )}
     </div>
   );
