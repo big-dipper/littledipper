@@ -118,6 +118,8 @@ function checkAssistantMode(a: AssistantSettings, wanted: string[], reviewable: 
   if (wanted.includes('keys:manage')) throw new HttpError(403, 'owner_only', 'Only the owner manages keys and connections.');
   if (!wanted.length || !wanted.every(isWriteScope)) return;
   if (a.mode === 'answer') throw new HttpError(403, 'read_only', 'Your owner set you to answer questions only. You can read, but not change anything.');
+  // Adding a person or organisation on its own can't wait in Review, but it can travel with the record that needs it.
+  if (a.mode === 'suggest' && !reviewable && wanted.includes('parties:write')) throw new HttpError(403, 'needs_review', 'Your owner set you to suggest changes, so you can’t add people or organisations on their own. Bring them with the record instead: in add_record or update_record, list them in newParties ({ ref, type, name }) and put "new:<ref>" in the field. Your owner approves them together.');
   if (a.mode === 'suggest' && !reviewable) throw new HttpError(403, 'needs_review', 'Your owner set you to suggest changes, and this kind of change can’t wait in Review yet. Tell your owner what you’d change.');
 }
 

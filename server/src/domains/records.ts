@@ -167,7 +167,7 @@ async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> 
     case 'party': case 'contact': {
       const ids = p.many ? (Array.isArray(v) ? v.map(String) : fail('expected a list of people or organisations')) : [String(v)];
       if (new Set(ids).size !== ids.length) fail('the same person twice');
-      for (const id of ids) if (!cx.newParties?.has(id) && !(await partyExists(id))) fail('no such person or organisation');
+      for (const id of ids) if (!cx.newParties?.has(id) && !(await partyExists(id))) fail(id.startsWith('new:') ? `${id} isn’t in newParties` : 'no such person or organisation (use their id from find_parties; someone new goes in newParties as "new:<ref>")');
       return p.many ? ids : ids[0];
     }
     case 'record': {
