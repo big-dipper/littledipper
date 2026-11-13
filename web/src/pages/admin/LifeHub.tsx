@@ -1,20 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { get, post, type ProfileLine as Field } from '../../api';
-import { Dialog, ErrorNote, Loading, Pills, useAction, useAsync } from '../../ui';
-import { fetchCatalog, fmtDate, groupOf, Lock, Mono, Section, Select, useGrouped, type Domain } from '../../life';
+import { get, type ProfileLine as Field } from '../../api';
+import { ErrorNote, Loading, useAsync } from '../../ui';
+import { fetchCatalog, fmtDate, groupOf, Lock, Mono, Section, useGrouped, type Domain } from '../../life';
 
 type Attention = { domain: string; domainLabel: string; id: string; title: string; part: string; date: string; expired: boolean };
 
 export default function LifeHub() {
   const nav = useNavigate();
   // Relationships live on each person's page, tasks in the action bar, events on the Calendar, notes on their own page and Birth on Profile basics (its Born line), not here.
-  const { data: domains, error, reload } = useAsync(() => fetchCatalog().then((ds) => ds.filter((d) => !d.livesOn)), []);
+  const { data: domains, error } = useAsync(() => fetchCatalog().then((ds) => ds.filter((d) => !d.livesOn)), []);
   const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/profile'), []);
   const { data: attention } = useAsync(() => get<{ items: Attention[] }>('/api/attention'), []);
   const { data: timeline } = useAsync(() => get<{ items: { validFrom: string }[] }>('/api/timeline'), []);
   const [q, setQ] = useState('');
-  const [creating, setCreating] = useState(false);
   const grouped = useGrouped(domains?.filter((d) => !q || `${d.label} ${d.description}`.toLowerCase().includes(q.toLowerCase())));
 
   if (error) return <ErrorNote error={error} />;
@@ -71,21 +70,12 @@ export default function LifeHub() {
       )}
 
       {grouped.map(({ g, items }) => (
-        <Section key={g.id} title={g.label} blurb={g.blurb} ink={g.ink} right={g.id === 'custom' ? <button className="btn btn-ghost" onClick={() => setCreating(true)}>New category</button> : undefined}>
+        <Section key={g.id} title={g.label} blurb={g.blurb} ink={g.ink}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,240px),1fr))', gap: 14 }}>
             {items.map((d) => <Tile key={d.id} d={d} />)}
           </div>
         </Section>
       ))}
-      {!q && !domains.some((d) => d.group === 'custom') && (
-        <Section title="Your categories" blurb="Anything else you want to keep track of" ink={groupOf('custom').ink}>
-          <button className="card bare" onClick={() => setCreating(true)} style={{ padding: '20px 22px', border: '1.5px dashed var(--color-neutral-400)', background: 'transparent', maxWidth: 360, textAlign: 'left' }}>
-            <div className="card-title">Make your own category</div>
-            <div className="card-body">Wine cellar, plant care, recipes, gear… with the details you choose.</div>
-          </button>
-        </Section>
-      )}
-      {creating && <NewCategory onClose={() => setCreating(false)} onDone={(id) => { setCreating(false); reload(); nav(`/admin/life/${id}`); }} />}
     </div>
   );
 }
@@ -128,43 +118,5 @@ function TimelineSpark({ n }: { n: number }) {
         <span key={i} style={{ position: 'absolute', top: 3, left: `${(i / (dots - 1)) * 96}%`, width: 10, height: 10, borderRadius: '50%', background: i < n ? 'var(--color-accent-2-600)' : 'var(--color-accent-2-200)', border: '2px solid var(--color-accent-2-100)' }} />
       ))}
     </div>
-  );
-}
-
-const TYPES: [string, string][] = [['text', 'Text'], ['longtext', 'Paragraph'], ['date', 'Date'], ['datetime', 'Date and time'], ['number', 'Number'], ['money', 'Money'], ['boolean', 'Yes / no'], ['email', 'Email'], ['phone', 'Phone'], ['url', 'Link'], ['country', 'Country'], ['contact', 'Contact']];
-
-function NewCategory({ onClose, onDone }: { onClose: () => void; onDone: (id: string) => void }) {
-  const { run, busy } = useAction();
-  const [label, setLabel] = useState('');
-  const [dated, setDated] = useState(false);
-  const [sensitivity, setSensitivity] = useState<'standard' | 'sensitive' | 'secret'>('sensitive');
-  const [parts, setParts] = useState([{ label: '', type: 'text', required: true }, { label: '', type: 'text', required: false }]);
-  const create = async () => {
-    const r = await run(() => post<{ id: string }>('/api/catalog', { label, dated, sensitivity, parts: parts.filter((p) => p.label.trim()).map((p) => ({ ...p, key: p.label })) }), `${label} created`);
-    if (r) onDone(r.id);
-  };
-  return (
-    <Dialog title="New category" onClose={onClose} width={560} actions={<>
-      <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-      <button className="btn btn-primary" disabled={busy || !label.trim() || !parts.some((p) => p.label.trim())} onClick={create}>Create category</button>
-    </>}>
-      <div className="field"><label htmlFor="cl">Name</label><input id="cl" className="input" placeholder="Wine cellar" value={label} onChange={(e) => setLabel(e.target.value)} /></div>
-      <div className="field"><label>Details to keep</label>
-        <div style={{ display: 'grid', gap: 8 }}>
-          {parts.map((p, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 8 }}>
-              <input className="input" aria-label={`Detail ${i + 1}`} placeholder={i === 0 ? 'Wine' : 'Vintage'} value={p.label} onChange={(e) => setParts(parts.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-              <Select value={p.type} onChange={(v) => setParts(parts.map((x, j) => (j === i ? { ...x, type: v || 'text' } : x)))} options={TYPES} placeholder="Type" />
-            </div>
-          ))}
-          <button className="btn btn-ghost" style={{ justifySelf: 'start', fontSize: 13 }} onClick={() => setParts([...parts, { label: '', type: 'text', required: false }])}>Add a detail</button>
-        </div>
-      </div>
-      <div className="field"><label>Sensitivity</label><Pills value={sensitivity} options={[['standard', 'Standard'], ['sensitive', 'Sensitive'], ['secret', 'Secret']]} onChange={setSensitivity} /></div>
-      <button role="checkbox" aria-checked={dated} className="bare" onClick={() => setDated(!dated)} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-        <span style={{ width: 18, height: 18, borderRadius: 6, border: '2px solid var(--color-accent)', background: dated ? 'var(--color-accent)' : 'transparent', color: 'var(--color-bg)', display: 'grid', placeItems: 'center', fontSize: 11 }}>{dated ? '✓' : ''}</span>
-        Entries have dates (from / to)
-      </button>
-    </Dialog>
   );
 }
