@@ -182,10 +182,10 @@ export default async function nodeRoutes(app: FastifyInstance) {
     await ctx.store.update('apiKeys', setupKey._id, { revokedAt: now() });
     reply.clearCookie(COOKIE.setup, { path: '/' });
     if (!transfer) {
-      // What they typed during setup becomes their first entries: the name they go by, and their main email.
+      // The name they typed during setup becomes their first entry: the name they go by.
       const by = { type: 'owner' as const, id: pending._id };
       const domain = (id: string) => BUILT_IN_DOMAINS.find((d) => d.id === id)!;
-      for (const [id, data] of [['names', { kind: 'preferred', full: pending.setup!.name }], ['contact_methods', { kind: 'email', value: pending.setup!.email, primary: true }]] as const) {
+      for (const [id, data] of [['names', { kind: 'preferred', full: pending.setup!.name }]] as const) {
         const rec = await buildRecord(domain(id), { data }, null, by);
         await ctx.store.insert('records', rec);
         await recordVersion(rec, 'create', by);

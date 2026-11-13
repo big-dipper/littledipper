@@ -58,7 +58,7 @@ export default function Setup() {
   const [help, setHelp] = useState(() => params.has('help'));
   const [claimInput, setClaimInput] = useState('');
   const [claimError, setClaimError] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '' });
+  const [form, setForm] = useState({ name: '' });
   const [formError, setFormError] = useState('');
   const [passkey, setPasskey] = useState<'idle' | 'pending' | 'done'>('idle');
   const [codes, setCodes] = useState<string[]>([]);
@@ -113,7 +113,7 @@ export default function Setup() {
     setFormError('');
     setBusy(true);
     try {
-      await post('/api/owner', { displayName: form.name, email: form.email });
+      await post('/api/owner', { displayName: form.name });
       setStep(2);
     } catch (e) {
       setFormError((e as Error).message);
@@ -219,11 +219,10 @@ export default function Setup() {
             <p className="text-muted">This becomes the owner record. Only you can change it later.</p>
             <form onSubmit={(e) => { e.preventDefault(); saveYou(); }} style={{ display: 'grid', gap: 14, maxWidth: 440, marginTop: 20 }}>
               <div className="field"><label htmlFor="n">Your name</label><input id="n" className="input" autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div className="field"><label htmlFor="e">Email for recovery and notices</label><input id="e" className="input" type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
               {formError && <p style={{ color: 'var(--color-accent-700)', fontSize: 13, margin: 0 }}>{formError}</p>}
               <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setStep(0)}>Back</button>
-                <button type="submit" className="btn btn-primary" disabled={busy || !form.name.trim() || !form.email.trim()}>Continue</button>
+                <button type="submit" className="btn btn-primary" disabled={busy || !form.name.trim()}>Continue</button>
               </div>
             </form>
           </>

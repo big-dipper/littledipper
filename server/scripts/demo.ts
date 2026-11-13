@@ -73,7 +73,7 @@ async function node(port: number, name: string, who: string) {
   const call = client(base);
   const key = new SoftKey();
   await call('POST', '/api/node/claim', { token: new URL(claimUrl).searchParams.get('token') });
-  await call('POST', '/api/owner', { displayName: name, email: `${name.split(' ')[0].toLowerCase()}@example.com` });
+  await call('POST', '/api/owner', { displayName: name });
   const reg = await call('POST', '/api/auth/passkeys/register/options', {});
   await call('POST', '/api/auth/passkeys/register', { challengeId: reg.challengeId, response: key.register(reg.options, base), label: 'Demo key' });
   await call('POST', '/api/auth/recovery-codes', {});

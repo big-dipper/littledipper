@@ -8,7 +8,7 @@ export type PasskeyRec = { credentialId: string; publicKey: string; counter: num
  * `setup` holds the name and email typed during claim until the claim completes and they become entries.
  */
 export type OwnerDoc = Doc & {
-  setup?: { name: string; email: string };
+  setup?: { name: string };
   /** True while a claim (or ownership transfer) is in progress. */
   pending?: boolean;
   passkeys: PasskeyRec[];

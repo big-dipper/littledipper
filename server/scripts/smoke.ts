@@ -52,7 +52,7 @@ function startNode(port: number, dir: string, extra: Record<string, string> = {}
 
 async function claim(c: Client, claimUrl: string, name: string, key: SoftKey) {
   await c.call('POST', '/api/node/claim', { token: new URL(claimUrl).searchParams.get('token') });
-  await c.call('POST', '/api/owner', { displayName: name, email: `${name.split(' ')[0].toLowerCase()}@example.com` });
+  await c.call('POST', '/api/owner', { displayName: name });
   const reg = await c.call('POST', '/api/auth/passkeys/register/options', {});
   await c.call('POST', '/api/auth/passkeys/register', { challengeId: reg.challengeId, response: key.register(reg.options, c.base), label: 'Soft key' });
   const { codes } = await c.call('POST', '/api/auth/recovery-codes', {});
@@ -114,7 +114,8 @@ async function main() {
     await a.call('POST', '/api/data/residences', { data: { street1: '2214 SE Ankeny St', city: 'Portland', region: 'OR', postalCode: '97214', country: 'us', ownership: 'rent' }, validFrom: '2019-06' });
     // The profile is worked out from categories; nothing is stored on it.
     const line = async (key: string) => (await a.call('GET', '/api/profile')).items.find((l: any) => l.key === key);
-    ok((await line('preferred_name'))?.value === 'Maya Lindqvist' && (await line('email'))?.value === 'maya@example.com', 'the name and email from setup become your first entries, and your profile shows them');
+    ok((await line('preferred_name'))?.value === 'Maya Lindqvist' && !(await line('email')), 'the name from setup becomes your first entry; setup asks for no email');
+    await a.call('POST', '/api/data/contact_methods', { data: { kind: 'email', value: 'maya@example.com', primary: true } });
     ok((await line('phone'))?.value === '(503) 555-0148', 'a phone is stored in E.164 and shown in a friendly form');
     const acct = await a.call('GET', '/api/owner');
     ok(acct.name === 'Maya Lindqvist' && acct.email === 'maya@example.com', 'the account name and email are worked out from Names and Contact methods');

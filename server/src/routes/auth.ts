@@ -12,7 +12,7 @@ import {
   bad, COOKIE, cookieOpts, deviceLabel, findKey, HttpError, issueKey, rateLimit, requireSession, requireSetupOrSession, startSession,
 } from '../auth.js';
 import { canonicalUrl, getNode } from '../node.js';
-import { ownerEmail, ownerName } from '../profile.js';
+import { ownerName } from '../profile.js';
 import { getOwner, ownerFor, type OwnerDoc, type PasskeyRec } from '../owner.js';
 
 /** WebAuthn binds to the hostname the browser is on; accept only our own addresses. */
@@ -52,26 +52,24 @@ async function issueRecoveryCodes(o: OwnerDoc) {
 }
 
 export default async function authRoutes(app: FastifyInstance) {
-  // Setup step "You": name + recovery email.
+  // Setup step "You": just a name. No email: nodes don't depend on it, and nothing here sends one.
   app.post('/api/owner', async (req) => {
     const mode = await requireSetupOrSession(req);
     if (mode !== 'setup') throw new HttpError(409, 'already_claimed', 'Use PATCH /api/owner');
-    const { displayName, email } = (req.body || {}) as { displayName?: string; email?: string };
+    const { displayName } = (req.body || {}) as { displayName?: string };
     const name = String(displayName || '').trim();
-    const mail = String(email || '').trim();
     if (!name) throw bad('name_required', 'Add your name');
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) throw bad('email_invalid', 'Enter a valid email');
     const existing = await ownerFor('setup');
     if (existing) {
-      await ctx.store.update('owners', existing._id, { setup: { name, email: mail } });
-      return { id: existing._id, displayName: name, email: mail };
+      await ctx.store.update('owners', existing._id, { setup: { name } });
+      return { id: existing._id, displayName: name };
     }
     const o: OwnerDoc = {
-      _id: newId('own'), setup: { name, email: mail }, pending: true, passkeys: [], passwordHash: null,
+      _id: newId('own'), setup: { name }, pending: true, passkeys: [], passwordHash: null,
       totp: { enabled: false, secretEnc: null }, recoveryCodeHashes: [], prefs: { showTechnical: false }, createdAt: new Date().toISOString(),
     };
     await ctx.store.insert('owners', o);
-    return { id: o._id, displayName: name, email: mail };
+    return { id: o._id, displayName: name };
   });
 
   // ── passkey registration (setup or signed-in owner) ──────────────────
@@ -80,7 +78,7 @@ export default async function authRoutes(app: FastifyInstance) {
     const o = await needOwner(mode);
     const { rpID } = await rp(req);
     const opts = await generateRegistrationOptions({
-      rpName: 'Little Dipper', rpID, userName: o.setup?.email || (await ownerEmail()) || 'owner', userDisplayName: o.setup?.name || (await ownerName()) || 'Owner',
+      rpName: 'Little Dipper', rpID, userName: o.setup?.name || (await ownerName()) || 'owner', userDisplayName: o.setup?.name || (await ownerName()) || 'Owner',
       userID: new TextEncoder().encode(o._id), attestationType: 'none',
       excludeCredentials: o.passkeys.map((p) => ({ id: p.credentialId, transports: p.transports as never })),
       authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
@@ -172,7 +170,7 @@ export default async function authRoutes(app: FastifyInstance) {
     const secret = authenticator.generateSecret();
     await ctx.store.update('owners', o._id, { totp: { ...o.totp, pendingSecretEnc: encrypt(ctx.keys.masterKey, secret) } });
     const n = await getNode();
-    return { secret, otpauth: authenticator.keyuri((await ownerEmail()) || "owner", `Little Dipper (${new URL(canonicalUrl(n)).host})`, secret) };
+    return { secret, otpauth: authenticator.keyuri((await ownerName()) || "owner", `Little Dipper (${new URL(canonicalUrl(n)).host})`, secret) };
   });
 
   app.post('/api/auth/totp/enable', async (req) => {
