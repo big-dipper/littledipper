@@ -99,9 +99,9 @@ One entry: status · Group: identity · Default sensitivity: sensitive · Keeps 
 |---|---|---|---|---|---|
 | Country | `country` | country | yes | follows the entry |  |
 | Status | `status` | one of: citizen, noncitizen_national, permanent_resident, temporary_resident, visa_holder, visitor, refugee, asylee, other | yes | follows the entry |  |
-| Acquired by | `acquiredBy` | one of: birth, descent, naturalization, marriage, investment, other |  | follows the entry |  |
+| How you got this status | `acquiredBy` | one of: birth, descent, naturalization, marriage, investment, other |  | follows the entry | only when status is citizen or noncitizen_national |
 | Proven by | `provenBy` | links to ids |  | follows the entry | The passport, certificate or permit |
-| Ended by | `endedBy` | one of: renounced, revoked, expired, superseded |  | follows the entry |  |
+| How it ended | `endedBy` | one of: renounced, revoked, expired, superseded |  | follows the entry |  |
 
 Invites: The passport, certificate or permit that proves it.
 

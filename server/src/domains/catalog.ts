@@ -87,9 +87,11 @@ const DEFS: Def[] = [
     parts: [
       { key: 'country', label: 'Country', type: 'country', required: true },
       { key: 'status', label: 'Status', type: 'enum', required: true, options: o('citizen', 'noncitizen_national=Non-citizen national', 'permanent_resident=Permanent resident', 'temporary_resident=Temporary resident', 'visa_holder=Visa holder', 'visitor=Visitor (visa-exempt)', 'refugee', 'asylee', 'other') },
-      { key: 'acquiredBy', label: 'Acquired by', type: 'enum', options: o('birth', 'descent', 'naturalization', 'marriage', 'investment', 'other') },
+      // How you got it is a question about citizenship and nationality only; a visa or a stay has no such story.
+      { key: 'acquiredBy', label: 'How you got this status', type: 'enum', options: o('birth', 'descent', 'naturalization', 'marriage', 'investment', 'other'),
+        when: { part: 'status', in: ['citizen', 'noncitizen_national'] }, labelBy: { part: 'status', labels: { citizen: 'How you became a citizen' } } },
       { key: 'provenBy', label: 'Proven by', type: 'record', to: ['ids'], many: true, hint: 'The passport, certificate or permit' },
-      { key: 'endedBy', label: 'Ended by', type: 'enum', options: o('renounced', 'revoked', 'expired', 'superseded=Replaced by another status') },
+      { key: 'endedBy', label: 'How it ended', type: 'enum', more: true, options: o('renounced', 'revoked', 'expired', 'superseded=Replaced by another status') },
     ],
     companions: [{ domain: 'ids', label: 'The passport, certificate or permit that proves it' }],
   },
