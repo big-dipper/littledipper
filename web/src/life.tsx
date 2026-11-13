@@ -44,6 +44,7 @@ export type Domain = {
   confirmShare?: boolean;
   /** Entries take linked documents; new ones get this kind. */
   documents?: string;
+  documentsHint?: string;
 };
 export type Rec = {
   id: string; domain: string; title: string; data: Record<string, unknown>; masked: string[]; validFrom: string | null; validTo: string | null;
@@ -777,6 +778,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
           {d.documents && (
             <div className="field">
               <label>Documents</label>
+              {d.documentsHint && <div className="text-muted" style={{ fontSize: 12, marginTop: -2 }}>{d.documentsHint}</div>}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                 <DocTiles docs={docs} size={84} onRemove={removeDoc} />
                 {pending.map((f, i) => (

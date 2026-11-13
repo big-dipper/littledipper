@@ -112,6 +112,8 @@ export type DomainDef = {
   sortBy?: string;
   /** Entries take linked documents (scans, photos, PDFs); new ones get this kind, e.g. 'insurance_card'. */
   documents?: string;
+  /** What belongs in Documents, in a few words: "Offer letter, employment contract, pay stubs". */
+  documentsHint?: string;
   builtIn: boolean;
   schemaVersion: number;
 };
