@@ -331,6 +331,13 @@ async function main() {
     await a.call('DELETE', `/api/data/education/${school.id}`);
     const noHist = await fetch(`${a.base}/api/data/employment/${job.id}/history`, { headers: { authorization: `Bearer ${(await a.call('POST', '/api/keys', { name: 'IDs only', scopes: ['ids:read'] })).secret}` } });
     ok(noHist.status === 403, "history needs the category's read scope");
+    // A date range applies to the date a kind is dated by: a receipt's purchase date, not when it was added.
+    const shop = await org('Range Test Cafe');
+    const rEarly = await a.call('POST', '/api/data/receipts', { data: { merchant: shop, purchased: '2026-08-02', total: { amount: 4, currency: 'USD' } } });
+    const rLate = await a.call('POST', '/api/data/receipts', { data: { merchant: shop, purchased: '2026-11-12', total: { amount: 20.52, currency: 'USD' } } });
+    const inNov = (await a.call('GET', '/api/data/receipts?from=2026-11-11&to=2026-11-13')).items.map((x: any) => x.id);
+    ok(inNov.includes(rLate.id) && !inNov.includes(rEarly.id), 'from/to on receipts filters by the purchase date');
+    for (const x of [rEarly, rLate]) await a.call('DELETE', `/api/data/receipts/${x.id}`);
     // MCP: an assistant works through the same API with its key
     const mcpKey = await a.call('POST', '/api/keys', { name: 'Muse', scopes: ['employment:read', 'employment:write', 'documents:read'] });
     let rpcId = 0;

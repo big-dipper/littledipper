@@ -63,6 +63,20 @@ async function recordOr404(d: DomainDef, id: string) {
   return r as RecordDoc;
 }
 
+/**
+ * ?from=&to= for a category. Kinds dated by one of their own fields (a receipt's purchase date, a transaction's date,
+ * an event's start) are filtered by that day; dated kinds by overlap with when the entry applied.
+ */
+function inRangeOf(d: DomainDef, r: RecordDoc, from?: string, to?: string) {
+  if (!d.sortBy) return inRange(r, from, to);
+  const raw = plainData(r)[d.sortBy];
+  const v = raw && typeof raw === 'object' && 'at' in (raw as object) ? String((raw as { at: unknown }).at) : raw ? String(raw) : '';
+  if (!v) return false;
+  const day = v.slice(0, 10);
+  // A partial date (2026-11) counts as its whole period: it can still fall in the range.
+  return (!from || day >= from.slice(0, day.length)) && (!to || day <= to.slice(0, day.length));
+}
+
 /** Overlap filter for ?from=&to= on dated domains. */
 function inRange(r: RecordDoc, from?: string, to?: string) {
   if (from && r.validTo && r.validTo < from) return false;
@@ -276,7 +290,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     // A party sees what its share covers: all of a category, only what's current, or single entries.
     let recs = sortRecords(d, await recordsOf(d.id)).filter((r) => canSeeRecord(p.key, d, r, isCurrent(d, r)));
     if (q.current === 'true') recs = recs.filter((r) => isCurrent(d, r));
-    if (q.from || q.to) recs = recs.filter((r) => inRange(r, q.from, q.to));
+    if (q.from || q.to) recs = recs.filter((r) => inRangeOf(d, r, q.from, q.to));
     const docs = await documentsByRecord(d.id);
     const label = await actorLabels();
     return { domain: d.id, items: recs.map((r) => { const out = recordOut(d, r); return { ...out, updatedByLabel: label(out.updatedBy), sourceLabel: label(out.source), documents: docs.get(r._id) ?? [] }; }), ...(p.isSession ? { linked: await linkedTitles(d, recs) } : {}) };
