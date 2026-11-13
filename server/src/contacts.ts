@@ -40,7 +40,9 @@ async function askedOf(c: PartyDoc, link: LinkDoc | null) {
 
 export async function partyOut(c: PartyDoc, opts: { detail?: boolean } = {}) {
   const link = await linkFor(c);
-  const status: ContactStatus = c.node && link && link.status !== 'revoked' ? link.status : 'plain';
+  // An assistant is connected while it holds a key; a person on Little Dipper while their link is.
+  const assistantKey = c.type === 'assistant' ? (await ctx.store.find<{ _id: string; revokedAt: string | null }>('apiKeys', { kind: 'app', contactId: c._id })).some((k) => !k.revokedAt) : false;
+  const status: ContactStatus = c.node && link && link.status !== 'revoked' ? link.status : assistantKey ? 'active' : 'plain';
   const g = await whatTheyGet(c._id);
   const live = await liveShareFor(c._id);
   const base = {

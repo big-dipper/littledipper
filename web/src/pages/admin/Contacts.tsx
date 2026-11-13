@@ -10,7 +10,8 @@ import BigDipperBanner from './BigDipperBanner';
 type Req = { _id: string; contactId: string; peerName: string; fromNode: string; requestedFields: string[]; inviteId: string | null };
 
 export const shareSummary = (c: Contact) => {
-  if (!c.node) return '—';
+  if (!c.node && c.type !== 'assistant') return '—';
+  if (c.share.everything) return 'Everything';
   if (c.status === 'pending_in') return 'Not yet';
   const n = c.share.lines.length + Object.keys(c.share.categories).length + c.share.entries.length;
   return c.share.basic ? (n ? `Basic profile + ${n}` : 'Basic profile') : n ? `${n} item${n === 1 ? '' : 's'} only` : 'Nothing';

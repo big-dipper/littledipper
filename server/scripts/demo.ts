@@ -171,6 +171,11 @@ await call('PUT', '/api/public-profile', {
   ],
 });
 
+// ── Muse, an assistant: a party with a share, like anyone Maya shares with ──
+const muse = (await call('POST', '/api/parties', { type: 'assistant', name: 'Muse' })).id as string;
+await call('PUT', `/api/parties/${muse}/share`, { basic: true, categories: { employment: true, education: true, residences: { scope: 'current' }, financial_accounts: true }, write: 'suggest', confirm: true });
+await call('POST', '/api/keys', { party: muse });
+
 // ── Theo, a friend on his own Little Dipper, connected through an invite ──
 await theo.call('POST', '/api/data/residences', { data: { street1: '88 Rose St', city: 'Seattle', region: 'WA', country: 'US', primary: true }, validFrom: '2020-04' });
 await theo.call('POST', '/api/data/contact_methods', { data: { kind: 'phone', value: '(206) 555-0199', primary: true } });
