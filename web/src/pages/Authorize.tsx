@@ -80,7 +80,7 @@ export default function Authorize() {
   return (
     <div data-screen-label="Connect an assistant" style={{ minHeight: '100%', position: 'relative', overflow: 'hidden', padding: '40px clamp(20px,7vw,96px) 64px' }}>
       <Circle style={{ right: -180, top: -140, width: 520, height: 520, background: 'var(--color-accent-2-200)', opacity: 0.7 }} />
-      <div style={{ position: 'relative', maxWidth: 640 }}>
+      <div style={{ position: 'relative', maxWidth: 640, margin: '0 auto' }}>
         <div style={{ marginBottom: 28 }}><Brand name="Little Dipper" /></div>
         {error && !info ? (
           <>

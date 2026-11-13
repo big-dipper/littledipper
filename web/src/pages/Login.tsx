@@ -66,7 +66,7 @@ export default function Login() {
   return (
     <div data-screen-label="Sign in" style={{ minHeight: '100%', position: 'relative', overflow: 'hidden', padding: '64px clamp(20px,7vw,96px)' }}>
       <Circle style={{ right: -120, bottom: -160, width: 480, height: 480, background: 'var(--color-accent-200)', opacity: 0.7 }} />
-      <div style={{ position: 'relative', maxWidth: 420 }}>
+      <div style={{ position: 'relative', maxWidth: 420, margin: '0 auto' }}>
         <div style={{ marginBottom: 48 }}><Brand name={brand} /></div>
         <h1>Sign in</h1>
         <p className="text-muted">Owner access to <strong style={{ color: 'var(--color-text)' }}>{status ? addr(status.address) : '…'}</strong></p>

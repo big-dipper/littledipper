@@ -41,7 +41,7 @@ export default function Connect() {
   return (
     <div style={{ minHeight: '100%', position: 'relative', overflow: 'hidden', padding: '48px clamp(20px,7vw,96px) 64px' }}>
       <Circle style={{ right: -160, top: -120, width: 480, height: 480, background: 'var(--color-accent-2-200)', opacity: 0.7 }} />
-      <div style={{ position: 'relative', maxWidth: 600 }}>
+      <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto' }}>
         <div style={{ marginBottom: 40 }}><Brand name={data.displayName || 'Little Dipper'} /></div>
         {data.valid ? (
           <>

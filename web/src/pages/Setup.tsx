@@ -18,7 +18,7 @@ const HOST: Record<HostTab, { label: string; text: string; cmd: string; out: (a:
   home: { label: 'Home device', text: 'On a Raspberry Pi or NAS with a screen, the link shows on the device. Without a screen, open the device logs or run the CLI over SSH.', cmd: '$ little-dipper claim-link --qr', out: () => 'Scan the QR code with your phone to finish setup', note: 'Anyone who can run a command on the device is treated as the person who deployed it.' },
 };
 
-const STEPS = ['Verify link', 'You', 'Sign-in', 'Done'];
+const STEPS = ['Start', 'You', 'Sign-in', 'Done'];
 
 function StepPills({ step }: { step: number }) {
   return (
@@ -81,7 +81,8 @@ export default function Setup() {
     if (!token || tried.current) return;
     tried.current = true;
     post<{ mode: 'claim' | 'transfer' }>('/api/node/claim', { token })
-      .then((r) => { setMode(r.mode); setVerified('yes'); })
+      // A new node, set up from its link: straight to your name. (A hand-over still gets its own first screen.)
+      .then((r) => { setMode(r.mode); setVerified('yes'); if (r.mode === 'claim') setStep(1); })
       .catch(() => { setVerified('no'); setClaimError(true); setHelp(true); });
   }, [token]);
 
@@ -152,14 +153,14 @@ export default function Setup() {
   const pk = {
     idle: ['var(--color-neutral-300)', 'No passkey yet', 'Your browser will ask for your face, fingerprint, device PIN or a security key.'],
     pending: ['var(--color-accent)', 'Waiting for your device…', 'Confirm on your device.'],
-    done: ['var(--color-accent-2)', 'Passkey created', 'Saved to “This device”. Add more devices later in Settings.'],
+    done: ['var(--color-accent-2)', 'Passkey saved', 'To sign in from another phone or computer too, add it later in Settings → Security.'],
   }[passkey];
 
   return (
     <div data-screen-label="Unclaimed node" style={{ minHeight: '100%', position: 'relative', overflow: 'hidden', padding: '48px clamp(20px,7vw,96px) 64px' }}>
       <Circle style={{ right: -180, top: -140, width: 520, height: 520, background: 'var(--color-accent-2-200)', opacity: 0.7 }} />
       <Circle style={{ right: 120, top: 260, width: 160, height: 160, background: 'var(--color-accent-200)', opacity: 0.8 }} />
-      <div style={{ position: 'relative', maxWidth: 640 }}>
+      <div style={{ position: 'relative', maxWidth: 640, margin: '0 auto' }}>
         <div style={{ marginBottom: 36 }}><Brand name={brand} /></div>
         {step > 0 && !restoring && <StepPills step={step} />}
 
@@ -213,7 +214,7 @@ export default function Setup() {
           </>
         )}
 
-        {step === 1 && (
+        {!restoring && step === 1 && (
           <>
             <h2>Who is this Little Dipper for?</h2>
             <p className="text-muted">The name you go by. You can change it any time.</p>
@@ -225,6 +226,7 @@ export default function Setup() {
                 <button type="submit" className="btn btn-primary" disabled={busy || !form.name.trim()}>Continue</button>
               </div>
             </form>
+            {mode === 'claim' && <button className="btn btn-ghost" onClick={() => setRestoring(true)} style={{ fontSize: 14, marginTop: 18, paddingLeft: 0 }}>Coming back from a backup?</button>}
           </>
         )}
 
@@ -240,6 +242,7 @@ export default function Setup() {
             {passkey === 'done' && (
               <div style={{ marginTop: 22 }}>
                 <h5>Recovery codes</h5>
+                <div className="text-muted" style={{ fontSize: 13, marginTop: 2 }}>Each one can sign in as you. Download them or write them down. Don’t screenshot or share them.</div>
                 <div className="mono" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: 8, fontSize: 14, margin: '10px 0 14px' }}>
                   {codes.map((c) => <div key={c} style={{ background: 'var(--color-neutral-100)', borderRadius: 999, padding: '8px 14px', textAlign: 'center' }}>{c}</div>)}
                 </div>

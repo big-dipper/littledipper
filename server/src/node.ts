@@ -85,6 +85,9 @@ export function descriptor(n: NodeDoc, displayName: string | null, connectReques
     mcp: `${base}/api/mcp`,
     connectRequests,
     claimed: n.claimed,
+    // Lets the page that made the setup code (Big Dipper) see this is the node it was made for, without revealing
+    // it: a hash of the code's hash. Only while unclaimed; gone the moment the node has an owner.
+    ...(!n.claimed && n.claimTokenHash && n.claimMode !== 'transfer' ? { setupCheck: sha256(`ld-setup-check:${n.claimTokenHash}`) } : {}),
     capabilities: [...CAPABILITIES],
   };
 }
