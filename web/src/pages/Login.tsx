@@ -74,7 +74,11 @@ export default function Login() {
         {mode === 'passkey' && (
           <>
             <button className="btn btn-primary" onClick={passkey} disabled={pending} style={{ width: '100%', fontSize: 16, padding: 14, marginTop: 24 }}>{pending ? 'Waiting for your device…' : 'Sign in with passkey'}</button>
-            <button className="btn btn-ghost" onClick={() => { setMode('pw'); setError(''); }} style={{ marginTop: 14 }}>Use password and authenticator code</button>
+            {/* Someone who lost their passkey sees the way back in straight away, not one level down. */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 14 }}>
+              <button className="btn btn-ghost" onClick={() => { setMode('recovery'); setError(''); }}>Lost your passkey? Use a recovery code</button>
+              <button className="btn btn-ghost" onClick={() => { setMode('pw'); setError(''); }}>Use password and authenticator code</button>
+            </div>
           </>
         )}
 
