@@ -1,4 +1,5 @@
 {
+  "epoch": "0.4.0",
   "capabilities": [
     "address-change",
     "assistants",
@@ -21,7 +22,6 @@
   "routes": [
     "DELETE /api/auth/passkeys/{}",
     "DELETE /api/catalog/{}",
-    "DELETE /api/contacts/{}",
     "DELETE /api/copies/{}",
     "DELETE /api/data/{}/{}",
     "DELETE /api/documents/{}",
@@ -31,7 +31,7 @@
     "DELETE /api/federation/links/{}",
     "DELETE /api/keys/{}",
     "DELETE /api/mcp",
-    "DELETE /api/owner/fields/{}",
+    "DELETE /api/parties/{}",
     "DELETE /api/public-profile/avatar",
     "GET /.well-known/little-dipper",
     "GET /.well-known/oauth-authorization-server",
@@ -44,9 +44,6 @@
     "GET /api/big-dipper",
     "GET /api/calendar",
     "GET /api/catalog",
-    "GET /api/contacts",
-    "GET /api/contacts/{}",
-    "GET /api/contacts/{}/grants",
     "GET /api/copies",
     "GET /api/copies/{}",
     "GET /api/copies/{}/download",
@@ -76,10 +73,19 @@
     "GET /api/notifications",
     "GET /api/oauth/request",
     "GET /api/owner",
-    "GET /api/owner/fields",
+    "GET /api/parties",
+    "GET /api/parties/{}",
+    "GET /api/parties/{}/preview",
+    "GET /api/parties/{}/preview/{}",
+    "GET /api/parties/{}/share",
+    "GET /api/profile",
+    "GET /api/profile/basic",
+    "GET /api/profile/suggestions",
     "GET /api/public-profile",
     "GET /api/public-profile/options",
     "GET /api/reviews",
+    "GET /api/tasks",
+    "GET /api/tasks/requests",
     "GET /api/timeline",
     "GET /peer/domains",
     "GET /peer/domains/{}",
@@ -98,12 +104,11 @@
     "OPTIONS /api/mcp",
     "OPTIONS /oauth/register",
     "OPTIONS /oauth/token",
-    "PATCH /api/contacts/{}",
     "PATCH /api/data/{}/{}",
     "PATCH /api/documents/{}",
-    "PATCH /api/keys/{}",
     "PATCH /api/node",
     "PATCH /api/owner",
+    "PATCH /api/parties/{}",
     "POST /api/auth/fallback/disable",
     "POST /api/auth/logout",
     "POST /api/auth/passkeys/options",
@@ -118,8 +123,6 @@
     "POST /api/auth/totp/verify",
     "POST /api/big-dipper/connect",
     "POST /api/catalog",
-    "POST /api/contacts",
-    "POST /api/contacts/{}/invite",
     "POST /api/copies",
     "POST /api/data/{}",
     "POST /api/data/{}/{}/history/{}/restore",
@@ -131,7 +134,6 @@
     "POST /api/documents/{}/suggestions",
     "POST /api/documents/{}/suggestions/{}/accept",
     "POST /api/federation/invites",
-    "POST /api/federation/links/{}/rotate",
     "POST /api/federation/lookup",
     "POST /api/federation/requests",
     "POST /api/federation/requests/{}/accept",
@@ -157,24 +159,27 @@
     "POST /api/notifications/{}/dismiss",
     "POST /api/oauth/authorize",
     "POST /api/owner",
-    "POST /api/owner/fields",
-    "POST /api/owner/fields/{}/reveal",
+    "POST /api/parties",
+    "POST /api/parties/{}/invite",
     "POST /api/reviews/{}/approve",
     "POST /api/reviews/{}/reject",
+    "POST /api/tasks",
+    "POST /api/tasks/requests/{}",
+    "POST /api/tasks/{}/done",
     "POST /oauth/register",
     "POST /oauth/token",
     "POST /peer/address-change",
     "POST /peer/links/changed",
     "POST /peer/links/revoke",
-    "POST /peer/links/rotate",
     "POST /peer/messages",
     "POST /peer/requests",
     "POST /peer/requests/{}/accept",
     "POST /peer/requests/{}/decline",
     "PUT /api/auth/password",
     "PUT /api/big-dipper",
-    "PUT /api/contacts/{}/grants",
-    "PUT /api/owner/fields/{}",
+    "PUT /api/parties/{}/share",
+    "PUT /api/profile/basic",
+    "PUT /api/profile/suggestions",
     "PUT /api/public-profile",
     "PUT /api/public-profile/avatar"
   ],
@@ -186,19 +191,41 @@
           "type": "enum",
           "required": true,
           "options": [
+            "preferred",
             "legal",
-            "birth",
-            "married",
-            "previous_legal",
-            "alias",
-            "nickname",
-            "professional",
-            "religious"
+            "other"
           ]
         },
         "full": {
           "type": "text",
           "required": true
+        },
+        "alsoLegal": {
+          "type": "boolean",
+          "required": false
+        },
+        "otherKind": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "professional",
+            "nickname",
+            "religious",
+            "other"
+          ]
+        },
+        "reason": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "birth",
+            "marriage",
+            "divorce",
+            "adoption",
+            "court_order",
+            "naturalization",
+            "other"
+          ]
         },
         "given": {
           "type": "text",
@@ -215,18 +242,39 @@
         "suffix": {
           "type": "text",
           "required": false
+        }
+      }
+    },
+    "birth": {
+      "dated": false,
+      "parts": {
+        "date": {
+          "type": "date",
+          "required": true
         },
-        "reason": {
-          "type": "enum",
-          "required": false,
-          "options": [
-            "birth",
-            "marriage",
-            "divorce",
-            "court_order",
-            "naturalization",
-            "other"
-          ]
+        "city": {
+          "type": "text",
+          "required": false
+        },
+        "region": {
+          "type": "text",
+          "required": false
+        },
+        "country": {
+          "type": "country",
+          "required": false
+        },
+        "time": {
+          "type": "time",
+          "required": false
+        },
+        "timeZone": {
+          "type": "timezone",
+          "required": false
+        },
+        "asWritten": {
+          "type": "text",
+          "required": false
         }
       }
     },
@@ -239,16 +287,24 @@
           "options": [
             "passport",
             "drivers_license",
-            "state_id",
-            "national_id",
-            "ssn",
-            "tax_id",
-            "visa",
+            "id_card",
+            "tax_number",
+            "other"
+          ]
+        },
+        "otherKind": {
+          "type": "enum",
+          "required": true,
+          "options": [
             "residence_permit",
+            "visa",
             "work_permit",
             "known_traveler",
-            "military_id",
             "birth_certificate",
+            "naturalization_certificate",
+            "citizenship_certificate",
+            "consular_birth_report",
+            "military_id",
             "voter_registration",
             "other"
           ]
@@ -257,15 +313,15 @@
           "type": "text",
           "required": true
         },
+        "expires": {
+          "type": "date",
+          "required": false
+        },
         "issuer": {
           "type": "country",
           "required": false
         },
         "authority": {
-          "type": "text",
-          "required": false
-        },
-        "nameOnDocument": {
           "type": "text",
           "required": false
         },
@@ -277,8 +333,8 @@
           "type": "date",
           "required": false
         },
-        "expires": {
-          "type": "date",
+        "nameOnDocument": {
+          "type": "text",
           "required": false
         }
       }
@@ -295,10 +351,11 @@
           "required": true,
           "options": [
             "citizen",
-            "national",
+            "noncitizen_national",
             "permanent_resident",
             "temporary_resident",
             "visa_holder",
+            "visitor",
             "refugee",
             "asylee",
             "other"
@@ -315,11 +372,25 @@
             "investment",
             "other"
           ]
+        },
+        "provenBy": {
+          "type": "record",
+          "required": false
+        },
+        "endedBy": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "renounced",
+            "revoked",
+            "expired",
+            "superseded"
+          ]
         }
       }
     },
     "contact_methods": {
-      "dated": false,
+      "dated": true,
       "parts": {
         "kind": {
           "type": "enum",
@@ -327,19 +398,27 @@
           "options": [
             "email",
             "phone",
-            "social",
+            "postal",
             "website",
-            "messaging",
-            "other"
+            "social",
+            "messaging"
           ]
-        },
-        "label": {
-          "type": "text",
-          "required": false
         },
         "value": {
           "type": "text",
           "required": true
+        },
+        "address": {
+          "type": "address",
+          "required": true
+        },
+        "service": {
+          "type": "text",
+          "required": true
+        },
+        "label": {
+          "type": "text",
+          "required": false
         },
         "primary": {
           "type": "boolean",
@@ -374,6 +453,10 @@
           "type": "country",
           "required": true
         },
+        "primary": {
+          "type": "boolean",
+          "required": false
+        },
         "ownership": {
           "type": "enum",
           "required": false,
@@ -387,11 +470,7 @@
           ]
         },
         "landlord": {
-          "type": "contact",
-          "required": false
-        },
-        "mailing": {
-          "type": "boolean",
+          "type": "party",
           "required": false
         }
       }
@@ -399,42 +478,50 @@
     "relationships": {
       "dated": true,
       "parts": {
+        "party": {
+          "type": "party",
+          "required": true
+        },
         "relation": {
           "type": "enum",
           "required": true,
           "options": [
             "spouse",
+            "civil_union",
+            "domestic_partner",
             "partner",
-            "ex_spouse",
             "child",
             "parent",
             "sibling",
             "grandparent",
             "grandchild",
             "guardian",
-            "dependent",
-            "emergency_contact",
+            "other_family",
+            "friend",
+            "reference",
+            "colleague",
+            "manager",
+            "mentor",
             "other"
           ]
         },
-        "name": {
-          "type": "text",
-          "required": true
-        },
-        "contact": {
-          "type": "contact",
+        "legallySeparated": {
+          "type": "boolean",
           "required": false
         },
-        "birthDate": {
-          "type": "date",
-          "required": false
+        "endedBy": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "divorce",
+            "death",
+            "annulment",
+            "separation",
+            "other"
+          ]
         },
-        "phone": {
-          "type": "phone",
-          "required": false
-        },
-        "email": {
-          "type": "email",
+        "job": {
+          "type": "record",
           "required": false
         },
         "emergencyContact": {
@@ -467,7 +554,7 @@
           "required": false
         },
         "vet": {
-          "type": "contact",
+          "type": "party",
           "required": false
         }
       }
@@ -480,6 +567,10 @@
           "required": true
         },
         "city": {
+          "type": "text",
+          "required": false
+        },
+        "region": {
           "type": "text",
           "required": false
         },
@@ -522,52 +613,48 @@
           "required": false
         },
         "repeat": {
-          "type": "enum",
-          "required": false,
-          "options": [
-            "daily",
-            "weekly",
-            "monthly",
-            "yearly"
-          ]
-        },
-        "repeatUntil": {
-          "type": "date",
+          "type": "repeat",
           "required": false
         }
       }
     },
-    "life_events": {
-      "dated": true,
+    "tasks": {
+      "dated": false,
       "parts": {
-        "kind": {
-          "type": "enum",
-          "required": false,
-          "options": [
-            "birth",
-            "move",
-            "relationship",
-            "marriage",
-            "divorce",
-            "child",
-            "education",
-            "career",
-            "health",
-            "loss",
-            "achievement",
-            "travel",
-            "other"
-          ]
-        },
         "title": {
           "type": "text",
           "required": true
         },
-        "description": {
-          "type": "longtext",
+        "due": {
+          "type": "date",
           "required": false
         },
-        "place": {
+        "who": {
+          "type": "party",
+          "required": false
+        },
+        "done": {
+          "type": "boolean",
+          "required": false
+        },
+        "doneAt": {
+          "type": "date",
+          "required": false
+        },
+        "from": {
+          "type": "party",
+          "required": false
+        },
+        "answer": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "asked",
+            "accepted",
+            "not_now"
+          ]
+        },
+        "ref": {
           "type": "text",
           "required": false
         }
@@ -577,7 +664,7 @@
       "dated": true,
       "parts": {
         "employer": {
-          "type": "text",
+          "type": "party",
           "required": true
         },
         "title": {
@@ -602,32 +689,21 @@
             "other"
           ]
         },
-        "remote": {
-          "type": "boolean",
-          "required": false
+        "arrangement": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "onsite",
+            "hybrid",
+            "remote"
+          ]
         },
-        "city": {
-          "type": "text",
-          "required": false
-        },
-        "country": {
-          "type": "country",
-          "required": false
-        },
-        "workAddress": {
-          "type": "text",
-          "required": false
-        },
-        "employerPhone": {
-          "type": "phone",
+        "location": {
+          "type": "address",
           "required": false
         },
         "supervisor": {
-          "type": "text",
-          "required": false
-        },
-        "supervisorContact": {
-          "type": "contact",
+          "type": "party",
           "required": false
         },
         "mayContact": {
@@ -646,6 +722,18 @@
           "type": "money",
           "required": false
         },
+        "endedHow": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "resigned",
+            "laid_off",
+            "contract_ended",
+            "terminated",
+            "retired",
+            "other"
+          ]
+        },
         "reasonForLeaving": {
           "type": "text",
           "required": false
@@ -660,7 +748,7 @@
       "dated": true,
       "parts": {
         "institution": {
-          "type": "text",
+          "type": "party",
           "required": true
         },
         "level": {
@@ -686,8 +774,17 @@
           "type": "text",
           "required": false
         },
-        "completed": {
-          "type": "boolean",
+        "outcome": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "graduated",
+            "attending",
+            "withdrew"
+          ]
+        },
+        "conferredOn": {
+          "type": "date",
           "required": false
         },
         "gpa": {
@@ -698,12 +795,8 @@
           "type": "text",
           "required": false
         },
-        "city": {
-          "type": "text",
-          "required": false
-        },
-        "country": {
-          "type": "country",
+        "campus": {
+          "type": "address",
           "required": false
         },
         "studentId": {
@@ -730,7 +823,7 @@
           "required": true
         },
         "issuer": {
-          "type": "text",
+          "type": "party",
           "required": true
         },
         "number": {
@@ -738,7 +831,7 @@
           "required": false
         },
         "region": {
-          "type": "text",
+          "type": "region",
           "required": false
         },
         "issued": {
@@ -755,68 +848,241 @@
         }
       }
     },
-    "military": {
+    "allergies": {
       "dated": true,
       "parts": {
-        "country": {
-          "type": "country",
-          "required": true
-        },
-        "branch": {
+        "substance": {
           "type": "text",
           "required": true
         },
-        "rank": {
+        "reaction": {
           "type": "text",
           "required": false
         },
-        "serviceNumber": {
-          "type": "text",
-          "required": false
-        },
-        "discharge": {
+        "severity": {
           "type": "enum",
           "required": false,
           "options": [
-            "honorable",
-            "general",
-            "other_than_honorable",
-            "medical",
-            "still_serving",
-            "other"
+            "mild",
+            "moderate",
+            "severe",
+            "life_threatening"
           ]
+        },
+        "accordingTo": {
+          "type": "party",
+          "required": false
         }
       }
     },
-    "health": {
+    "conditions": {
       "dated": true,
       "parts": {
-        "kind": {
-          "type": "enum",
-          "required": true,
-          "options": [
-            "allergy",
-            "condition",
-            "medication",
-            "immunization",
-            "procedure",
-            "blood_type",
-            "measurement",
-            "directive",
-            "organ_donor",
-            "other"
-          ]
-        },
         "name": {
           "type": "text",
           "required": true
         },
-        "detail": {
-          "type": "longtext",
+        "status": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "suspected",
+            "provisional",
+            "confirmed",
+            "ruled_out",
+            "resolved"
+          ]
+        },
+        "accordingTo": {
+          "type": "party",
           "required": false
         },
-        "provider": {
-          "type": "contact",
+        "diagnosed": {
+          "type": "date",
+          "required": false
+        }
+      }
+    },
+    "medications": {
+      "dated": true,
+      "parts": {
+        "name": {
+          "type": "text",
+          "required": true
+        },
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "prescription",
+            "over_the_counter",
+            "supplement",
+            "herbal",
+            "homeopathic",
+            "other"
+          ]
+        },
+        "dose": {
+          "type": "text",
+          "required": false
+        },
+        "frequency": {
+          "type": "text",
+          "required": false
+        },
+        "reason": {
+          "type": "text",
+          "required": false
+        },
+        "prescriber": {
+          "type": "party",
+          "required": false
+        }
+      }
+    },
+    "immunizations": {
+      "dated": false,
+      "parts": {
+        "vaccine": {
+          "type": "text",
+          "required": true
+        },
+        "date": {
+          "type": "date",
+          "required": true
+        },
+        "doseNumber": {
+          "type": "number",
+          "required": false
+        },
+        "lot": {
+          "type": "text",
+          "required": false
+        },
+        "givenBy": {
+          "type": "party",
+          "required": false
+        }
+      }
+    },
+    "treatments": {
+      "dated": true,
+      "parts": {
+        "name": {
+          "type": "text",
+          "required": true
+        },
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "surgery",
+            "procedure",
+            "physical_therapy",
+            "acupuncture",
+            "chiropractic",
+            "massage",
+            "talk_therapy",
+            "other"
+          ]
+        },
+        "by": {
+          "type": "party",
+          "required": false
+        },
+        "condition": {
+          "type": "record",
+          "required": false
+        }
+      }
+    },
+    "measurements": {
+      "dated": false,
+      "parts": {
+        "what": {
+          "type": "text",
+          "required": true
+        },
+        "value": {
+          "type": "text",
+          "required": true
+        },
+        "unit": {
+          "type": "text",
+          "required": false
+        },
+        "at": {
+          "type": "datetime",
+          "required": true
+        },
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "home",
+            "lab",
+            "visit",
+            "device"
+          ]
+        },
+        "by": {
+          "type": "party",
+          "required": false
+        },
+        "range": {
+          "type": "text",
+          "required": false
+        },
+        "relatedTo": {
+          "type": "record",
+          "required": false
+        }
+      }
+    },
+    "health_basics": {
+      "dated": false,
+      "parts": {
+        "bloodType": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "A+",
+            "A-",
+            "B+",
+            "B-",
+            "AB+",
+            "AB-",
+            "O+",
+            "O-",
+            "unknown"
+          ]
+        },
+        "organDonor": {
+          "type": "boolean",
+          "required": false
+        },
+        "doctor": {
+          "type": "party",
+          "required": false
+        },
+        "pharmacy": {
+          "type": "party",
+          "required": false
+        },
+        "hospital": {
+          "type": "party",
+          "required": false
+        },
+        "devices": {
+          "type": "text",
+          "required": false
+        },
+        "directive": {
+          "type": "record",
+          "required": false
+        },
+        "careWishes": {
+          "type": "longtext",
           "required": false
         }
       }
@@ -839,12 +1105,11 @@
             "travel",
             "pet",
             "umbrella",
-            "business",
             "other"
           ]
         },
-        "provider": {
-          "type": "text",
+        "insurer": {
+          "type": "party",
           "required": true
         },
         "policyNumber": {
@@ -863,16 +1128,24 @@
           "type": "money",
           "required": false
         },
-        "coverage": {
-          "type": "text",
+        "coverageAmount": {
+          "type": "money",
           "required": false
         },
-        "phone": {
-          "type": "phone",
+        "deductible": {
+          "type": "money",
+          "required": false
+        },
+        "coversPeople": {
+          "type": "party",
+          "required": false
+        },
+        "coversThings": {
+          "type": "record",
           "required": false
         },
         "agent": {
-          "type": "contact",
+          "type": "party",
           "required": false
         }
       }
@@ -898,50 +1171,294 @@
           ]
         },
         "institution": {
-          "type": "text",
+          "type": "party",
           "required": true
         },
         "nickname": {
           "type": "text",
           "required": false
         },
-        "last4": {
+        "number": {
+          "type": "text",
+          "required": false
+        },
+        "cardLast4": {
           "type": "last4",
+          "required": false
+        },
+        "routingNumber": {
+          "type": "text",
+          "required": false
+        },
+        "account": {
+          "type": "record",
+          "required": false
+        },
+        "finances": {
+          "type": "record",
           "required": false
         },
         "balance": {
           "type": "money",
           "required": false
         },
-        "jointWith": {
+        "balanceAsOf": {
+          "type": "date",
+          "required": false
+        },
+        "ownedWith": {
+          "type": "party",
+          "required": false
+        },
+        "status": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "current",
+            "past_due",
+            "charged_off",
+            "in_collections",
+            "settled",
+            "paid_in_full",
+            "closed"
+          ]
+        },
+        "statusSince": {
+          "type": "date",
+          "required": false
+        },
+        "firstDelinquency": {
+          "type": "date",
+          "required": false
+        },
+        "collector": {
+          "type": "party",
+          "required": false
+        },
+        "debtOwner": {
+          "type": "party",
+          "required": false
+        },
+        "collectorReference": {
           "type": "text",
+          "required": false
+        },
+        "claimed": {
+          "type": "money",
+          "required": false
+        },
+        "claimedAsOf": {
+          "type": "date",
+          "required": false
+        },
+        "dispute": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "open",
+            "validation_requested",
+            "disputed",
+            "payment_plan"
+          ]
+        },
+        "judgment": {
+          "type": "record",
           "required": false
         }
       }
     },
-    "income": {
-      "dated": true,
+    "transactions": {
+      "dated": false,
       "parts": {
-        "source": {
-          "type": "text",
+        "date": {
+          "type": "date",
           "required": true
         },
-        "kind": {
+        "direction": {
           "type": "enum",
-          "required": false,
+          "required": true,
           "options": [
-            "salary",
-            "self_employment",
-            "investment",
-            "rental",
-            "pension",
-            "benefits",
-            "other"
+            "out",
+            "in",
+            "transfer"
           ]
         },
         "amount": {
           "type": "money",
           "required": true
+        },
+        "counterparty": {
+          "type": "party",
+          "required": true
+        },
+        "category": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "income",
+            "housing",
+            "utilities",
+            "groceries",
+            "dining",
+            "transport",
+            "health",
+            "insurance",
+            "debt",
+            "childcare",
+            "education",
+            "shopping",
+            "personal",
+            "entertainment",
+            "travel",
+            "gifts",
+            "family",
+            "savings",
+            "fees",
+            "taxes",
+            "refund",
+            "cash",
+            "other"
+          ]
+        },
+        "account": {
+          "type": "record",
+          "required": false
+        },
+        "toAccount": {
+          "type": "record",
+          "required": false
+        },
+        "method": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "card",
+            "bank_transfer",
+            "direct_deposit",
+            "check",
+            "cash",
+            "app",
+            "benefits_card",
+            "autopay",
+            "other"
+          ]
+        },
+        "description": {
+          "type": "text",
+          "required": false
+        },
+        "reference": {
+          "type": "text",
+          "required": false
+        },
+        "entry": {
+          "type": "record",
+          "required": false
+        }
+      }
+    },
+    "income": {
+      "dated": false,
+      "parts": {
+        "received": {
+          "type": "date",
+          "required": true
+        },
+        "amount": {
+          "type": "money",
+          "required": true
+        },
+        "kind": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "wages",
+            "bonus",
+            "overtime",
+            "tips",
+            "cash_work",
+            "self_employment",
+            "gig",
+            "business",
+            "sales",
+            "interest",
+            "dividends",
+            "capital_gains",
+            "crypto",
+            "rental",
+            "royalties",
+            "pension",
+            "retirement_withdrawal",
+            "social_security",
+            "unemployment",
+            "disability",
+            "food_assistance",
+            "cash_assistance",
+            "tax_credit",
+            "benefits",
+            "child_support",
+            "alimony",
+            "family_help",
+            "gift",
+            "prize",
+            "scholarship",
+            "other"
+          ]
+        },
+        "payer": {
+          "type": "party",
+          "required": true
+        },
+        "taxForm": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "w2",
+            "nec",
+            "k",
+            "misc",
+            "int",
+            "div",
+            "b",
+            "r",
+            "g",
+            "ssa",
+            "k1",
+            "other",
+            "none"
+          ]
+        },
+        "how": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "direct_deposit",
+            "check",
+            "cash",
+            "app",
+            "card",
+            "other"
+          ]
+        },
+        "gross": {
+          "type": "money",
+          "required": false
+        },
+        "periodStart": {
+          "type": "date",
+          "required": false
+        },
+        "periodEnd": {
+          "type": "date",
+          "required": false
+        },
+        "source": {
+          "type": "record",
+          "required": false
+        },
+        "paidInto": {
+          "type": "record",
+          "required": false
         }
       }
     },
@@ -953,7 +1470,7 @@
           "required": true
         },
         "jurisdiction": {
-          "type": "text",
+          "type": "region",
           "required": true
         },
         "filingStatus": {
@@ -964,9 +1481,13 @@
             "married_joint",
             "married_separate",
             "head_of_household",
-            "widow",
+            "qualifying_surviving_spouse",
             "other"
           ]
+        },
+        "dependents": {
+          "type": "party",
+          "required": false
         },
         "agi": {
           "type": "money",
@@ -981,156 +1502,7 @@
           "required": false
         },
         "preparer": {
-          "type": "contact",
-          "required": false
-        }
-      }
-    },
-    "vehicles": {
-      "dated": true,
-      "parts": {
-        "kind": {
-          "type": "enum",
-          "required": false,
-          "options": [
-            "car",
-            "motorcycle",
-            "truck",
-            "rv",
-            "boat",
-            "bicycle",
-            "other"
-          ]
-        },
-        "make": {
-          "type": "text",
-          "required": true
-        },
-        "model": {
-          "type": "text",
-          "required": true
-        },
-        "year": {
-          "type": "number",
-          "required": false
-        },
-        "color": {
-          "type": "text",
-          "required": false
-        },
-        "vin": {
-          "type": "text",
-          "required": false
-        },
-        "plate": {
-          "type": "text",
-          "required": false
-        },
-        "plateRegion": {
-          "type": "text",
-          "required": false
-        },
-        "registrationExpires": {
-          "type": "date",
-          "required": false
-        }
-      }
-    },
-    "property": {
-      "dated": true,
-      "parts": {
-        "kind": {
-          "type": "enum",
-          "required": false,
-          "options": [
-            "home",
-            "land",
-            "electronics",
-            "jewelry",
-            "art",
-            "instrument",
-            "collectible",
-            "other"
-          ]
-        },
-        "name": {
-          "type": "text",
-          "required": true
-        },
-        "location": {
-          "type": "text",
-          "required": false
-        },
-        "serialNumber": {
-          "type": "text",
-          "required": false
-        },
-        "purchasePrice": {
-          "type": "money",
-          "required": false
-        },
-        "estimatedValue": {
-          "type": "money",
-          "required": false
-        }
-      }
-    },
-    "memberships": {
-      "dated": true,
-      "parts": {
-        "kind": {
-          "type": "enum",
-          "required": false,
-          "options": [
-            "frequent_flyer",
-            "hotel",
-            "loyalty",
-            "club",
-            "association",
-            "union",
-            "subscription",
-            "other"
-          ]
-        },
-        "organization": {
-          "type": "text",
-          "required": true
-        },
-        "memberNumber": {
-          "type": "text",
-          "required": false
-        },
-        "tier": {
-          "type": "text",
-          "required": false
-        },
-        "cost": {
-          "type": "money",
-          "required": false
-        }
-      }
-    },
-    "online_accounts": {
-      "dated": true,
-      "parts": {
-        "service": {
-          "type": "text",
-          "required": true
-        },
-        "username": {
-          "type": "text",
-          "required": false
-        },
-        "url": {
-          "type": "url",
-          "required": false
-        },
-        "twoFactor": {
-          "type": "boolean",
-          "required": false
-        },
-        "recoveryHint": {
-          "type": "text",
+          "type": "party",
           "required": false
         }
       }
@@ -1145,28 +1517,48 @@
             "will",
             "power_of_attorney",
             "healthcare_proxy",
+            "advance_directive",
             "trust",
             "beneficiary",
             "prenup",
             "court_order",
-            "deed",
             "other"
           ]
         },
         "title": {
           "type": "text",
-          "required": true
+          "required": false
         },
         "attorney": {
-          "type": "contact",
+          "type": "party",
+          "required": false
+        },
+        "executors": {
+          "type": "party",
+          "required": false
+        },
+        "beneficiaries": {
+          "type": "party",
+          "required": false
+        },
+        "agents": {
+          "type": "party",
+          "required": false
+        },
+        "trustees": {
+          "type": "party",
+          "required": false
+        },
+        "guardians": {
+          "type": "party",
           "required": false
         },
         "originalLocation": {
           "type": "text",
           "required": false
         },
-        "parties": {
-          "type": "longtext",
+        "witnesses": {
+          "type": "party",
           "required": false
         }
       }
@@ -1175,7 +1567,7 @@
       "dated": false,
       "parts": {
         "merchant": {
-          "type": "text",
+          "type": "party",
           "required": false
         },
         "purchased": {
@@ -1251,8 +1643,8 @@
             "other"
           ]
         },
-        "cardLast4": {
-          "type": "last4",
+        "paidWith": {
+          "type": "record",
           "required": false
         },
         "orderNumber": {
@@ -1266,40 +1658,167 @@
         "warrantyUntil": {
           "type": "date",
           "required": false
-        },
-        "merchantUrl": {
-          "type": "url",
-          "required": false
-        },
-        "capturedVia": {
-          "type": "enum",
-          "required": false,
-          "options": [
-            "manual",
-            "upload",
-            "email",
-            "assistant",
-            "merchant"
-          ]
         }
       }
     },
-    "preferences": {
-      "dated": false,
+    "vehicles": {
+      "dated": true,
       "parts": {
-        "category": {
+        "kind": {
           "type": "enum",
-          "required": true,
+          "required": false,
           "options": [
-            "clothing",
-            "food",
-            "drink",
-            "gifts",
-            "travel",
-            "communication",
-            "accessibility",
-            "entertainment",
-            "work",
+            "car",
+            "motorcycle",
+            "truck",
+            "rv",
+            "boat",
+            "bicycle",
+            "other"
+          ]
+        },
+        "make": {
+          "type": "text",
+          "required": true
+        },
+        "model": {
+          "type": "text",
+          "required": true
+        },
+        "year": {
+          "type": "number",
+          "required": false
+        },
+        "color": {
+          "type": "text",
+          "required": false
+        },
+        "vin": {
+          "type": "text",
+          "required": false
+        },
+        "plate": {
+          "type": "text",
+          "required": false
+        },
+        "registeredIn": {
+          "type": "region",
+          "required": false
+        },
+        "registrationExpires": {
+          "type": "date",
+          "required": false
+        },
+        "heldAs": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "owned",
+            "financed",
+            "leased",
+            "company"
+          ]
+        },
+        "ownedWith": {
+          "type": "party",
+          "required": false
+        }
+      }
+    },
+    "real_estate": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "house",
+            "condo",
+            "townhouse",
+            "mobile_home",
+            "multi_family",
+            "land",
+            "commercial",
+            "other"
+          ]
+        },
+        "use": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "home",
+            "rental",
+            "vacation",
+            "investment",
+            "other"
+          ]
+        },
+        "address": {
+          "type": "address",
+          "required": true
+        },
+        "name": {
+          "type": "text",
+          "required": false
+        },
+        "livesHere": {
+          "type": "record",
+          "required": false
+        },
+        "heldAs": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "sole",
+            "joint",
+            "tenancy_in_common",
+            "trust",
+            "company"
+          ]
+        },
+        "ownedWith": {
+          "type": "party",
+          "required": false
+        },
+        "yourShare": {
+          "type": "number",
+          "required": false
+        },
+        "parcelId": {
+          "type": "text",
+          "required": false
+        },
+        "purchasePrice": {
+          "type": "money",
+          "required": false
+        },
+        "value": {
+          "type": "money",
+          "required": false
+        },
+        "valueAsOf": {
+          "type": "date",
+          "required": false
+        },
+        "valuedBy": {
+          "type": "party",
+          "required": false
+        }
+      }
+    },
+    "valuables": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "jewelry",
+            "art",
+            "instrument",
+            "electronics",
+            "collectible",
+            "copyright",
             "other"
           ]
         },
@@ -1307,8 +1826,86 @@
           "type": "text",
           "required": true
         },
+        "keptAt": {
+          "type": "record",
+          "required": false
+        },
         "value": {
+          "type": "money",
+          "required": false
+        },
+        "valueAsOf": {
+          "type": "date",
+          "required": false
+        },
+        "serialNumber": {
           "type": "text",
+          "required": false
+        },
+        "ownedWith": {
+          "type": "party",
+          "required": false
+        },
+        "purchasePrice": {
+          "type": "money",
+          "required": false
+        },
+        "receipt": {
+          "type": "record",
+          "required": false
+        },
+        "valuedBy": {
+          "type": "party",
+          "required": false
+        }
+      }
+    },
+    "memberships": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "frequent_flyer",
+            "hotel",
+            "loyalty",
+            "club",
+            "association",
+            "union",
+            "religious",
+            "political",
+            "subscription",
+            "other"
+          ]
+        },
+        "organization": {
+          "type": "party",
+          "required": true
+        },
+        "memberNumber": {
+          "type": "text",
+          "required": false
+        },
+        "tier": {
+          "type": "text",
+          "required": false
+        },
+        "cost": {
+          "type": "money",
+          "required": false
+        },
+        "renewsOn": {
+          "type": "date",
+          "required": false
+        }
+      }
+    },
+    "notes": {
+      "dated": false,
+      "parts": {
+        "text": {
+          "type": "longtext",
           "required": true
         }
       }

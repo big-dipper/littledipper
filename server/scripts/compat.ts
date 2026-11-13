@@ -20,7 +20,12 @@ import type { PartDef } from '../src/domains/types.js';
 import { CAPABILITIES } from '../src/node.js';
 
 type Part = { type: string; required: boolean; deprecated?: true; options?: string[]; of?: Record<string, Part> };
-type Contract = { capabilities: string[]; routes: string[]; domains: Record<string, { dated: boolean; parts: Record<string, Part> }> };
+/**
+ * The contract was reset once, when the beta went live with 0.4.0 (Nov 2026). From then on it only grows: a contract
+ * from before the reset (no epoch) is never compared against.
+ */
+const EPOCH = '0.4.0';
+type Contract = { epoch?: string; capabilities: string[]; routes: string[]; domains: Record<string, { dated: boolean; parts: Record<string, Part> }> };
 
 const FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../compat/contract.json');
 const REPO_PATH = 'server/compat/contract.json';
@@ -41,6 +46,7 @@ async function current(): Promise<Contract> {
   const app = await buildApp({ onRoute: (m, url) => { if (m !== 'HEAD') routes.add(`${m} ${url.replace(/:[A-Za-z_]+/g, '{}')}`); } });
   await app.close();
   return {
+    epoch: EPOCH,
     capabilities: [...CAPABILITIES].sort(),
     routes: [...routes].sort(),
     domains: Object.fromEntries(BUILT_IN_DOMAINS.map((d) => [d.id, { dated: d.dated, parts: partsOf(d.parts) }])),
@@ -85,10 +91,11 @@ async function main() {
   const committed: Contract | null = existsSync(FILE) ? JSON.parse(readFileSync(FILE, 'utf8')) : null;
 
   const problems: string[] = [];
-  if (committed) problems.push(...breaks(committed, now));
+  if (committed && committed.epoch === EPOCH) problems.push(...breaks(committed, now));
   const baseline = base ? fromRef(base) : null;
   if (base && !baseline) console.log(`No contract at ${base} yet; checking against the committed one only.`);
-  if (baseline) problems.push(...breaks(baseline, now).filter((p) => !problems.includes(p)));
+  if (baseline && baseline.epoch !== EPOCH) console.log(`The contract at ${base} is from before the ${EPOCH} reset; not comparing with it.`);
+  if (baseline && baseline.epoch === EPOCH) problems.push(...breaks(baseline, now).filter((p) => !problems.includes(p)));
 
   if (problems.length) {
     console.error(`\n✗ ${problems.length} breaking ${problems.length === 1 ? 'change' : 'changes'} (see docs/COMPATIBILITY.md):\n`);
