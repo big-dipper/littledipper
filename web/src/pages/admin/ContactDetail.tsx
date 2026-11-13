@@ -4,6 +4,7 @@ import { ago, copy, del, displayMethod, firstName, get, initials, patch, post, s
 import { Confirm, Dialog, ErrorNote, Loading, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
+import AssistantPanel from './AssistantPanel';
 import { fetchCatalog, fmtRange, money, PartialDate, RecordEditor, Select, useContactsLite, type Rec } from '../../life';
 import { CopyList, SendCopy } from './Copies';
 import SharedWithYou from './SharedWithYou';
@@ -32,6 +33,7 @@ export default function ContactDetail() {
   const fields = fieldsResp.items;
   // An organisation goes by its whole name: "Remove Harbor Credit Union", never "Remove Harbor".
   const isOrg = c.type === 'organisation';
+  const isAssistant = c.type === 'assistant';
   const first = isOrg ? c.name : firstName(c.name);
   const isNode = !!c.node;
   const s = c.status;
@@ -80,8 +82,8 @@ export default function ContactDetail() {
         <div style={{ flex: 1, minWidth: 220 }}>
           <h1 style={{ margin: 0 }}>{c.name}</h1>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
-            <span className={`tag ${isNode ? 'tag-accent-2' : 'tag-neutral'}`}>{isNode ? 'On Little Dipper' : isOrg ? 'Organisation' : 'Person'}</span>
-            <span className={`tag ${STATUS[s][1]}`}>{STATUS[s][0]}</span>
+            <span className={`tag ${isNode ? 'tag-accent-2' : 'tag-neutral'}`}>{isNode ? 'On Little Dipper' : isOrg ? 'Organisation' : isAssistant ? 'Assistant' : 'Person'}</span>
+            {!isAssistant && <span className={`tag ${STATUS[s][1]}`}>{STATUS[s][0]}</span>}
             <span className="text-muted" style={{ fontFamily: isNode ? 'var(--mono)' : 'inherit', fontSize: 12 }}>{sub}</span>
             {c.node?.nodeId && (
               <span className="text-muted" style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>
@@ -92,7 +94,7 @@ export default function ContactDetail() {
           </div>
         </div>
         {/* One owner per node: Little Dipper is for people, so organisations are never invited to run one. */}
-        {!isNode && !isOrg && <button className="btn btn-secondary" onClick={invite}>Invite to Little Dipper</button>}
+        {!isNode && !isOrg && !isAssistant && <button className="btn btn-secondary" onClick={invite}>Invite to Little Dipper</button>}
         {isNode && s === 'active' && <Link className="btn btn-primary" to={`/admin/messages/${c.id}`}>Message</Link>}
       </div>
 
@@ -112,7 +114,9 @@ export default function ContactDetail() {
           )}
 
           {/* What they see: first, under their name, at any width. One editor; every change a specific one. */}
-          {isNode && s === 'active' && <ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} onPreview={() => setPreview(true)} />}
+          {/* An assistant: what it can change, Everything, until when, its connection. Then the same editor as anyone. */}
+          {isAssistant && <div style={{ marginTop: 22 }}><AssistantPanel c={c} onShare={(g) => setData({ ...c, share: g })} /></div>}
+          {((isNode && s === 'active') || (isAssistant && !c.share.everything)) && <ContactAccess c={c} fields={fields} first={first} onGrants={(g) => setData({ ...c, share: g })} onPreview={() => setPreview(true)} />}
           {preview && catalog && <AsTheySee partyId={c.id} first={first} catalog={catalog} onClose={() => setPreview(false)} />}
 
           {/* One column, top to bottom, like Home: what they see, how you know them, their details, what they share, then the rest. */}
@@ -120,7 +124,7 @@ export default function ContactDetail() {
             <div style={{ display: 'grid', gap: 22 }}>
               {catalog && <BetweenYou c={c} />}
               {/* How you know someone (spouse, mentor…) is about people; with an organisation, Between you says it. */}
-              {catalog && !isOrg && <HowYouKnow partyId={c.id} first={first} catalog={catalog} notes={isNode ? { text: c.notes, save: (notes) => run(() => patch(`/api/parties/${c.id}`, { notes }), 'Saved').then(reload) } : undefined} />}
+              {catalog && !isOrg && !isAssistant && <HowYouKnow partyId={c.id} first={first} catalog={catalog} notes={isNode ? { text: c.notes, save: (notes) => run(() => patch(`/api/parties/${c.id}`, { notes }), 'Saved').then(reload) } : undefined} />}
               {/* One contact card: what they share (kept up to date by them), plus anything you added yourself. */}
               <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -216,7 +220,7 @@ export default function ContactDetail() {
   );
 }
 
-type Edit = { name: string; type: 'person' | 'organisation'; birthDate: string; notes: string; methods: ContactMethod[] };
+type Edit = { name: string; type: 'person' | 'organisation' | 'assistant'; birthDate: string; notes: string; methods: ContactMethod[] };
 const KIND_LABEL: Record<ContactMethod['kind'], string> = { email: 'Email', phone: 'Phone', postal: 'Postal address', website: 'Website', social: 'Social', messaging: 'Messaging' };
 const STRING_KINDS: ContactMethod['kind'][] = ['email', 'phone', 'website', 'social', 'messaging'];
 function saveContact(id: string, e: Edit) {

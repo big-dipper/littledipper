@@ -91,7 +91,7 @@ export default function ContactAccess({ c, fields, first, onGrants, onPreview }:
           <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onPreview}>See it as {first} does</button>
         </div>
         <div className="card-title" style={{ fontSize: 22, marginTop: 4 }}>{summary}</div>
-        <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>Changes apply right away. {first}’s Little Dipper picks them up on its next sync, and every read is logged in your activity.</div>
+        <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>Changes apply right away. {c.type === 'assistant' ? `${first} gets them on its next request` : `${first}’s Little Dipper picks them up on its next sync`}, and every read is logged in your activity.</div>
       </div>
 
       {/* Profile */}

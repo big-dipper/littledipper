@@ -3,7 +3,7 @@ import { ctx } from './ctx.js';
 import { fingerprint, newId } from './crypto.js';
 import { issueKey } from './auth.js';
 import { linesFor, PROFILE_LINES } from './profile.js';
-import { describeEntries, partiesSharing, whatTheyGet } from './shares.js';
+import { describeEntries, liveShareFor, partiesSharing, whatTheyGet } from './shares.js';
 import type { SharedDomain } from './domains/sharing.js';
 import { displayAddr } from './node.js';
 import type { ContactMethod } from './methods.js';
@@ -42,10 +42,11 @@ export async function partyOut(c: PartyDoc, opts: { detail?: boolean } = {}) {
   const link = await linkFor(c);
   const status: ContactStatus = c.node && link && link.status !== 'revoked' ? link.status : 'plain';
   const g = await whatTheyGet(c._id);
+  const live = await liveShareFor(c._id);
   const base = {
     id: c._id, type: c.type, name: c.name, status,
     node: c.node && link ? { url: displayAddr(link.peerUrl), nodeId: link.peerNodeId, linkId: link._id } : null,
-    share: { basic: g.basic, lines: g.lines, categories: g.categories, entries: await describeEntries(g.entries) },
+    share: { basic: g.basic, lines: g.lines, categories: g.categories, entries: await describeEntries(g.entries), write: live?.write ?? 'none', everything: live?.everything ?? null, until: live?.expiresAt ?? null },
     lastActivity: await lastActivityOf(c, link), createdAt: c.createdAt,
     methods: c.methods, affiliations: c.affiliations ?? [], ...(c.birthDate ? { birthDate: c.birthDate } : {}),
   };

@@ -24,7 +24,7 @@ export default function Contacts() {
   const { refresh } = useAdmin();
   const { run } = useAction();
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<'all' | 'family' | 'node' | 'person' | 'organisation'>('all');
+  const [filter, setFilter] = useState<'all' | 'family' | 'node' | 'person' | 'organisation' | 'assistant'>('all');
   // ?connect=<invite or address>: someone's invite, opened from their page or after setup, ready to send.
   const [params, setParams] = useSearchParams();
   const [connect] = useState(() => params.get('connect') || '');
@@ -88,7 +88,7 @@ export default function Contacts() {
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '24px 0 12px', flexWrap: 'wrap' }}>
         <input className="input" aria-label="Search relationships" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 320 }} />
-        <Pills value={filter} options={[['all', 'All'], ['family', 'Family'], ['node', 'On Little Dipper'], ['person', 'People'], ['organisation', 'Organisations']]} onChange={setFilter} />
+        <Pills value={filter} options={[['all', 'All'], ['family', 'Family'], ['node', 'On Little Dipper'], ['person', 'People'], ['organisation', 'Organisations'], ['assistant', 'Assistants']]} onChange={setFilter} />
       </div>
       {!data ? <Loading /> : (
         <div style={{ overflowX: 'auto' }}>
@@ -104,7 +104,7 @@ export default function Contacts() {
                       <div><div style={{ fontWeight: 600 }}>{c.name}</div><div className="text-muted" style={{ fontSize: 12, fontFamily: c.node ? 'var(--mono)' : 'inherit' }}>{sub}</div></div>
                     </div></td>
                     <td><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {(rels?.by.get(c.id) ?? [c.type === 'organisation' ? 'Organisation' : 'Person']).map((l) => <span key={l} className="tag tag-neutral">{l}</span>)}
+                      {(rels?.by.get(c.id) ?? [c.type === 'organisation' ? 'Organisation' : c.type === 'assistant' ? 'Assistant' : 'Person']).map((l) => <span key={l} className="tag tag-neutral">{l}</span>)}
                       {c.node && <span className="tag tag-accent-2">Little Dipper</span>}
                     </div></td>
                     <td><span className={`tag ${STATUS[c.status][1]}`}>{STATUS[c.status][0]}</span></td>

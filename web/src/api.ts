@@ -44,10 +44,10 @@ export type ContactMethod = {
 export type ContactStatus = 'plain' | 'pending_in' | 'pending_out' | 'active';
 /** A person or organisation in the owner's life. The screens still call them contacts. */
 export type Party = {
-  id: string; type: 'person' | 'organisation'; name: string; status: ContactStatus;
+  id: string; type: 'person' | 'organisation' | 'assistant'; name: string; status: ContactStatus;
   node: { url: string; nodeId: string; linkId: string } | null;
   /** What they get: the basic profile, extra lines, whole categories and single entries. */
-  share: { basic: boolean; lines: string[]; categories: Record<string, { domain: string; scope: 'all' | 'current'; includeSecret: boolean }>; entries: { id: string; includeSecret: boolean; title?: string; domain?: string; domainLabel?: string }[] };
+  share: { basic: boolean; lines: string[]; categories: Record<string, { domain: string; scope: 'all' | 'current'; includeSecret: boolean }>; entries: { id: string; includeSecret: boolean; title?: string; domain?: string; domainLabel?: string }[]; write?: 'none' | 'suggest' | 'make'; everything?: { includeSecret: boolean } | null; until?: string | null };
   lastActivity: { text: string; at: string }; createdAt: string; methods: ContactMethod[]; affiliations: { party: string; role: string }[]; birthDate?: string;
 };
 export type Reference = { domain: string; domainLabel: string; recordId: string; title: string; part: string; partLabel: string };
