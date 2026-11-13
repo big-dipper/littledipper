@@ -376,8 +376,11 @@ const DEFS: Def[] = [
       { key: 'kind', label: 'Kind', type: 'enum', required: true, options: o('checking', 'savings', 'credit_card=Credit card', 'debit_card=Debit card', 'brokerage', 'retirement', 'hsa=HSA', 'loan', 'mortgage', 'crypto', 'other') },
       { key: 'institution', label: 'Institution', type: 'party', expects: 'organisation', required: true },
       { key: 'nickname', label: 'Nickname', type: 'text' },
-      { key: 'number', label: 'Account or card number', type: 'text', sensitivity: 'secret' },
-      { key: 'routingNumber', label: 'Routing number', type: 'text', when: { part: 'kind', in: ['checking', 'savings'] }, hint: 'Identifies the bank; printed on cheques' },
+      // Cards keep the last four only: a full card number is all a thief needs, and nobody looks one up from here.
+      // The whole number waits for the Vault (BRY-93). Account and routing numbers stay whole, secret, shareable with a confirm.
+      { key: 'number', label: 'Account number', type: 'text', sensitivity: 'secret', when: { part: 'kind', in: ['checking', 'savings', 'brokerage', 'retirement', 'hsa', 'loan', 'mortgage', 'crypto', 'other'] } },
+      { key: 'cardLast4', label: 'Last four digits', type: 'last4', when: { part: 'kind', in: ['credit_card', 'debit_card'] }, hint: 'Just the last four. The whole number stays on the card.' },
+      { key: 'routingNumber', label: 'Routing number', type: 'text', sensitivity: 'secret', when: { part: 'kind', in: ['checking', 'savings'] }, hint: 'Identifies the bank; printed on cheques' },
       { key: 'account', label: 'Card for account', type: 'record', to: ['financial_accounts'], when: { part: 'kind', in: ['debit_card'] } },
       { key: 'finances', label: 'What it pays for', type: 'record', to: ['vehicles', 'real_estate'], when: { part: 'kind', in: ['loan', 'mortgage'] } },
       // A typed-in bank or card balance is stale the next day, so only loans keep one: what's owed moves slowly.

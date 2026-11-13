@@ -133,6 +133,7 @@ const checking = await add('financial_accounts', { kind: 'checking', institution
 const car = await add('vehicles', { kind: 'car', make: 'Subaru', model: 'Outback', year: 2019, vin: '4S4BSANC5K3123456', registeredIn: 'US-OR', registrationExpires: '2027-03', heldAs: 'financed' }, { validFrom: '2019-09' });
 const loan = await add('valuables', { kind: 'jewelry', name: 'Grandmother’s gold ring', value: { amount: 1800, currency: 'USD' }, valueAsOf: '2024-06' });
 await add('financial_accounts', { kind: 'loan', institution: bank, finances: car, status: 'current' }, { validFrom: '2019-09' });
+await add('financial_accounts', { kind: 'debit_card', institution: bank, cardLast4: '4821', account: checking, status: 'current' }, { validFrom: '2023-02' });
 const nwMutual = await party('Northwest Mutual');
 await add('insurance', { kind: 'auto', insurer: nwMutual, premium: { amount: 96, currency: 'USD', period: 'month' }, coversThings: [car], coversPeople: [robin] }, { validFrom: '2025-01' });
 const blueBottle = await party('Blue Bottle');
