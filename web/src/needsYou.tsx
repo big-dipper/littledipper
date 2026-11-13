@@ -27,9 +27,12 @@ export function useNeedsYou(): { items: NeedsYouItem[] | null } {
     get<{ items: { id: string; by: string; keyId: string }[] }>('/api/reviews'),
     get<{ items: Attention[] }>('/api/attention?days=90'),
     fetchCatalog(),
+    get<{ items: { key: string }[] }>('/api/profile'),
   ]), [version]);
   if (!data) return { items: null };
-  const [reqs, asks, reviews, attention, catalog] = data;
+  const [reqs, asks, reviews, attention, catalog, profile] = data;
+  // A new owner fills in a few basics first; the rest of My data is theirs to find.
+  const basics = ['lives_in', 'born', 'phone', 'email'].filter((k) => profile.items.some((l) => l.key === k)).length;
   const answer = (a: TaskAsk, ans: 'accepted' | 'not_now') => run(() => post(`/api/tasks/requests/${a.messageId}`, { answer: ans }), ans === 'accepted' ? 'Added to your tasks' : `${a.party.name.split(' ')[0]} will see you can’t take this one`).then(refresh);
 
   const items: NeedsYouItem[] = [
@@ -52,10 +55,11 @@ export function useNeedsYou(): { items: NeedsYouItem[] | null } {
       sub: a.kind === 'deadline' && a.expired ? `Passed ${fmtDate(a.date)}` : `${a.part} ${fmtDate(a.date)}`, actions: [{ label: 'Open', go: () => nav(`/admin/life/${a.domain}`) }],
     })),
     // The recovery kit first: without it, no backup can be restored anywhere else.
-    ...(node.recoveryKit.due ? [{ key: 'recovery-kit', initials: 'K', title: 'Save your recovery kit', sub: node.recoveryKit.reason === 'key-changed' ? 'Your key changed since you saved one' : 'Without it, no backup can be restored', actions: [{ label: 'Save', go: () => nav('/admin/settings/address?kit=1') }] }] : []),
+    ...(node.recoveryKit.due ? [{ key: 'recovery-kit', initials: 'K', title: 'Save your recovery kit', sub: node.recoveryKit.reason === 'key-changed' ? 'Your key changed since you saved one' : 'To move your Little Dipper to a new server. Not the same as your sign-in codes', actions: [{ label: 'Save', go: () => nav('/admin/settings/address?kit=1') }] }] : []),
     // A backup on this device: asked for weekly, or when the browser paused saving to the chosen folder.
     ...(device.needsPermission ? [{ key: 'device-allow', initials: '⤓', title: `Allow saving backups to ${device.folderName}`, sub: 'Your browser paused it after a restart', actions: [{ label: 'Allow', go: () => run(device.allow, 'Saving backups again') }] }]
       : node.deviceBackup.due ? [{ key: 'device-backup', initials: '⤓', title: node.deviceBackup.lastAt ? 'Save a fresh backup to this device' : 'Keep a backup on this device', sub: node.deviceBackup.lastAt ? `Last saved here ${whenLabel(node.deviceBackup.lastAt)}` : 'So far your backups are only on your Little Dipper', actions: [{ label: 'Save', go: () => run(device.download, 'Backup saved to this device') }] }] : []),
+    ...(basics < 2 ? [{ key: 'profile', initials: 'P', title: 'Fill in your profile', sub: 'Where you live, your birthday, how to reach you', actions: [{ label: 'Start', go: () => nav('/admin/life/profile') }] }] : []),
     ...(node.update.available ? [{ key: 'update', initials: '↑', title: `Update ${node.update.latest} is ready`, sub: 'Release notes in Settings', actions: [{ label: 'View', go: () => nav('/admin/settings/hosting') }] }] : []),
   ];
   return { items };

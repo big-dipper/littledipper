@@ -60,10 +60,12 @@ export function ProfileView({ p, compact, actions }: { p: ProfileViewData; compa
   const [viewing, setViewing] = useState<Page[] | null>(null);
   const h = compact ? { name: 24, head: 13, body: 13, photo: 60, pad: '18px 20px', fold: 30 } : { name: 34, head: 16, body: 15, photo: 84, pad: '26px 28px', fold: 36 };
   const about = p.sections.filter((s): s is Extract<ViewSection, { type: 'about' }> => s.type === 'about');
-  // Where you live reads best beside your name, so it moves out of the details into the card.
+  // Where you live reads best beside your name, so it moves out of the details into the card. The name the card
+  // already shows isn't said twice: a new owner's page shouldn't open a fold that holds only their name.
   const livesIn = p.sections.flatMap((s) => (s.type === 'details' ? s.fields : [])).find((f) => f.key === 'lives_in')?.value;
+  const inCard = (f: Field) => f.key === 'lives_in' || (f.key === 'preferred_name' && f.value === p.displayName);
   const folds = p.sections
-    .map((s) => (s.type === 'details' ? { ...s, fields: s.fields.filter((f) => f.key !== 'lives_in') } : s))
+    .map((s) => (s.type === 'details' ? { ...s, fields: s.fields.filter((f) => !inCard(f)) } : s))
     .filter((s): s is Exclude<ViewSection, { type: 'about' }> => s.type !== 'about' && (s.type !== 'details' || s.fields.length > 0));
 
   return (

@@ -23,7 +23,6 @@ export default function Home() {
         <h1 style={{ marginBottom: 6 }}>{greeting()}, {firstName(owner.name)}.</h1>
         <div style={{ fontSize: 13, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'baseline' }}>
           <a href={node.address} target="_blank" rel="noreferrer">{addr(node.address)}</a>
-          <span className="mono text-muted" style={{ fontSize: 12, overflowWrap: 'anywhere' }}>{node.id}</span>
         </div>
       </div>
 

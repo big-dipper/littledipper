@@ -216,7 +216,7 @@ export default function Setup() {
         {step === 1 && (
           <>
             <h2>Who is this Little Dipper for?</h2>
-            <p className="text-muted">This becomes the owner record. Only you can change it later.</p>
+            <p className="text-muted">The name you go by. You can change it any time.</p>
             <form onSubmit={(e) => { e.preventDefault(); saveYou(); }} style={{ display: 'grid', gap: 14, maxWidth: 440, marginTop: 20 }}>
               <div className="field"><label htmlFor="n">Your name</label><input id="n" className="input" autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
               {formError && <p style={{ color: 'var(--color-accent-700)', fontSize: 13, margin: 0 }}>{formError}</p>}
