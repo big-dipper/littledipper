@@ -261,20 +261,15 @@ export default function Setup() {
 
         {step === 3 && (
           <>
-            <span className="tag tag-accent-2">Claimed</span>
-            <h1 style={{ marginTop: 14 }}>Welcome home, {first}.</h1>
-            <p style={{ fontSize: 17, maxWidth: 520 }}>You own <strong>{nodeAddr}</strong> with full admin access to every endpoint. The claim link has been destroyed and this setup page is gone for good.</p>
-            <div style={{ display: 'grid', gap: 10, margin: '24px 0', maxWidth: 520 }}>
-              {['Owner account and passkey created', '8 recovery codes issued', 'Permanent ID created', `Address: ${nodeAddr} · add a custom domain any time in Settings`].map((d) => (
-                <div key={d} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 15 }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--color-accent-2)', flex: 'none' }} />{d}</div>
-              ))}
-            </div>
+            <h1 style={{ marginTop: 0 }}>Welcome home, {first}.</h1>
+            <p style={{ fontSize: 17, maxWidth: 520 }}>Your Little Dipper is ready, and only you can sign in.</p>
+            <p style={{ fontSize: 15, maxWidth: 520, margin: '18px 0 26px' }}>Its address: <strong className="mono" style={{ overflowWrap: 'anywhere' }}>{nodeAddr}</strong>. Bookmark it.</p>
             {invite ? (
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <button className="btn btn-primary" onClick={() => { localStorage.removeItem(PENDING_INVITE); nav(`/admin/relationships?connect=${encodeURIComponent(invite)}`, { replace: true }); }} style={{ fontSize: 16, padding: '12px 26px' }}>Connect with the person who invited you</button>
                 <button className="btn btn-ghost" onClick={() => nav('/admin', { replace: true })}>Later</button>
               </div>
-            ) : <button className="btn btn-primary" onClick={() => nav('/admin', { replace: true })} style={{ fontSize: 16, padding: '12px 26px' }}>Open my dashboard</button>}
+            ) : <button className="btn btn-primary" onClick={() => nav('/admin', { replace: true })} style={{ fontSize: 16, padding: '12px 26px' }}>Go to my Little Dipper</button>}
           </>
         )}
       </div>
