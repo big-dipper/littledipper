@@ -197,11 +197,14 @@ function AddressTab() {
       {kit && (
         <Dialog title="Download recovery kit" onClose={() => setKit(null)} actions={<>
           <button className="btn btn-secondary" onClick={() => setKit(null)}>Cancel</button>
-          <button className="btn btn-primary" disabled={busy || kit.a.length < 10} onClick={downloadKit}>Download</button>
+          <button className="btn btn-primary" disabled={busy || kit.a.length < 10 || kit.a !== kit.b} onClick={downloadKit}>Download</button>
         </>}>
           <div className="dialog-body">The kit holds your signing key and backup key, encrypted with a passphrase you choose. You'll need both the file and the passphrase to restore.</div>
           <div className="field"><label htmlFor="k1">Passphrase (10+ characters)</label><input id="k1" className="input" type="password" autoComplete="new-password" value={kit.a} onChange={(e) => setKit({ ...kit, a: e.target.value })} /></div>
           <div className="field"><label htmlFor="k2">Again</label><input id="k2" className="input" type="password" autoComplete="new-password" value={kit.b} onChange={(e) => setKit({ ...kit, b: e.target.value })} /></div>
+          {/* Said here, next to the boxes: a toast at the bottom of the screen is easy to miss, so Download just seemed to do nothing. */}
+          {kit.b.length > 0 && kit.a !== kit.b && <div role="alert" style={{ color: 'var(--color-accent-700)', fontSize: 13 }}>The two passphrases don’t match yet.</div>}
+          {kit.a.length > 0 && kit.a.length < 10 && <div className="text-muted" style={{ fontSize: 13 }}>{10 - kit.a.length} more character{10 - kit.a.length === 1 ? '' : 's'} to go.</div>}
         </Dialog>
       )}
       {confirm && <Confirm cfg={confirm} onClose={() => setConfirm(null)} />}
