@@ -76,7 +76,7 @@ export default function BigDipperSetup() {
     if (r) { reload(); nav(`/admin/relationships/${r.contactId}`); }
   };
 
-  const status = connected ? ['Connected', 'var(--color-accent-2-300)'] : pending ? ['Request sent', 'var(--color-accent-300)'] : bd.available ? ['Not connected', 'var(--color-neutral-400)'] : ['Opening soon', 'var(--color-accent-300)'];
+  const status = connected ? ['Connected', 'var(--color-accent-2-300)'] : pending ? ['Request sent', 'var(--color-accent-300)'] : bd.available ? ['Not connected', 'var(--color-neutral-400)'] : ['Coming soon', 'var(--color-accent-300)'];
 
   return (
     <div style={{ display: 'grid', gap: 28, paddingBottom: 8 }}>
@@ -91,7 +91,9 @@ export default function BigDipperSetup() {
         </div>
         <h2 style={{ position: 'relative', margin: 0, fontSize: 'clamp(30px, 4vw, 40px)', lineHeight: 1.05, maxWidth: 520 }}>A helping hand for your own server. You stay in charge.</h2>
         <p style={{ position: 'relative', margin: 0, fontSize: 15, color: 'var(--color-neutral-400)', maxWidth: 560, lineHeight: 1.55, textWrap: 'pretty' }}>
-          Big Dipper can keep an eye on your Little Dipper, help keep it up to date and vouch for who you are. You choose what it does. It never gets the keys.
+          {bd.available
+            ? 'Big Dipper can keep an eye on your Little Dipper, help keep it up to date and vouch for who you are. You choose what it does. It never gets the keys.'
+            : 'Big Dipper isn’t open yet. When it is, it will be able to keep an eye on your Little Dipper, help keep it up to date and vouch for who you are. You’ll choose what it does, and it never gets the keys. For now, pick what you’d want: your choices stay here, and nothing is sent.'}
         </p>
       </section>
 

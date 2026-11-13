@@ -36,10 +36,12 @@ export default function BigDipperBanner() {
       <div aria-hidden style={{ position: 'absolute', right: -80, bottom: -120, width: 280, height: 280, borderRadius: '50%', background: 'var(--color-accent-800)', opacity: 0.6 }} />
       <Dipper style={{ right: 24, top: 18, opacity: 0.9 }} />
       <div style={{ position: 'relative', maxWidth: 600 }}>
-        <div className="card-kicker" style={{ color: 'var(--color-accent-300)' }}>Big Dipper · optional</div>
-        <div className="card-title" style={{ fontSize: 22, marginTop: 4 }}>Add Big Dipper as a contact</div>
+        <div className="card-kicker" style={{ color: 'var(--color-accent-300)' }}>Big Dipper · {bd.available ? 'optional' : 'coming soon'}</div>
+        <div className="card-title" style={{ fontSize: 22, marginTop: 4 }}>{bd.available ? 'Add Big Dipper as a contact' : 'Coming soon: a helping hand from Big Dipper'}</div>
         <div style={{ fontSize: 14, color: 'var(--color-neutral-400)', marginTop: 6, textWrap: 'pretty' }}>
-          A helping hand for running your own server. Big Dipper can check your Little Dipper, help keep it up to date and vouch for who you are, on your terms. It never gets the keys.
+          {bd.available
+            ? 'A helping hand for running your own server. Big Dipper can check your Little Dipper, help keep it up to date and vouch for who you are, on your terms. It never gets the keys.'
+            : 'Big Dipper isn’t open yet. When it is, it will be able to check your Little Dipper, help keep it up to date and vouch for who you are, on your terms. It never gets the keys.'}
         </div>
       </div>
 
@@ -53,8 +55,8 @@ export default function BigDipperBanner() {
       </div>
 
       <div style={{ position: 'relative', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button className="btn btn-primary" style={{ background: 'var(--color-accent-2-600)' }} onClick={go}>{bd.contact ? 'Request sent · view' : started ? 'Review your choices' : 'See how it works'}</button>
-        <span style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>Benefits, things to know and your options. Nothing is sent until you connect.</span>
+        <button className="btn btn-primary" style={{ background: 'var(--color-accent-2-600)' }} onClick={go}>{bd.contact ? 'Request sent · view' : started ? 'Review your choices' : bd.available ? 'See how it works' : 'See what’s coming'}</button>
+        <span style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>{bd.available ? 'Benefits, things to know and your options. Nothing is sent until you connect.' : 'What each service will do, and what you’d choose. Nothing is sent.'}</span>
         <button className="btn btn-ghost" style={{ color: 'var(--color-neutral-400)', marginLeft: 'auto' }} onClick={() => { writeHidden(true); setHidden(true); }}>Not now</button>
       </div>
     </section>
