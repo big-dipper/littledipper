@@ -359,7 +359,9 @@ const DEFS: Def[] = [
       { key: 'memberId', label: 'Your member ID', type: 'text', sensitivity: 'secret' },
       { key: 'groupNumber', label: 'Group number', type: 'text', sensitivity: 'secret' },
       { key: 'premium', label: 'Premium', type: 'money', periodic: true },
-      { key: 'coverage', label: 'Coverage', type: 'text' },
+      // Who and what a policy covers have their own parts; these are the two numbers people look up.
+      { key: 'coverageAmount', label: 'Coverage amount', type: 'money', hint: 'The most it pays, e.g. $500,000 life or $300,000 liability' },
+      { key: 'deductible', label: 'Deductible', type: 'money' },
       { key: 'coversPeople', label: 'People covered', type: 'party', many: true },
       { key: 'coversThings', label: 'What it covers', type: 'record', to: ['vehicles', 'real_estate', 'valuables', 'residences', 'pets'], many: true },
       { key: 'agent', label: 'Agent', type: 'party' },
