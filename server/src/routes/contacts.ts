@@ -2,11 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { fingerprint, newId, randomToken } from '../crypto.js';
 import { audit, ownerActor } from '../audit.js';
-import { bad, HttpError, notFound, requireOwner } from '../auth.js';
+import { bad, HttpError, notFound, requireOwner, requireSession } from '../auth.js';
 import { ownerName, profileLines, PROFILE_LINES, publicName } from '../profile.js';
 import { ALWAYS_SHARED, basicLines } from '../shares.js';
 import { entrySens, getDomain, isPartialDate, partyReferences, plainData, recordOut, unlinkParty, type RecordDoc } from '../domains/records.js';
-import { describeEntries, endLiveShare, setLiveShare, whatTheyGet, type WhatTheyGet } from '../shares.js';
+import { describeEntries, endLiveShare, liveShareFor, setLiveShare, whatTheyGet, WRITE_MODES, type ShareDoc, type WhatTheyGet, type WriteMode } from '../shares.js';
 import { checkMethods } from '../methods.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import { getOwner } from '../owner.js';
@@ -24,13 +24,25 @@ type ShareInput = {
   basic?: boolean; lines?: Record<string, boolean>; confirm?: boolean;
   categories?: Record<string, boolean | { scope?: 'all' | 'current'; includeSecret?: boolean }>;
   entries?: Record<string, boolean | { includeSecret?: boolean }>;
+  /** What they can change in what they see. Assistants for now; people on a node later, from their own node. */
+  write?: WriteMode;
+  /** Every category, line and document, now and later. Assistants only, for now. */
+  everything?: false | { includeSecret?: boolean };
+  /** Optional end date (ISO); null clears it. */
+  until?: string | null;
 };
 
-const shareOut = async (w: WhatTheyGet) => ({ basic: w.basic, lines: w.lines, categories: w.categories, entries: await describeEntries(w.entries) });
+const shareOut = async (partyId: string) => {
+  const w = await whatTheyGet(partyId);
+  const s = await liveShareFor(partyId);
+  return { basic: w.basic, lines: w.lines, categories: w.categories, entries: await describeEntries(w.entries), write: s?.write ?? 'none', everything: s?.everything ?? null, until: s?.expiresAt ?? null };
+};
 
 /** Apply changes to a party's live share; returns what changed, in words, for the activity log. */
-async function applyShare(partyId: string, b: ShareInput): Promise<string[]> {
+async function applyShare(party: PartyDoc, b: ShareInput): Promise<string[]> {
+  const partyId = party._id;
   const cur = await whatTheyGet(partyId);
+  const curShare = await liveShareFor(partyId);
   const lines = new Set(cur.lines), categories = { ...cur.categories }, entries = new Map(cur.entries.map((e) => [e.id, e]));
   const profile = await profileLines();
   const changes: string[] = [];
@@ -66,7 +78,25 @@ async function applyShare(partyId: string, b: ShareInput): Promise<string[]> {
     entries.set(rid, { id: rid, includeSecret });
     changes.push(`${title} shared`);
   }
-  await setLiveShare(partyId, { basic: b.basic ?? cur.basic, lines: [...lines], categories: Object.values(categories), entries: [...entries.values()] });
+  const extra: Partial<Pick<ShareDoc, 'write' | 'everything' | 'expiresAt'>> = {};
+  if (b.write !== undefined) {
+    if (!WRITE_MODES.includes(b.write)) throw bad('invalid_value', `write: one of ${WRITE_MODES.join(', ')}`);
+    if (b.write !== 'none' && party.type !== 'assistant') throw bad('not_yet', 'For now only assistants can change things. People will be able to, from their own Little Dipper.');
+    if (b.write !== (curShare?.write ?? 'none')) changes.push(`can ${({ none: 'change nothing', suggest: 'suggest changes', make: 'make changes' })[b.write]}`);
+    extra.write = b.write;
+  }
+  if (b.everything !== undefined) {
+    if (b.everything && party.type !== 'assistant') throw bad('not_yet', 'Everything is for assistants. Choose categories for people.');
+    if (b.everything && b.confirm !== true) throw new HttpError(409, 'confirm_required', 'Sharing everything needs confirmation');
+    extra.everything = b.everything ? { includeSecret: !!b.everything.includeSecret } : null;
+    changes.push(b.everything ? `everything shared${b.everything.includeSecret ? ', with secret details' : ''}` : 'everything unshared');
+  }
+  if (b.until !== undefined) {
+    if (b.until && (Number.isNaN(Date.parse(b.until)) || Date.parse(b.until) < Date.now())) throw bad('invalid_value', 'The end date has to be in the future');
+    extra.expiresAt = b.until || null;
+    changes.push(b.until ? `until ${b.until.slice(0, 10)}` : 'until you end it');
+  }
+  await setLiveShare(partyId, { basic: b.basic ?? cur.basic, lines: [...lines], categories: Object.values(categories), entries: [...entries.values()], ...extra });
   return changes;
 }
 
@@ -76,7 +106,7 @@ async function getContact(id: string) {
   return c;
 }
 
-const TYPES = ['person', 'organisation'] as const;
+const TYPES = ['person', 'organisation', 'assistant'] as const;
 type PartyInput = { type?: string; name?: string; notes?: string; methods?: unknown; affiliations?: { party?: string; role?: string }[]; birthDate?: string | null };
 
 /** A person's date of birth, as a partial date; organisations don't have one. */
@@ -161,7 +191,7 @@ export async function requestConnection(keyId: string, address: string, choice: 
     throw e;
   }
   // What we'll share once they approve: basic profile (unless told not to; no grant at all means shared) + the extras we offered.
-  await applyShare(contact._id, { basic: shareProfile, lines: Object.fromEntries(offered.map((k) => [k, true])), categories: Object.fromEntries(Object.entries(choice.categories ?? {}).map(([d, c]) => [d, { scope: c.scope ?? 'all' }])), confirm: choice.confirm });
+  await applyShare(contact, { basic: shareProfile, lines: Object.fromEntries(offered.map((k) => [k, true])), categories: Object.fromEntries(Object.entries(choice.categories ?? {}).map(([d, c]) => [d, { scope: c.scope ?? 'all' }])), confirm: choice.confirm });
   const t = now();
   await ctx.store.insert<RequestDoc>('connectionRequests', {
     _id: newId('req'), direction: 'out', requestId, fromNodeId: n._id, peerName: name, fromNode: displayAddr(canonicalUrl(n)), toNode: displayAddr(d.address),
@@ -188,7 +218,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     const b = (req.body || {}) as PartyInput;
     const name = String(b.name || '').trim().slice(0, 200);
     if (!name) throw bad('name_required', 'Add a name first');
-    if (!TYPES.includes(b.type as never)) throw bad('invalid_value', 'Type: person or organisation');
+    if (!TYPES.includes(b.type as never)) throw bad('invalid_value', 'Type: person, organisation or assistant');
     const t = now();
     const c: PartyDoc = {
       _id: newId('pty'), type: b.type as PartyDoc['type'], name, methods: checkMethods(b.methods), notes: String(b.notes || '').slice(0, 10000),
@@ -223,7 +253,7 @@ export default async function contactRoutes(app: FastifyInstance) {
       patch.name = String(b.name).trim().slice(0, 200);
     }
     if (b.type !== undefined) {
-      if (!TYPES.includes(b.type as never)) throw bad('invalid_value', 'Type: person or organisation');
+      if (!TYPES.includes(b.type as never)) throw bad('invalid_value', 'Type: person, organisation or assistant');
       patch.type = b.type;
     }
     if (b.notes !== undefined) patch.notes = String(b.notes).slice(0, 10000);
@@ -239,7 +269,7 @@ export default async function contactRoutes(app: FastifyInstance) {
 
   /** Entries that point to a party stop pointing to it, so nothing dangles. Without confirm:true, says what would change. */
   app.delete('/api/parties/:id', async (req) => {
-    const p = await requireOwner(req, 'parties:write');
+    const p = await requireSession(req);
     const c = await getContact((req.params as { id: string }).id);
     const usedBy = await partyReferences(c._id);
     if (usedBy.length && (req.query as { confirm?: string }).confirm !== 'true') {
@@ -270,7 +300,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   app.get('/api/parties/:id/share', async (req) => {
     await requireOwner(req, 'parties:read');
     const c = await getContact((req.params as { id: string }).id);
-    return await shareOut(await whatTheyGet(c._id));
+    return await shareOut(c._id);
   });
 
   /**
@@ -314,19 +344,20 @@ export default async function contactRoutes(app: FastifyInstance) {
    * Categories that hold IDs, health or money, secret entries and secret details need confirm:true.
    */
   app.put('/api/parties/:id/share', async (req) => {
-    const p = await requireOwner(req, 'parties:write');
+    // Granting access is the owner's alone: no key, however trusted, changes what anyone sees.
+    const p = await requireSession(req);
     const c = await getContact((req.params as { id: string }).id);
-    if (!c.node) throw bad('not_connected', 'Only people and organisations on Little Dipper get a live share. Send them a copy instead.');
-    const changes = await applyShare(c._id, (req.body || {}) as ShareInput);
+    if (!c.node && c.type !== 'assistant') throw bad('not_connected', 'Only people and organisations on Little Dipper, and assistants, get a live share. Send others a copy instead.');
+    const changes = await applyShare(c, (req.body || {}) as ShareInput);
     if (changes.length) {
       await audit({ actor: ownerActor(p.key._id), action: 'share.update', resource: `parties/${c._id}/share`, text: `Sharing with ${c.name}: ${changes.join(', ')}`, tone: 'owner' });
       nudgePeers([c._id]);
     }
-    return await shareOut(await whatTheyGet(c._id));
+    return await shareOut(c._id);
   });
 
   app.post('/api/parties/:id/invite', async (req) => {
-    await requireOwner(req, 'parties:write');
+    await requireSession(req);
     const c = await getContact((req.params as { id: string }).id);
     // Setting up a Little Dipper takes a while, so an invite to a person lasts a month. It still works once.
     const inv = await createInvite('30d', []);
@@ -338,7 +369,7 @@ export default async function contactRoutes(app: FastifyInstance) {
 
   // ── federation (owner side) ──────────────────────────────────────────
   app.post('/api/federation/lookup', async (req) => {
-    await requireOwner(req, 'parties:write');
+    await requireSession(req);
     const { address } = (req.body || {}) as { address?: string };
     const { origin, invite } = parsePeerInput(String(address || ''));
     const d = await lookupDescriptor(origin);
@@ -354,7 +385,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/federation/requests', async (req, reply) => {
-    const p = await requireOwner(req, 'parties:write');
+    const p = await requireSession(req);
     const b = (req.body || {}) as { address?: string; share?: ConnectChoice; asks?: string[]; note?: string; offeredFields?: string[] };
     const choice: ConnectChoice = b.share ?? { basic: true, lines: b.offeredFields ?? [] };
     const out = await requestConnection(p.key._id, String(b.address || ''), choice, String(b.note || ''), (b.asks ?? []).map(String));
@@ -373,7 +404,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/federation/requests/:id/resend', async (req) => {
-    await requireOwner(req, 'parties:write');
+    await requireSession(req);
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'out' || r.status !== 'pending') throw notFound('request_not_found');
     const link = (await ctx.store.get<LinkDoc>('nodeLinks', r.linkId))!;
@@ -384,7 +415,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/federation/requests/:id/accept', async (req) => {
-    const p = await requireOwner(req, 'parties:write');
+    const p = await requireSession(req);
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'in' || r.status !== 'pending') throw notFound('request_not_found');
     const link = (await ctx.store.get<LinkDoc>('nodeLinks', r.linkId))!;
@@ -392,7 +423,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     // What you chose on the connect screen: the basic profile and any extras (suggested ones you kept, requests you ticked).
     const choice = ((req.body || {}) as { share?: ConnectChoice }).share;
     if (choice) {
-      await applyShare(contact._id, {
+      await applyShare(contact, {
         basic: choice.basic !== false,
         lines: Object.fromEntries((choice.lines ?? []).map((k) => [k, true])),
         categories: Object.fromEntries(Object.entries(choice.categories ?? {}).map(([d, c]) => [d, { scope: c.scope ?? 'all' }])),
@@ -413,14 +444,14 @@ export default async function contactRoutes(app: FastifyInstance) {
     await pushTimeline(link, 'Approved by you');
     await pushTimeline(link, 'Secure connection set up');
     await ctx.store.update('connectionRequests', r._id, { status: 'accepted' });
-    const g = await shareOut(await whatTheyGet(contact._id));
+    const g = await shareOut(contact._id);
     await audit({ actor: ownerActor(p.key._id), action: 'link.accept', resource: `parties/${contact._id}`, text: `You connected with ${contact.name}`, tone: 'peer', meta: { share: g } });
     try { await syncContact((await ctx.store.get<PartyDoc>('parties', contact._id))!); } catch { /* fetched later */ }
     return { status: 'active', share: g, issuedToken: doc.prefix };
   });
 
   app.post('/api/federation/requests/:id/decline', async (req) => {
-    const p = await requireOwner(req, 'parties:write');
+    const p = await requireSession(req);
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'in' || r.status !== 'pending') throw notFound('request_not_found');
     const link = await ctx.store.get<LinkDoc>('nodeLinks', r.linkId);
@@ -454,7 +485,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   }
 
   app.post('/api/federation/invites', async (req, reply) => {
-    const p = await requireOwner(req, 'parties:write');
+    const p = await requireSession(req);
     const b = (req.body || {}) as { expiresIn?: string; offeredFields?: string[] };
     const offered = await offerable(b.offeredFields || []);
     const inv = await createInvite(String(b.expiresIn || '7d'), offered);
@@ -465,7 +496,7 @@ export default async function contactRoutes(app: FastifyInstance) {
 
   // ── links ────────────────────────────────────────────────────────────
   app.post('/api/federation/links/:id/rotate', async (req) => {
-    const p = await requireOwner(req, 'parties:write');
+    const p = await requireSession(req);
     const link = await ctx.store.get<LinkDoc>('nodeLinks', (req.params as { id: string }).id);
     if (!link || link.status !== 'active') throw notFound('link_not_found');
     const contact = (await ctx.store.get<PartyDoc>('parties', link.contactId))!;
@@ -486,7 +517,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/federation/links/:id', async (req) => {
-    const p = await requireOwner(req, 'parties:write');
+    const p = await requireSession(req);
     const link = await ctx.store.get<LinkDoc>('nodeLinks', (req.params as { id: string }).id);
     if (!link || link.status === 'revoked') throw notFound('link_not_found');
     const contact = await ctx.store.get<PartyDoc>('parties', link.contactId);

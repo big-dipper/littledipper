@@ -3,6 +3,7 @@
  * connection request) is in "Needs you" instead. Background work by an assistant has somewhere to report, without email. They're worked out from what's already stored (Review, keys, the activity
  * log), so there's nothing to keep in sync. Dismissing one hides it; a new event with a new id shows again.
  */
+import type { ShareDoc } from '../shares.js';
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { requireSession, type ApiKeyDoc } from '../auth.js';
@@ -19,19 +20,22 @@ async function notices(): Promise<Notice[]> {
   const now = Date.now();
   const month = new Date().toISOString().slice(0, 7);
 
+  // Assistants and other parties with a key: what they get lives in their share.
   const keys = await ctx.store.find<ApiKeyDoc>('apiKeys', { kind: 'app' });
-  for (const k of keys.filter((x) => x.assistant)) {
-    // A connection that reached the length the owner chose, in the last week.
-    if (k.expiresAt && !k.revokedAt && Date.parse(k.expiresAt) < now && now - Date.parse(k.expiresAt) < WEEK) {
-      out.push({ id: `ended:${k._id}`, kind: 'ended', at: k.expiresAt, href: '/admin/settings/apps', title: `${k.name}'s connection ended`, text: 'It reached the length you chose. Reconnect from the assistant if you still want it.' });
+  for (const k of keys.filter((x) => x.contactId)) {
+    const page = `/admin/relationships/${k.contactId}`;
+    // Access that reached the end date the owner chose, in the last week.
+    const share = (await ctx.store.find<ShareDoc>('shares', { party: k.contactId, mode: 'live' }))[0];
+    if (share?.expiresAt && !k.revokedAt && Date.parse(share.expiresAt) < now && now - Date.parse(share.expiresAt) < WEEK) {
+      out.push({ id: `ended:${k._id}:${share.expiresAt}`, kind: 'ended', at: share.expiresAt, href: page, title: `${k.name}'s access ended`, text: 'It reached the date you chose. Give it access again from its page if you still want it.' });
     }
-    // This month so far, for assistants still connected.
+    // This month so far, for parties still connected.
     if (!k.revokedAt && k.usage?.month === month && (k.usage.reads || k.usage.writes)) {
       const { reads, writes } = k.usage;
       out.push({
-        id: `digest:${k._id}:${month}`, kind: 'digest', at: k.lastUsedAt ?? new Date().toISOString(), href: `/admin/settings/apps?assistant=${k._id}`,
+        id: `digest:${k._id}:${month}`, kind: 'digest', at: k.lastUsedAt ?? new Date().toISOString(), href: page,
         title: `This month ${k.name} looked things up ${reads} ${reads === 1 ? 'time' : 'times'} and made ${writes} ${writes === 1 ? 'change' : 'changes'}`,
-        text: 'See what it did, undo anything, or disconnect it.',
+        text: 'See what it did, undo anything, or end its access.',
       });
     }
   }

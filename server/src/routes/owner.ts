@@ -86,8 +86,13 @@ export default async function ownerRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/profile', async (req) => {
-    const p = await requireOwner(req, 'owner:read');
+    const p = await requireOwner(req, ['owner:read', 'profile:read']);
     const lines = await profileLines();
+    // A party (an assistant) reads the lines its share includes, nothing about who else sees what.
+    if (p.key.access) {
+      const allowed = new Set(p.key.access.lines);
+      return { items: lines.filter((l) => allowed.has(l.key) && l.sensitivity !== 'secret').map(({ key, label, value }) => ({ key, label, value })) };
+    }
     const pp = await ctx.store.get<PublicProfileDoc>('publicProfile', 'public');
     const links = await ctx.store.find<LinkDoc>('nodeLinks', { status: 'active' });
     const shares = await Promise.all(links.map((l) => whatTheyGet(l.contactId)));

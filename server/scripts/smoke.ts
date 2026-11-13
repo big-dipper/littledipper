@@ -358,7 +358,16 @@ async function main() {
     await a.call('DELETE', `/api/data/employment/${batch.results[0].id}`);
     // Assistant modes, Review and secrets
     const empScopes = ['employment:read', 'employment:write'];
-    const asKey = async (mode: string, secretFields: string[] = []) => (await a.call('POST', '/api/keys', { name: `Muse (${mode})`, scopes: empScopes, assistant: { mode, secretFields } })).secret as string;
+    // An assistant is a party with a share: what it sees and can change lives there, and its key carries nothing itself.
+    const asParty = async (mode: string, opts: { secrets?: boolean; name?: string; everything?: boolean } = {}) => {
+      const party = await a.call('POST', '/api/parties', { type: 'assistant', name: opts.name ?? `Muse (${mode})` });
+      const write = mode === 'answer' ? 'none' : mode;
+      await a.call('PUT', `/api/parties/${party.id}/share`, opts.everything
+        ? { everything: { includeSecret: !!opts.secrets }, basic: true, write, confirm: true }
+        : { categories: { employment: { scope: 'all', includeSecret: !!opts.secrets } }, write, confirm: true });
+      return { ...(await a.call('POST', '/api/keys', { party: party.id })), party: party.id };
+    };
+    const asKey = async (mode: string, secrets = false) => (await asParty(mode, { secrets })).secret as string;
     const as = (secret: string) => async (name: string, args: object = {}) => (await mcp('tools/call', { name, arguments: args }, secret)).body.result;
     const answerer = as(await asKey('answer'));
     ok((await answerer('whoami')).structuredContent.assistant.mode === 'answer', 'whoami tells an assistant its mode');
@@ -392,16 +401,16 @@ async function main() {
     await a.call('POST', `/api/reviews/${secretItem.id}/reject`);
     await a.call('PATCH', `/api/data/employment/${job.id}`, { notes: '' });
     ok((await maker('get_record', { kind: 'employment', id: job.id })).structuredContent.data.employeeId !== 'AS-0042', 'secret fields stay masked for an assistant by default');
-    const trusted = as(await asKey('answer', ['employment.employeeId']));
-    ok((await trusted('get_record', { kind: 'employment', id: job.id })).structuredContent.data.employeeId === 'AS-0042', 'an assistant reads a secret field only once the owner allows that field');
-    const leaving = await a.call('POST', '/api/keys', { name: 'Muse (leaving)', scopes: empScopes, assistant: { mode: 'suggest', secretFields: [] } });
+    const trusted = as(await asKey('answer', true));
+    ok((await trusted('get_record', { kind: 'employment', id: job.id })).structuredContent.data.employeeId === 'AS-0042', 'an assistant reads secret details only once the owner includes them for that category');
+    const leaving = await asParty('suggest', { name: 'Muse (leaving)' });
     await as(leaving.secret)('add_record', { kind: 'employment', data: { employer: await org('Hooli'), title: 'Engineer' } });
     await a.call('DELETE', `/api/keys/${leaving.id}`);
     const orphan = (await a.call('GET', '/api/reviews')).items.find((r: any) => r.by === 'Muse (leaving)');
     ok(orphan && (await a.call('POST', `/api/reviews/${orphan.id}/approve`)).status === 'approved', "a disconnected assistant's suggestions stay, and can still be approved");
     for (const r of (await a.call('GET', '/api/data/employment')).items.filter((x: any) => [initechId, orgIds.get('Hooli')].includes(x.data.employer))) await a.call('DELETE', `/api/data/employment/${r.id}`);
     // Provenance and undo
-    const undoKey = await a.call('POST', '/api/keys', { name: 'Muse (undo)', scopes: empScopes, assistant: { mode: 'make', secretFields: [] } });
+    const undoKey = await asParty('make', { name: 'Muse (undo)' });
     const muse = as(undoKey.secret);
     const clerk = await a.call('POST', '/api/data/employment', { data: { employer: await org('Initrode'), title: 'Clerk', department: 'Austin' }, validFrom: '2010' });
     await muse('update_record', { kind: 'employment', id: clerk.id, notes: 'Promoted', data: { title: 'Manager', department: 'Dallas' } });
@@ -425,9 +434,9 @@ async function main() {
     await a.call('DELETE', `/api/data/employment/${clerk.id}`);
     // Every scope respects the mode, not just records; only the owner manages keys; core identity always waits
     const wide = ['records:read', 'records:write', 'documents:read', 'documents:write', 'owner:read', 'owner:write', 'parties:read', 'parties:write'];
-    await a.call('POST', '/api/keys', { name: 'Muse (admin)', scopes: ['keys:manage'], assistant: { mode: 'make', secretFields: [] } }, [400]);
-    ok(true, 'an assistant key can never be given keys:manage');
-    const wideKey = async (mode: string) => (await a.call('POST', '/api/keys', { name: `Muse (${mode}, wide)`, scopes: wide, assistant: { mode, secretFields: [] } })).secret as string;
+    for (const power of ['keys:manage', 'owner:write', 'export', 'public:write', 'audit:read']) await a.call('POST', '/api/keys', { name: 'Too much', scopes: [power] }, [400]);
+    ok(true, 'no key is ever given an owner-only power: keys, account, export, public page, activity log');
+    const wideKey = async (mode: string) => (await asParty(mode, { everything: true, name: `Muse (${mode}, wide)` })).secret as string;
     const rest = (secret: string) => async (method: string, path: string, body?: unknown, type = 'application/json') => {
       const res = await fetch(a.base + path, { method, headers: { authorization: `Bearer ${secret}`, ...(body !== undefined ? { 'content-type': type } : {}) }, body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : JSON.stringify(body) });
       const text = await res.text();
@@ -440,7 +449,7 @@ async function main() {
       await readOnly('PATCH', '/api/owner', { prefs: { showTechnical: true } }),
       await readOnly('POST', '/api/parties', { type: 'person', name: 'Someone' }),
     ];
-    ok(readerWrites.every((r) => r.status === 403 && r.body.code === 'read_only'), 'an answer-only assistant changes nothing anywhere: documents, profile or contacts');
+    ok(readerWrites.every((r) => r.status === 403), 'an answer-only assistant changes nothing anywhere: documents, account or contacts');
     const suggester2 = rest(await wideKey('suggest'));
     const sDoc = await suggester2('POST', '/api/documents?name=s.png&link=employment:none', pixel, 'image/png');
     ok(sDoc.status === 201 && sDoc.body.status === 'inbox' && !sDoc.body.links.length && sDoc.body.message, 'in suggest mode an uploaded document waits unfiled in the inbox, and the assistant is told');
@@ -449,12 +458,10 @@ async function main() {
       await suggester2('PATCH', '/api/owner', { prefs: { showTechnical: true } }),
       await suggester2('POST', '/api/parties', { type: 'person', name: 'Someone' }),
     ];
-    ok(sBlocked.every((r) => r.status === 403 && r.body.code === 'needs_review'), "in suggest mode, changes that can't wait in Review yet are refused with a clear reason");
+    ok(sBlocked.every((r) => r.status === 403) && sBlocked[0].body.code === 'needs_review' && sBlocked[2].body.code === 'needs_review', "in suggest mode, changes that can't wait in Review yet are refused with a clear reason");
     ok((await suggester2('DELETE', `/api/documents/${sDoc.body.id}`)).body.code === 'owner_only', 'an assistant can never delete a document');
     ok((await suggester2('GET', '/api/keys')).status === 403, "an assistant can't see or manage keys");
-    const manager = await a.call('POST', '/api/keys', { name: 'Key manager', scopes: ['keys:manage'] });
-    await a.call('PATCH', `/api/keys/${manager.id}`, { assistant: { mode: 'make', secretFields: [] } }, [400]);
-    ok(true, "a key that manages keys can't be turned into an assistant");
+    ok((await suggester2('PUT', `/api/parties/${(await a.call('GET', '/api/parties')).items[0].id}/share`, { everything: { includeSecret: true }, confirm: true })).status === 403, 'no assistant can change what anyone sees, including itself');
     const maker2 = rest(await wideKey('make'));
     const pending = async (r: { status: number; body: any }) => r.status === 202 && r.body.status === 'pending_review' && r.body.message.includes('core identity');
     ok(await pending(await maker2('POST', '/api/data/names', { data: { kind: 'legal', full: 'Alex Q. Sample' } })), 'in make mode a legal name still waits for the owner');
@@ -467,7 +474,7 @@ async function main() {
     const lex = (await a.call('GET', '/api/data/names')).items.find((n: any) => n.data.full === 'Lex');
     const prot = await maker2('PATCH', `/api/data/names/${lex.id}`, { sensitivity: 'secret' });
     ok(prot.status === 202 && prot.body.message.includes('owner’s call'), 'who can see an entry is the owner’s call: an assistant’s change waits in Review');
-    ok((await maker2('PATCH', '/api/owner', { prefs: { showTechnical: true } })).body.code === 'owner_only', 'only the owner changes their account settings');
+    ok((await maker2('PATCH', '/api/owner', { prefs: { showTechnical: true } })).status === 403, 'only the owner changes their account settings');
     for (const r of (await a.call('GET', '/api/reviews')).items) await a.call('POST', `/api/reviews/${r.id}/reject`);
     // OAuth: an assistant platform connects without anyone copying a key
     const prm = await (await fetch(`${a.base}/.well-known/oauth-protected-resource`)).json();
@@ -486,29 +493,37 @@ async function main() {
     await a.call('GET', `/api/oauth/request?${new URLSearchParams({ ...authQ, redirect_uri: 'https://evil.example/cb' })}`, undefined, [400]);
     const oaDenied = await a.call('POST', '/api/oauth/authorize', { ...authQ, approve: false });
     ok(new URL(oaDenied.redirect).searchParams.get('error') === 'access_denied' && new URL(oaDenied.redirect).searchParams.get('state') === 'xyz', 'turning it down sends the assistant access_denied');
-    const granted = await a.call('POST', '/api/oauth/authorize', { ...authQ, approve: true, preset: 'custom', kinds: ['employment'], documents: false, assistant: { mode: 'suggest', secretFields: [] }, length: '60d' });
+    const granted = await a.call('POST', '/api/oauth/authorize', { ...authQ, approve: true, categories: [{ domain: 'employment', scope: 'all', includeSecret: false }], write: 'suggest' });
     const oaCode = new URL(granted.redirect).searchParams.get('code')!;
     const oauthToken = async (body: Record<string, string>) => { const r = await fetch(`${a.base}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) }); return { status: r.status, body: await r.json() }; };
     ok((await oauthToken({ grant_type: 'authorization_code', code: oaCode, client_id: oaClient.client_id, redirect_uri: authQ.redirect_uri, code_verifier: 'wrong'.padEnd(43, 'x') })).body.error === 'invalid_grant', 'a wrong PKCE verifier gets nothing');
-    const granted2 = await a.call('POST', '/api/oauth/authorize', { ...authQ, approve: true, preset: 'custom', kinds: ['employment'], documents: false, assistant: { mode: 'suggest', secretFields: [] }, length: '60d' });
+    const granted2 = await a.call('POST', '/api/oauth/authorize', { ...authQ, approve: true, categories: [{ domain: 'employment', scope: 'all', includeSecret: false }], write: 'suggest' });
     const code2 = new URL(granted2.redirect).searchParams.get('code')!;
     const oaTok = (await oauthToken({ grant_type: 'authorization_code', code: code2, client_id: oaClient.client_id, redirect_uri: authQ.redirect_uri, code_verifier: verifier })).body;
-    ok(oaTok.token_type === 'Bearer' && oaTok.expires_in <= 1800 && oaTok.refresh_token && oaTok.scope === 'employment:read employment:write', 'the code becomes a 30-minute token and a refresh token, scoped to what the owner chose');
+    ok(oaTok.token_type === 'Bearer' && oaTok.expires_in <= 1800 && oaTok.refresh_token && !oaTok.scope, 'the code becomes a 30-minute token and a refresh token, carrying no permissions of its own');
     ok((await oauthToken({ grant_type: 'authorization_code', code: code2, client_id: oaClient.client_id, redirect_uri: authQ.redirect_uri, code_verifier: verifier })).body.error === 'invalid_grant', 'a code works once');
     const viaOauth = as(oaTok.access_token);
     const who = (await viaOauth('whoami')).structuredContent;
-    ok(who.name === 'Muse' && who.assistant.mode === 'suggest' && Date.parse(who.expiresAt) - Date.now() > 59 * 86400_000, 'the connected assistant has its mode and a 60-day connection');
+    const museParty = (await a.call('GET', '/api/parties')).items.find((p: any) => p.type === 'assistant' && p.name === 'Muse');
+    const museShare = museParty && await a.call('GET', `/api/parties/${museParty.id}/share`);
+    ok(who.name === 'Muse' && who.assistant.mode === 'suggest' && who.expiresAt === null && who.scopes.includes('employment:write') && !who.scopes.includes('ids:read'), 'the connected assistant sees and changes what its share says, until the owner ends it');
+    ok(museShare?.write === 'suggest' && museShare.categories.employment && museShare.until === null, 'connecting made Muse a party, with a share the owner can see and change');
     ok((await viaOauth('add_record', { kind: 'employment', data: { employer: await org('Wayne Enterprises'), title: 'Butler' } })).structuredContent.status === 'pending_review', 'its changes wait in Review like any assistant');
     const r1 = (await oauthToken({ grant_type: 'refresh_token', refresh_token: oaTok.refresh_token, client_id: oaClient.client_id })).body;
     const rAgain = (await oauthToken({ grant_type: 'refresh_token', refresh_token: oaTok.refresh_token, client_id: oaClient.client_id })).body;
     ok(r1.access_token && r1.refresh_token !== oaTok.refresh_token && rAgain.access_token, 'refreshing rotates the token, and a retry within a minute still works');
     ok((await as(r1.access_token)('whoami')).structuredContent.name === 'Muse', 'the new token works');
-    const oaConn = (await a.call('GET', '/api/keys')).items.find((k: any) => k.name === 'Muse' && k.assistant);
+    await a.call('PUT', `/api/parties/${museParty.id}/share`, { categories: { education: true } });
+    ok((await as(r1.access_token)('whoami')).structuredContent.scopes.includes('education:read'), 'changing its share changes what it can do on its very next call');
+    const oaConn = (await a.call('GET', '/api/keys')).items.find((k: any) => k.name === 'Muse' && k.contactId === museParty.id);
     await a.call('DELETE', `/api/keys/${oaConn.id}`);
     ok((await mcp('tools/list', {}, r1.access_token)).status === 401 && (await oauthToken({ grant_type: 'refresh_token', refresh_token: r1.refresh_token })).body.error === 'invalid_grant', 'disconnecting cuts off a live token immediately, and it can’t be refreshed');
-    const reader = await a.call('POST', '/api/oauth/authorize', { ...authQ, approve: true, preset: 'everything', assistant: { mode: 'answer', secretFields: [] }, length: 'hour' });
+    ok((await a.call('GET', `/api/oauth/request?${new URLSearchParams(authQ)}`)).previous?.write === 'suggest', 'connecting again starts from what the owner chose last time');
+    const reader = await a.call('POST', '/api/oauth/authorize', { ...authQ, approve: true, everything: { includeSecret: false }, write: 'none' });
     const rtok = (await oauthToken({ grant_type: 'authorization_code', code: new URL(reader.redirect).searchParams.get('code')!, client_id: oaClient.client_id, redirect_uri: authQ.redirect_uri, code_verifier: verifier })).body;
-    ok(rtok.scope === 'records:read documents:read' && rtok.expires_in <= 1800, 'an answer-only assistant gets read scopes only');
+    const rWho = (await as(rtok.access_token)('whoami')).structuredContent;
+    ok(rWho.assistant.mode === 'answer' && rWho.scopes.includes('ids:read') && rWho.scopes.includes('documents:read') && !rWho.scopes.some((x: string) => x.endsWith(':write')) && rtok.expires_in <= 1800, 'Everything, answer only: it reads every category and changes nothing');
+    ok((await a.call('GET', '/api/parties')).items.filter((p: any) => p.type === 'assistant' && p.name === 'Muse').length === 1, 'reconnecting reuses the same party: one relationship, one key');
     // Notifications: background work has somewhere to report
     const notes = (await a.call('GET', '/api/notifications')).items;
     ok(!notes.some((n: any) => /approval/.test(n.title)) && (await a.call('GET', '/api/reviews')).items.length > 0, 'a suggestion waiting in Review is an action (Needs you), not a notification');

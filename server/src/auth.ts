@@ -29,6 +29,8 @@ export type ApiKeyDoc = Doc & {
   assistant?: AssistantSettings;
   /** Set when the key is an OAuth connection: the registered client it belongs to. Its own secret is never handed out. */
   oauth?: { clientId: string };
+  /** Worked out from the party's share on each request (never stored): see access.ts. */
+  access?: import('./access.js').Access;
   /** What an assistant did this month through MCP, for the owner's digest. */
   usage?: { month: string; reads: number; writes: number };
 };
@@ -88,7 +90,8 @@ export async function findKey(secret: string | undefined, kinds: ApiKeyDoc['kind
   if (!k.lastUsedAt || Date.now() - new Date(k.lastUsedAt).getTime() > 60_000) {
     await ctx.store.update('apiKeys', k._id, { lastUsedAt: new Date().toISOString() });
   }
-  return k;
+  // A key carries no permissions of its own: a party's key gets them from its share, right now.
+  return (await import('./access.js')).resolveKey(k);
 }
 
 export const bearer = (req: FastifyRequest) => {
@@ -100,9 +103,11 @@ export type Principal = { key: ApiKeyDoc; isSession: boolean };
 
 const isWriteScope = (s: string) => s.endsWith(':write') || s === 'keys:manage';
 
-/** Only the owner manages keys: a key that could mint keys would let an assistant escape its own mode. */
-export function checkAssistantScopes(scopes: string[]) {
-  if (scopes.includes('keys:manage')) throw bad('assistant_scope', 'An assistant can’t be given keys:manage. Only you manage keys and connections.');
+/** Running the node is the owner's alone: no key is ever given an owner-only power (keys, account, export, public page, activity log). */
+export async function checkKeyScopes(scopes: string[]) {
+  const { isOwnerOnly } = await import('./access.js');
+  const bad1 = scopes.find(isOwnerOnly);
+  if (bad1) throw bad('owner_only_scope', `${bad1} is yours alone. Only you, signed in, can do that.`);
 }
 
 /**
@@ -131,6 +136,8 @@ export async function requireOwner(req: FastifyRequest, scope?: string | string[
   if (!key) throw new HttpError(401, 'unauthenticated', 'Sign in required');
   const wanted = scope === undefined ? [] : Array.isArray(scope) ? scope : [scope];
   const ok = key.scopes.includes('admin:*') || wanted.some((s) => key.scopes.includes(s));
+  // An assistant that can see this but not change it hears why: its owner set it to answer questions only.
+  if (!ok && key.assistant?.mode === 'answer' && wanted.length && wanted.every(isWriteScope) && wanted.some((s) => key.scopes.includes(s.replace(/:write$/, ':read')))) checkAssistantMode(key.assistant, wanted, false);
   if (!ok) throw new HttpError(403, 'insufficient_scope', wanted.length ? `This key needs ${wanted.join(' or ')}` : 'Owner session required');
   if (key.assistant) checkAssistantMode(key.assistant, wanted, !!opts.reviewable);
   return { key, isSession };

@@ -8,7 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { config } from '../config.js';
 import { audit, ownerActor } from '../audit.js';
-import { bad, HttpError, requireOwner } from '../auth.js';
+import { bad, HttpError, requireOwner, requireSession } from '../auth.js';
 import { displayAddr, getNode } from '../node.js';
 import type { LinkDoc } from '../federation.js';
 import { requestConnection } from './contacts.js';
@@ -169,7 +169,7 @@ export default async function bigDipperRoutes(app: FastifyInstance) {
 
   /** Save which services and options the owner wants. A consent choice, so only the owner's own session. */
   app.put('/api/big-dipper', async (req) => {
-    const p = await requireOwner(req, 'parties:write');
+    const p = await requireSession(req);
     if (!p.isSession) throw bad('session_required');
     const choice = checkChoices((req.body || {}) as object);
     await saveChoices(p.key._id, choice);
@@ -178,7 +178,7 @@ export default async function bigDipperRoutes(app: FastifyInstance) {
 
   /** Save the choice and send Big Dipper a connection request that names it. Big Dipper gets no profile or fields. */
   app.post('/api/big-dipper/connect', async (req, reply) => {
-    const p = await requireOwner(req, 'parties:write');
+    const p = await requireSession(req);
     if (!p.isSession) throw bad('session_required');
     const choice = checkChoices((req.body || {}) as object);
     if (!choice.services.length) throw bad('invalid_value', 'Choose at least one service');

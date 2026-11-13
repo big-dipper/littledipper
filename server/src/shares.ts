@@ -12,6 +12,9 @@ import { newId } from './crypto.js';
 import type { Doc } from './store/index.js';
 
 export type CategoryShare = { domain: string; scope: 'all' | 'current'; includeSecret: boolean };
+/** What a party may change in what it sees: nothing, suggestions that wait for the owner, or changes saved straight away. */
+export type WriteMode = 'none' | 'suggest' | 'make';
+export const WRITE_MODES: WriteMode[] = ['none', 'suggest', 'make'];
 export type EntryShare = { id: string; includeSecret: boolean };
 
 export type ShareDoc = Doc & {
@@ -27,6 +30,10 @@ export type ShareDoc = Doc & {
   categories: CategoryShare[];
   entries: EntryShare[];
   documents: string[];
+  /** Every category, every profile line and every document, now and later: the owner's "Everything" choice. */
+  everything?: { includeSecret: boolean } | null;
+  /** What the party may change in what it sees (write follows read). Identity and secret values always wait for the owner. */
+  write?: WriteMode;
   expiresAt: string | null;
   revokedAt: string | null;
   createdAt: string;
@@ -73,7 +80,7 @@ export async function describeEntries(entries: EntryShare[]) {
 }
 
 /** Create or change a party's live share. Fields left out stay as they are. */
-export async function setLiveShare(partyId: string, patch: Partial<Pick<ShareDoc, 'basic' | 'lines' | 'categories' | 'entries' | 'expiresAt'>>) {
+export async function setLiveShare(partyId: string, patch: Partial<Pick<ShareDoc, 'basic' | 'lines' | 'categories' | 'entries' | 'expiresAt' | 'everything' | 'write'>>) {
   const existing = (await ctx.store.find<ShareDoc>('shares', { party: partyId, mode: 'live' }))[0];
   if (existing) {
     await ctx.store.update('shares', existing._id, { ...patch, revokedAt: null, updatedAt: now() });
@@ -81,7 +88,7 @@ export async function setLiveShare(partyId: string, patch: Partial<Pick<ShareDoc
   }
   const s: ShareDoc = {
     _id: newId('shr'), audience: 'party', party: partyId, mode: 'live', basic: false, lines: [], categories: [], entries: [], documents: [],
-    expiresAt: null, revokedAt: null, createdAt: now(), updatedAt: now(), ...patch,
+    everything: null, write: 'none', expiresAt: null, revokedAt: null, createdAt: now(), updatedAt: now(), ...patch,
   };
   await ctx.store.insert('shares', s);
   return s;

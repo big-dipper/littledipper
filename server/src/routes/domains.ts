@@ -8,6 +8,7 @@ import { PROFILE_DOMAINS } from '../profile.js';
 import type { ShareDoc } from '../shares.js';
 import { audit, ownerActor, systemActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner, requireSession, type ApiKeyDoc } from '../auth.js';
+import { canAddTo, canSeeRecord } from '../access.js';
 import { isIdentityChange, pendingReply, propose, reviewInput, type ReviewDoc } from '../reviews.js';
 import { mask } from '../fields.js';
 import { undoOnRecord } from '../undo.js';
@@ -46,6 +47,13 @@ async function domainOr404(id: string) {
   const d = await getDomain(id);
   if (!d) throw notFound('not_found');
   return d;
+}
+
+/** A record the caller may see: anything for the owner, only what its share covers for a party. Hidden looks like missing. */
+async function visibleOr404(p: { key: ApiKeyDoc }, d: DomainDef, id: string) {
+  const r = await recordOr404(d, id);
+  if (!canSeeRecord(p.key, d, r, isCurrent(d, r))) throw notFound('record_not_found');
+  return r;
 }
 
 async function recordOr404(d: DomainDef, id: string) {
@@ -235,7 +243,8 @@ export default async function domainRoutes(app: FastifyInstance) {
   app.get(base, async (req) => {
     const { d, p } = await ctxFor(req, false);
     const q = req.query as { current?: string; from?: string; to?: string };
-    let recs = sortRecords(d, await recordsOf(d.id));
+    // A party sees what its share covers: all of a category, only what's current, or single entries.
+    let recs = sortRecords(d, await recordsOf(d.id)).filter((r) => canSeeRecord(p.key, d, r, isCurrent(d, r)));
     if (q.current === 'true') recs = recs.filter((r) => isCurrent(d, r));
     if (q.from || q.to) recs = recs.filter((r) => inRange(r, q.from, q.to));
     const docs = await documentsByRecord(d.id);
@@ -245,6 +254,7 @@ export default async function domainRoutes(app: FastifyInstance) {
 
   app.post(base, async (req, reply) => {
     const { d, p, by } = await ctxFor(req, true);
+    if (!canAddTo(p.key, d)) throw new HttpError(403, 'not_shared', `You can change the ${d.label.toLowerCase()} entries shared with you, but not add new ones.`);
     const input = (req.body || {}) as RecordInput;
     const a = p.key.assistant;
     if (a) {
@@ -259,7 +269,7 @@ export default async function domainRoutes(app: FastifyInstance) {
 
   app.get(`${base}/:id`, async (req) => {
     const { d, p, id } = await ctxFor(req, false);
-    const r = await recordOr404(d, id!);
+    const r = await visibleOr404(p, d, id!);
     const out = recordOut(d, r);
     const label = await actorLabels();
     return { ...out, updatedByLabel: label(out.updatedBy), sourceLabel: label(out.source), documents: (await documentsByRecord(d.id)).get(r._id) ?? [], ...(p.isSession ? { linked: await linkedTitles(d, [r]) } : {}) };
@@ -267,7 +277,7 @@ export default async function domainRoutes(app: FastifyInstance) {
 
   app.patch(`${base}/:id`, async (req, reply) => {
     const { d, p, id, by } = await ctxFor(req, true);
-    const existing = await recordOr404(d, id!);
+    const existing = await visibleOr404(p, d, id!);
     const input = (req.body || {}) as RecordInput;
     const a = p.key.assistant;
     if (a) {
@@ -309,7 +319,7 @@ export default async function domainRoutes(app: FastifyInstance) {
 
   app.post(`${base}/:id/reveal`, async (req) => {
     const { d, p, id } = await ctxFor(req, false);
-    const r = await recordOr404(d, id!);
+    const r = await visibleOr404(p, d, id!);
     const a = p.key.assistant;
     const out = recordOut(d, r, { reveal: a ? new Set(a.secretFields.filter((f) => f.startsWith(`${d.id}.`)).map((f) => f.slice(d.id.length + 1))) : true });
     await audit({ actor: ownerActor(p.key._id), action: 'record.reveal', resource: `${d.id}/${r._id}`, text: `${actorName(p)} revealed ${recordOut(d, r).title} (${d.label})`, tone: 'owner', ip: req.ip });
@@ -322,14 +332,19 @@ export default async function domainRoutes(app: FastifyInstance) {
     version: v._id, action: v.action, at: v.at, by: v.by, byLabel: label(v.by), record: recordOut(d, versionRecord(v)),
   });
 
+  // A party sees what's shared now, never what was deleted or what it used to say.
+  const ownHistoryOnly = (p: { key: ApiKeyDoc }) => { if (p.key.access) throw new HttpError(403, 'owner_only', 'Earlier versions and deleted entries are only for the owner.'); };
+
   app.get('/api/data/:domain/deleted', async (req) => {
-    const { d } = await ctxFor(req, false);
+    const { d, p } = await ctxFor(req, false);
+    ownHistoryOnly(p);
     const label = await actorLabels();
     return { domain: d.id, keepDays: KEEP_DELETED_DAYS, items: (await deletedRecords(d.id)).map((v) => versionOut(d, v, label)) };
   });
 
   app.get('/api/data/:domain/:id/history', async (req) => {
-    const { d, id } = await ctxFor(req, false);
+    const { d, p, id } = await ctxFor(req, false);
+    ownHistoryOnly(p);
     const versions = (await versionsOf(id!)).filter((v) => v.domain === d.id);
     if (!versions.length && !(await ctx.store.get('records', id!))) throw notFound('record_not_found');
     const label = await actorLabels();

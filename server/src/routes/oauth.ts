@@ -6,18 +6,22 @@
  * - Dynamic client registration (RFC 7591) at /oauth/register. Names are self-reported, so the consent page says
  *   "unverified".
  * - Authorization code with PKCE (S256 only). /oauth/authorize is the web app's consent page: the owner signs in with
- *   their passkey and chooses what the assistant may read, its mode, its secret fields and how long it stays connected.
+ *   their passkey and chooses what the assistant sees (the same choices as sharing with a person, or Everything),
+ *   what it can change, and optionally until when.
  * - Tokens: opaque, checked against the store on every call. Access tokens last 30 minutes. Refresh tokens rotate; a
  *   used refresh token still works for a minute (a dropped connection mid-swap mustn't disconnect anyone), after
  *   which reusing it is treated as theft and ends the connection.
  *
- * Every connection is one app key with assistant settings, so Review, provenance, undo and Disconnect work exactly
- * as for a key made by hand.
+ * The assistant is a party (type 'assistant') with a live share, like anyone you share with; its one key is bound
+ * to that party and carries no permissions itself (access.ts). Connecting again reuses the party, so its history,
+ * Review items and your earlier choices carry over, and its previous key ends: one key per relationship.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ctx } from '../ctx.js';
 import { audit, ownerActor, systemActor } from '../audit.js';
-import { checkAssistant, HttpError, issueKey, rateLimit, requireSession, type ApiKeyDoc, type AssistantSettings } from '../auth.js';
+import { bad, HttpError, issueKey, rateLimit, requireSession, type ApiKeyDoc } from '../auth.js';
+import type { PartyDoc } from '../federation.js';
+import { liveShareFor, setLiveShare, WRITE_MODES, type CategoryShare, type ShareDoc, type WriteMode } from '../shares.js';
 import { newId, randomToken, sha256 } from '../crypto.js';
 import { listDomains } from '../domains/records.js';
 import { canonicalUrl, getNode } from '../node.js';
@@ -27,12 +31,11 @@ export const ACCESS_TTL_S = 30 * 60;
 const REFRESH_GRACE_MS = 60_000;
 const CODE_TTL_MS = 60_000;
 
-/** How long a connection lasts, chosen by the owner on the consent page. */
-export const LENGTHS = { hour: 3600, day: 86400, '60d': 60 * 86400, forever: 0 } as const;
-type Length = keyof typeof LENGTHS;
+/** What the owner chose on the consent page: the share it gets, and what it can change. */
+type Choice = { everything: { includeSecret: boolean } | null; basic: boolean; categories: CategoryShare[]; write: WriteMode; expiresAt: string | null };
 
 type ClientDoc = Doc & { name: string; uri: string | null; redirectUris: string[]; createdAt: string };
-type CodeDoc = Doc & { hash: string; clientId: string; redirectUri: string; challenge: string; scopes: string[]; assistant: AssistantSettings; length: Length; ownerKeyId: string; expiresAt: string; usedAt: string | null };
+type CodeDoc = Doc & { hash: string; clientId: string; redirectUri: string; challenge: string; choice: Choice; ownerKeyId: string; expiresAt: string; usedAt: string | null };
 type TokenDoc = Doc & { hash: string; kind: 'access' | 'refresh'; keyId: string; expiresAt: string; usedAt: string | null };
 
 const b64url = (b: Buffer) => b.toString('base64url');
@@ -59,15 +62,36 @@ function checkRedirect(u: string) {
   } catch { return false; }
 }
 
-/** The grant the owner chose, turned into scopes. Answer-only assistants get read scopes only. */
-export async function scopesFor(choice: { preset: 'everything' | 'custom'; kinds?: string[]; documents?: boolean }, mode: AssistantSettings['mode']) {
+/** The owner's choices from the consent page, checked. Nothing chosen is refused: say "Don't connect" instead. */
+export async function checkChoice(b: Record<string, unknown>): Promise<Choice> {
   const known = new Set((await listDomains()).map((d) => d.id));
-  const verbs = mode === 'answer' ? ['read'] : ['read', 'write'];
-  if (choice.preset === 'everything') return [...verbs.map((v) => `records:${v}`), ...verbs.map((v) => `documents:${v}`)];
-  const kinds = (choice.kinds ?? []).filter((k) => known.has(k));
-  const docs = !!choice.documents;
-  if (!kinds.length && !docs) throw new HttpError(400, 'nothing_chosen', 'Choose at least one kind of record');
-  return [...kinds.flatMap((k) => verbs.map((v) => `${k}:${v}`)), ...(docs ? verbs.map((v) => `documents:${v}`) : [])];
+  const write = (WRITE_MODES.includes(b.write as WriteMode) ? b.write : 'suggest') as WriteMode;
+  const until = b.expiresAt ? String(b.expiresAt) : null;
+  if (until && (Number.isNaN(Date.parse(until)) || Date.parse(until) < Date.now())) throw bad('invalid_value', 'The end date has to be in the future');
+  if (b.everything) return { everything: { includeSecret: !!(b.everything as { includeSecret?: boolean }).includeSecret }, basic: true, categories: [], write, expiresAt: until };
+  const cats = Array.isArray(b.categories) ? (b.categories as Partial<CategoryShare>[]) : [];
+  const categories = cats.filter((c) => known.has(String(c.domain))).map((c) => ({ domain: String(c.domain), scope: c.scope === 'current' ? 'current' as const : 'all' as const, includeSecret: !!c.includeSecret }));
+  const basic = !!b.basic;
+  if (!categories.length && !basic) throw bad('nothing_chosen', 'Choose at least one thing it may see');
+  return { everything: null, basic, categories, write, expiresAt: until };
+}
+
+/** What the owner let this assistant see and do last time, to start the consent page from. */
+async function previousChoice(name: string): Promise<Choice | null> {
+  const party = (await ctx.store.find<PartyDoc>('parties', { type: 'assistant' })).find((p) => p.name.toLowerCase() === name.toLowerCase());
+  const s: ShareDoc | null = party ? (await ctx.store.find<ShareDoc>('shares', { party: party._id, mode: 'live' }))[0] ?? null : null;
+  return s ? { everything: s.everything ?? null, basic: s.basic, categories: s.categories, write: s.write ?? 'none', expiresAt: null } : null;
+}
+
+/** The assistant's party: the one you connected before under this name, or a new one. */
+async function assistantParty(name: string) {
+  const found = (await ctx.store.find<PartyDoc>('parties', { type: 'assistant' })).find((p) => p.name.toLowerCase() === name.toLowerCase());
+  if (found) return found;
+  const c: PartyDoc = {
+    _id: newId('pty'), type: 'assistant', name, methods: [], notes: '', affiliations: [], node: null, sharedIn: [], sharedInFetchedAt: null, createdAt: new Date().toISOString(),
+  };
+  await ctx.store.insert('parties', c);
+  return c;
 }
 
 async function issueTokens(keyId: string, keyExpiresAt: string | null) {
@@ -155,26 +179,25 @@ export default async function oauthRoutes(app: FastifyInstance) {
     const { client } = await checkRequest(req.query as Record<string, unknown>);
     return {
       client: { name: client.name, uri: client.uri, verified: false, redirectHost: new URL((req.query as { redirect_uri: string }).redirect_uri).host },
-      lengths: Object.keys(LENGTHS),
+      // Connected before under this name: start from what the owner chose last time.
+      previous: await previousChoice(client.name),
     };
   });
 
   /** The owner's answer. Returns where to send the browser: back to the assistant with a code, or with access_denied. */
   app.post('/api/oauth/authorize', async (req) => {
     const p = await requireSession(req);
-    const b = (req.body || {}) as Record<string, unknown> & { approve?: boolean; preset?: 'everything' | 'custom'; kinds?: string[]; documents?: boolean; assistant?: unknown; length?: string };
+    const b = (req.body || {}) as Record<string, unknown> & { approve?: boolean };
     const { client, redirectUri, challenge, state } = await checkRequest(b);
     const iss = await base();
     if (!b.approve) {
       await audit({ actor: ownerActor(p.key._id), action: 'oauth.deny', resource: `oauthClients/${client._id}`, text: `You turned down ${client.name}'s request to connect`, tone: 'owner' });
       return { redirect: withParams(redirectUri, { error: 'access_denied', state, iss }) };
     }
-    const assistant = checkAssistant(b.assistant) ?? { mode: 'suggest', secretFields: [] };
-    const length = (b.length && b.length in LENGTHS ? b.length : '60d') as Length;
-    const scopes = await scopesFor({ preset: b.preset === 'everything' ? 'everything' : 'custom', kinds: b.kinds, documents: b.documents }, assistant.mode);
+    const choice = await checkChoice(b);
     const code = `ldo_ac_${randomToken(32)}`;
     await ctx.store.insert<CodeDoc>('oauthCodes', {
-      _id: newId('cod'), hash: sha256(code), clientId: client._id, redirectUri, challenge, scopes, assistant, length, ownerKeyId: p.key._id,
+      _id: newId('cod'), hash: sha256(code), clientId: client._id, redirectUri, challenge, choice, ownerKeyId: p.key._id,
       expiresAt: new Date(Date.now() + CODE_TTL_MS).toISOString(), usedAt: null,
     });
     return { redirect: withParams(redirectUri, { code, state, iss }) };
@@ -193,12 +216,18 @@ export default async function oauthRoutes(app: FastifyInstance) {
       if (b.client_id !== c.clientId || b.redirect_uri !== c.redirectUri) return oauthError(reply, 'invalid_grant', 'client_id or redirect_uri doesn’t match the request');
       if (!b.code_verifier || pkce(b.code_verifier) !== c.challenge) return oauthError(reply, 'invalid_grant', 'PKCE verification failed');
       const client = await ctx.store.get<ClientDoc>('oauthClients', c.clientId);
-      const { doc } = await issueKey({ kind: 'app', name: client?.name ?? 'An assistant', scopes: c.scopes, assistant: c.assistant, ttlSec: LENGTHS[c.length] || undefined });
+      // The assistant becomes (or already is) a party with a share: what it sees and can change lives there.
+      const party = await assistantParty(client?.name ?? 'An assistant');
+      await setLiveShare(party._id, { everything: c.choice.everything, basic: c.choice.basic, lines: [], categories: c.choice.categories, entries: [], write: c.choice.write, expiresAt: c.choice.expiresAt });
+      for (const old of await ctx.store.find<ApiKeyDoc>('apiKeys', { kind: 'app', contactId: party._id })) {
+        if (!old.revokedAt) await ctx.store.update('apiKeys', old._id, { revokedAt: new Date().toISOString() }); // one key per relationship
+      }
+      const { doc } = await issueKey({ kind: 'app', name: party.name, scopes: [], contactId: party._id });
       await ctx.store.update('apiKeys', doc._id, { oauth: { clientId: c.clientId } });
       const t = await issueTokens(doc._id, doc.expiresAt);
-      const len = { hour: 'for an hour', day: 'for a day', '60d': 'for 60 days', forever: 'until you disconnect it' }[c.length];
+      const len = c.choice.expiresAt ? `until ${c.choice.expiresAt.slice(0, 10)}` : 'until you end it';
       await audit({ actor: ownerActor(c.ownerKeyId), action: 'oauth.connect', resource: `apiKeys/${doc._id}`, text: `You connected ${doc.name} ${len}`, tone: 'owner', ip: req.ip });
-      return { access_token: t.access, token_type: 'Bearer', expires_in: t.expiresIn, refresh_token: t.refresh, scope: c.scopes.join(' ') };
+      return { access_token: t.access, token_type: 'Bearer', expires_in: t.expiresIn, refresh_token: t.refresh };
     }
 
     if (b.grant_type === 'refresh_token') {
@@ -217,7 +246,7 @@ export default async function oauthRoutes(app: FastifyInstance) {
         }
       } else await ctx.store.update('oauthTokens', t._id, { usedAt: new Date().toISOString() });
       const n = await issueTokens(key._id, key.expiresAt);
-      return { access_token: n.access, token_type: 'Bearer', expires_in: n.expiresIn, refresh_token: n.refresh, scope: key.scopes.join(' ') };
+      return { access_token: n.access, token_type: 'Bearer', expires_in: n.expiresIn, refresh_token: n.refresh };
     }
 
     return oauthError(reply, 'unsupported_grant_type', 'Use authorization_code or refresh_token');

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { audit, ownerActor } from '../audit.js';
-import { bad, bearer, checkAssistant, checkAssistantScopes, COOKIE, findKey, HttpError, issueKey, notFound, requireOwner, requireSession, SCOPES, type ApiKeyDoc, type AssistantMode } from '../auth.js';
+import { bad, bearer, checkKeyScopes, COOKIE, findKey, HttpError, issueKey, notFound, requireOwner, requireSession, SCOPES, type ApiKeyDoc, type AssistantMode } from '../auth.js';
 
 const MODE_TEXT: Record<AssistantMode, string> = { answer: 'answer questions only', suggest: 'suggest changes', make: 'make changes' };
 import { ownerName, profileLines, PROFILE_LINES, publicName } from '../profile.js';
@@ -117,9 +117,25 @@ export default async function miscRoutes(app: FastifyInstance) {
     return { id: k._id, name: k.name, kind: k.kind, scopes: k.scopes, assistant: k.assistant ?? null, createdAt: k.createdAt, expiresAt: k.expiresAt, lastUsedAt: k.lastUsedAt };
   });
 
+  /**
+   * A new key. Two kinds: a developer's raw key (scopes chosen by hand, never an owner-only power), or a key for a
+   * party, such as an assistant that can't connect through the consent page. A party's key carries nothing itself:
+   * what it can see and change comes from that party's share, so the owner manages it on the party's page.
+   */
   app.post('/api/keys', async (req, reply) => {
-    const p = await requireOwner(req, 'keys:manage');
-    const b = (req.body || {}) as { name?: string; scopes?: string[]; assistant?: unknown };
+    const p = await requireSession(req);
+    const b = (req.body || {}) as { name?: string; scopes?: string[]; party?: string };
+    if (b.party) {
+      const party = await ctx.store.get<PartyDoc>('parties', String(b.party));
+      if (!party) throw notFound('party_not_found');
+      if (party.node) throw bad('has_node', `${party.name} has a Little Dipper: you're connected node to node, no key needed.`);
+      const old = await ctx.store.find<ApiKeyDoc>('apiKeys', { kind: 'app', contactId: party._id });
+      for (const k of old) if (!k.revokedAt) await ctx.store.update('apiKeys', k._id, { revokedAt: new Date().toISOString() }); // one key per relationship
+      const { secret, doc } = await issueKey({ kind: 'app', name: party.name, scopes: [], contactId: party._id });
+      await audit({ actor: ownerActor(p.key._id), action: 'key.create', resource: `apiKeys/${doc._id}`, text: `You made a key for ${party.name}. It sees and changes what you share with them.`, tone: 'owner' });
+      reply.code(201);
+      return { id: doc._id, name: party.name, party: party._id, prefix: doc.prefix, secret };
+    }
     // Fixed scopes plus {domain}:read / {domain}:write for every domain in the catalog.
     const domainScopes = (await listDomains()).flatMap((d) => [`${d.id}:read`, `${d.id}:write`]);
     const valid = new Set<string>([...SCOPES, ...domainScopes]);
@@ -127,26 +143,12 @@ export default async function miscRoutes(app: FastifyInstance) {
     if (unknown.length) throw bad('unknown_scope', `Unknown scope: ${unknown.join(', ')}`);
     const scopes = [...new Set(b.scopes || [])];
     if (!scopes.length) throw bad('scopes_required', 'Pick at least one scope');
+    await checkKeyScopes(scopes);
     const name = String(b.name || '').trim() || 'New key';
-    const assistant = checkAssistant(b.assistant);
-    if (assistant) checkAssistantScopes(scopes);
-    const { secret, doc } = await issueKey({ kind: 'app', name, scopes, assistant });
-    await audit({ actor: ownerActor(p.key._id), action: 'key.create', resource: `apiKeys/${doc._id}`, text: assistant ? `You connected the assistant “${name}” (${MODE_TEXT[assistant.mode]})` : `You created the API key “${name}”`, tone: 'owner' });
+    const { secret, doc } = await issueKey({ kind: 'app', name, scopes });
+    await audit({ actor: ownerActor(p.key._id), action: 'key.create', resource: `apiKeys/${doc._id}`, text: `You created the API key “${name}”`, tone: 'owner' });
     reply.code(201);
-    return { id: doc._id, name, scopes, prefix: doc.prefix, secret, assistant: assistant ?? null };
-  });
-
-  /** Change what an assistant may do: its mode and the secret fields it may read. Owner's browser only. */
-  app.patch('/api/keys/:id', async (req) => {
-    const p = await requireSession(req);
-    const k = await ctx.store.get<ApiKeyDoc>('apiKeys', (req.params as { id: string }).id);
-    if (!k || k.revokedAt || k.kind !== 'app') throw notFound('key_not_found');
-    const assistant = checkAssistant((req.body as { assistant?: unknown } | null)?.assistant);
-    if (!assistant) throw bad('assistant_required', 'Send { assistant: { mode, secretFields } }');
-    checkAssistantScopes(k.scopes);
-    await ctx.store.update('apiKeys', k._id, { assistant });
-    await audit({ actor: ownerActor(p.key._id), action: 'key.assistant', resource: `apiKeys/${k._id}`, text: `You set ${k.name} to ${MODE_TEXT[assistant.mode]}${assistant.secretFields.length ? `, with ${assistant.secretFields.length} secret ${assistant.secretFields.length === 1 ? 'field' : 'fields'}` : ''}`, tone: 'owner' });
-    return { id: k._id, name: k.name, assistant };
+    return { id: doc._id, name, scopes, prefix: doc.prefix, secret };
   });
 
   app.delete('/api/keys/:id', async (req) => {

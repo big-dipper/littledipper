@@ -23,7 +23,8 @@ export type { ContactMethod } from './methods.js';
  * to parties instead of typing their names, so each one's details live in one place.
  */
 export type PartyDoc = Doc & {
-  type: 'person' | 'organisation';
+  /** An assistant (Muse, Claude…) is its own kind: neither a person nor the company behind it. A plain field, so it can change if that line blurs. */
+  type: 'person' | 'organisation' | 'assistant';
   name: string;
   methods: import('./methods.js').ContactMethod[];
   notes: string;
