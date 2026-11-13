@@ -52,13 +52,9 @@ export type LinkDoc = Doc & {
   peerSigningKey: string;
   peerVersion: string | null;
   requestId: string;
-  tokenIssuedToPeer: { keyId: string; scope: string } | null;
-  tokenFromPeerEnc: string | null;
-  tokenFromPeerLastUsedAt: string | null;
   timeline: { label: string; at: string }[];
   establishedAt: string | null;
   lastSyncAt: string | null;
-  rotatedAt: string | null;
 };
 
 export type RequestDoc = Doc & {
@@ -201,15 +197,18 @@ export async function sendSigned<T extends object, R = Record<string, unknown>>(
   return (r.data || {}) as R;
 }
 
-// ── tokens between linked nodes ─────────────────────────────────────────
+// ── reads between linked nodes ──────────────────────────────────────────
 
-export const peerTokenFor = (link: LinkDoc) => (link.tokenFromPeerEnc ? decrypt(ctx.keys.masterKey, link.tokenFromPeerEnc) : null);
-export const sealToken = (t: string) => encrypt(ctx.keys.masterKey, t);
+/** The header a signed read travels in: the envelope (who, when, which path), signed with this node's identity key. */
+export const SIGNED_READ_HEADER = 'x-ld-signed';
 
+/**
+ * Read from a linked node. Each request is signed with this node's identity key, for this path, right now: there's no
+ * stored secret to leak or rotate, and a captured request is useless a minute later or for any other path.
+ */
 export async function peerGet(link: LinkDoc, path: string) {
-  const token = peerTokenFor(link);
-  if (!token) throw new HttpError(409, 'no_peer_token');
-  const r = await peerFetch(`${link.peerUrl}${path}`, { headers: { authorization: `Bearer ${token}` } });
+  const env = await envelope({ type: 'read', path });
+  const r = await peerFetch(`${link.peerUrl}${path}`, { headers: { [SIGNED_READ_HEADER]: Buffer.from(JSON.stringify(env)).toString('base64url') } });
   if (!r.ok) throw new HttpError(502, 'peer_error', (r.data?.message as string) || `Their Little Dipper answered ${r.status}`);
   return r.data || {};
 }

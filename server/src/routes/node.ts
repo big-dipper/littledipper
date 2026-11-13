@@ -320,7 +320,6 @@ export default async function nodeRoutes(app: FastifyInstance) {
         // Owner export: Secret values are decrypted so the file is usable on its own.
         if ((coll === 'records' || coll === 'recordVersions') && out.data) out.data = plainData(out as RecordDoc);
         if (coll === 'owners') { delete out.passwordHash; delete out.totp; delete out.recoveryCodeHashes; }
-        if (coll === 'nodeLinks') delete out.tokenFromPeerEnc;
         if (coll === 'messages' && isEncrypted(out.body)) out.body = JSON.parse(decrypt(ctx.keys.masterKey, out.body));
         if (coll === 'documents' && isEncrypted(out.text)) out.text = decrypt(ctx.keys.masterKey, out.text);
         if (coll === 'shares' || coll === 'copies') delete out.tokenHash;

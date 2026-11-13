@@ -6,13 +6,13 @@ import { audit } from '../audit.js';
 import { bad, findKey, HttpError, rateLimit } from '../auth.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import {
-  connectPolicy, lookupDescriptor, now, openEnvelope, parsePeerInput, REQUEST_TTL_DAYS, sealToken, tokenHash,
+  connectPolicy, lookupDescriptor, SIGNED_READ_HEADER, now, openEnvelope, parsePeerInput, REQUEST_TTL_DAYS, tokenHash,
   type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc, type RequestDoc,
 } from '../federation.js';
 import { getDomain } from '../domains/records.js';
 import { sharedDomainIds, sharedDomainOut } from '../domains/sharing.js';
 import { endLiveShare, setLiveShare, whatTheyGet } from '../shares.js';
-import { endLink, existingForNode, firstName, issuePeerToken, newNodeParty, pushTimeline, sharedOut, syncContact } from '../contacts.js';
+import { endLink, existingForNode, firstName, newNodeParty, pushTimeline, sharedOut, syncContact } from '../contacts.js';
 import { receiveMessage, type WireMessage } from '../messages.js';
 
 type Intro = { nodeId: string; address: string; signingKey: string; displayName: string; version?: string };
@@ -34,12 +34,15 @@ async function signedReply(payload: object) {
   return { payload: p, signature: sign(ctx.keys.signing.privateKey, p) };
 }
 
+/** Who's reading: a linked node, proven by a fresh signature with its identity key over this exact path. */
 async function peerContact(req: FastifyRequest) {
-  const h = req.headers.authorization;
-  const key = await findKey(h?.startsWith('Bearer ') ? h.slice(7).trim() : undefined, ['peer']);
-  if (!key?.contactId) throw new HttpError(401, 'bad_peer_token');
-  const c = await ctx.store.get<PartyDoc>('parties', key.contactId);
-  if (!c) throw new HttpError(401, 'bad_peer_token');
+  let env: unknown;
+  try { env = JSON.parse(Buffer.from(String(req.headers[SIGNED_READ_HEADER] || ''), 'base64url').toString('utf8')); } catch { throw new HttpError(401, 'unsigned_read'); }
+  if (!env) throw new HttpError(401, 'unsigned_read');
+  const { link, payload } = await verifiedLink<{ type: string; path: string }>(env, ['active']).catch(() => { throw new HttpError(401, 'unknown_peer'); });
+  if (payload.type !== 'read' || payload.path !== req.url) throw new HttpError(401, 'bad_signature', 'Signed for a different request');
+  const c = await ctx.store.get<PartyDoc>('parties', link.contactId);
+  if (!c) throw new HttpError(401, 'unknown_peer');
   return c;
 }
 
@@ -109,22 +112,18 @@ export default async function peerRoutes(app: FastifyInstance) {
 
   app.post('/peer/requests/:requestId/accept', async (req) => {
     const { requestId } = req.params as { requestId: string };
-    const { link, payload } = await verifiedLink<{ type: string; requestId: string; token: string; version?: string }>(req.body, ['pending_out']);
-    if (payload.type !== 'connect.accept' || payload.requestId !== requestId || link.requestId !== requestId || !payload.token) throw bad('bad_accept');
+    const { link, payload } = await verifiedLink<{ type: string; requestId: string; version?: string }>(req.body, ['pending_out']);
+    if (payload.type !== 'connect.accept' || payload.requestId !== requestId || link.requestId !== requestId) throw bad('bad_accept');
     const contact = (await ctx.store.get<PartyDoc>('parties', link.contactId))!;
-    const { secret, doc } = await issuePeerToken(contact);
-    await ctx.store.update('nodeLinks', link._id, {
-      status: 'active', tokenFromPeerEnc: sealToken(payload.token), tokenIssuedToPeer: { keyId: doc._id, scope: 'peer:profile peer:fields' },
-      establishedAt: now(), peerVersion: payload.version || link.peerVersion,
-    });
+    await ctx.store.update('nodeLinks', link._id, { status: 'active', establishedAt: now(), peerVersion: payload.version || link.peerVersion });
     await pushTimeline(link, `Approved by ${firstName(contact.name)}`);
     await pushTimeline(link, 'Secure connection set up');
     const r = await ctx.store.findOne<RequestDoc>('connectionRequests', { linkId: link._id, status: 'pending' });
     if (r) await ctx.store.update('connectionRequests', r._id, { status: 'accepted' });
     await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.accept', resource: `parties/${contact._id}`, text: `${contact.name} approved your request`, tone: 'peer' });
-    // Fetch what they share once they've stored our token.
+    // Fetch what they share once they've marked the link active too.
     setTimeout(() => { ctx.store.get<PartyDoc>('parties', contact._id).then((c) => c && syncContact(c)).catch(() => {}); }, 300);
-    return signedReply({ type: 'connect.accepted', requestId, token: secret });
+    return signedReply({ type: 'connect.accepted', requestId });
   });
 
   app.post('/peer/requests/:requestId/decline', async (req) => {
@@ -147,17 +146,6 @@ export default async function peerRoutes(app: FastifyInstance) {
     await endLink(link, `${contact ? firstName(contact.name) : 'They'} disconnected`);
     await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.revoked', resource: `parties/${link.contactId}`, text: `${contact?.name || displayAddr(link.peerUrl)} disconnected`, tone: 'peer' });
     return { ok: true };
-  });
-
-  app.post('/peer/links/rotate', async (req) => {
-    const { link, payload } = await verifiedLink<{ type: string; token: string }>(req.body, ['active']);
-    if (payload.type !== 'link.rotate' || !payload.token) throw bad('bad_rotate');
-    const contact = (await ctx.store.get<PartyDoc>('parties', link.contactId))!;
-    const { secret, doc } = await issuePeerToken(contact);
-    if (link.tokenIssuedToPeer) await ctx.store.update('apiKeys', link.tokenIssuedToPeer.keyId, { revokedAt: now() });
-    await ctx.store.update('nodeLinks', link._id, { tokenFromPeerEnc: sealToken(payload.token), tokenIssuedToPeer: { keyId: doc._id, scope: 'peer:profile peer:fields' }, rotatedAt: now() });
-    await pushTimeline(link, `Connection refreshed by ${firstName(contact.name)}`);
-    return signedReply({ type: 'link.rotated', token: secret });
   });
 
   /** Signed nudge: what they share with us changed. Sync now (in the background). */

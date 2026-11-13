@@ -11,11 +11,11 @@ import { checkMethods } from '../methods.js';
 import { canonicalUrl, displayAddr, getNode } from '../node.js';
 import { getOwner } from '../owner.js';
 import {
-  connectPolicy, lookupDescriptor, now, parsePeerInput, REQUEST_TTL_DAYS, sealToken, sendSigned, tokenHash,
+  connectPolicy, lookupDescriptor, now, parsePeerInput, REQUEST_TTL_DAYS, sendSigned, tokenHash,
   type PartyDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc, type RequestDoc,
 } from '../federation.js';
 import {
-  nudgePeers, partyOut, endLink, existingForNode, firstName, issuePeerToken, linkFor, newNodeParty, pushTimeline, revokeIssuedToken, syncContact,
+  nudgePeers, partyOut, endLink, existingForNode, firstName, linkFor, newNodeParty, pushTimeline, syncContact,
 } from '../contacts.js';
 
 const STALE_MS = 10 * 60_000;
@@ -279,7 +279,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     if (link && link.status === 'active') {
       try { await sendSigned(link.peerUrl, '/peer/links/revoke', { type: 'link.revoke' }); } catch { /* peer offline: our side still revokes */ }
     }
-    if (link) { await revokeIssuedToken(link); await ctx.store.remove('nodeLinks', link._id); }
+    if (link) await ctx.store.remove('nodeLinks', link._id);
     await endLiveShare(c._id);
     await ctx.store.removeMany('connectionRequests', { contactId: c._id });
     await ctx.store.removeMany('messages', { contactId: c._id });
@@ -430,24 +430,17 @@ export default async function contactRoutes(app: FastifyInstance) {
         confirm: choice.confirm,
       });
     }
-    const { secret, doc } = await issuePeerToken(contact);
-    let theirs: { token?: string };
-    try {
-      theirs = await sendSigned(link.peerUrl, `/peer/requests/${encodeURIComponent(r.requestId)}/accept`, { type: 'connect.accept', requestId: r.requestId, token: secret, version: (await getNode()).version }, link.peerSigningKey);
-    } catch (e) {
-      await ctx.store.update('apiKeys', doc._id, { revokedAt: now() });
-      throw e;
-    }
-    if (!theirs.token) throw new HttpError(502, 'peer_error', "Their Little Dipper didn't send a token back");
+    // No secrets change hands: from now on each side signs its reads with its own identity key.
+    await sendSigned(link.peerUrl, `/peer/requests/${encodeURIComponent(r.requestId)}/accept`, { type: 'connect.accept', requestId: r.requestId, version: (await getNode()).version }, link.peerSigningKey);
     const t = now();
-    await ctx.store.update('nodeLinks', link._id, { status: 'active', tokenIssuedToPeer: { keyId: doc._id, scope: 'peer:profile peer:fields' }, tokenFromPeerEnc: sealToken(theirs.token), establishedAt: t });
+    await ctx.store.update('nodeLinks', link._id, { status: 'active', establishedAt: t });
     await pushTimeline(link, 'Approved by you');
     await pushTimeline(link, 'Secure connection set up');
     await ctx.store.update('connectionRequests', r._id, { status: 'accepted' });
     const g = await shareOut(contact._id);
     await audit({ actor: ownerActor(p.key._id), action: 'link.accept', resource: `parties/${contact._id}`, text: `You connected with ${contact.name}`, tone: 'peer', meta: { share: g } });
     try { await syncContact((await ctx.store.get<PartyDoc>('parties', contact._id))!); } catch { /* fetched later */ }
-    return { status: 'active', share: g, issuedToken: doc.prefix };
+    return { status: 'active', share: g };
   });
 
   app.post('/api/federation/requests/:id/decline', async (req) => {
@@ -495,27 +488,6 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   // ── links ────────────────────────────────────────────────────────────
-  app.post('/api/federation/links/:id/rotate', async (req) => {
-    const p = await requireSession(req);
-    const link = await ctx.store.get<LinkDoc>('nodeLinks', (req.params as { id: string }).id);
-    if (!link || link.status !== 'active') throw notFound('link_not_found');
-    const contact = (await ctx.store.get<PartyDoc>('parties', link.contactId))!;
-    const { secret, doc } = await issuePeerToken(contact);
-    let theirs: { token?: string };
-    try {
-      theirs = await sendSigned(link.peerUrl, '/peer/links/rotate', { type: 'link.rotate', token: secret }, link.peerSigningKey);
-    } catch (e) {
-      await ctx.store.update('apiKeys', doc._id, { revokedAt: now() });
-      throw e;
-    }
-    if (!theirs.token) throw new HttpError(502, 'peer_error', "Their Little Dipper didn't send a new token");
-    await revokeIssuedToken(link);
-    await ctx.store.update('nodeLinks', link._id, { tokenIssuedToPeer: { keyId: doc._id, scope: 'peer:profile peer:fields' }, tokenFromPeerEnc: sealToken(theirs.token), rotatedAt: now() });
-    await pushTimeline(link, 'Connection refreshed');
-    await audit({ actor: ownerActor(p.key._id), action: 'link.rotate', resource: `nodeLinks/${link._id}`, text: `You refreshed the connection with ${contact.name}`, tone: 'owner' });
-    return { rotated: true, newTokenPrefix: doc.prefix };
-  });
-
   app.delete('/api/federation/links/:id', async (req) => {
     const p = await requireSession(req);
     const link = await ctx.store.get<LinkDoc>('nodeLinks', (req.params as { id: string }).id);

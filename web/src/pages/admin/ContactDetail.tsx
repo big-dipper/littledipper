@@ -49,9 +49,6 @@ export default function ContactDetail() {
     if (await run(() => post(`/api/federation/requests/${c.request!.id}/decline`), 'Request declined')) { refresh(); nav('/admin/relationships'); }
   };
   const resend = () => c.request && run(() => post(`/api/federation/requests/${c.request!.id}/resend`), 'Request re-sent');
-  const rotate = async () => {
-    if (await run(() => post(`/api/federation/links/${c.node!.linkId}/rotate`), 'Keys rotated. Their Little Dipper was notified.')) reload();
-  };
   const disconnect = () => setConfirm({
     title: `Disconnect ${c.name}?`, body: 'They will no longer see anything you shared. They stay in your relationships.', cta: 'Disconnect',
     onConfirm: async () => {
@@ -168,12 +165,11 @@ export default function ContactDetail() {
                     {c.timeline.map((t, i) => (
                       <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-accent-2)', flex: 'none' }} /><span style={{ flex: 1 }}>{t.label}</span><span className="text-muted">{shortDate(t.at)}</span></div>
                     ))}
-                    {c.keys.tokenIssued?.lastUsedAt && <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-accent-2)', flex: 'none' }} /><span style={{ flex: 1 }}>Last read of your data</span><span className="text-muted">{ago(c.keys.tokenIssued.lastUsedAt)}</span></div>}
                   </div>
                   {tech && [
                     ['Their signing key', `${c.keys.peerSigningKey}${c.keys.peerVersion ? ` · v${c.keys.peerVersion}` : ''}`],
-                    ['Token you issued them', c.keys.tokenIssued ? `${c.keys.tokenIssued.prefix} · scope ${c.keys.tokenIssued.scopes.join(' ')}` : 'none'],
-                    ['Token they issued you', c.keys.tokenFromPeer ? `stored encrypted · last used ${ago(c.keys.tokenFromPeer.lastUsedAt)}` : 'none'],
+                    ['How you read each other', 'Every read is signed with the reading node’s own key. No secrets are stored for this connection.'],
+                    ['Last read their side', c.keys.lastSyncAt ? ago(c.keys.lastSyncAt) : 'not yet'],
                     ['Their ID', c.node?.nodeId || ''],
                   ].map(([label, value]) => (
                     <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '10px 16px', borderRadius: 18, background: 'var(--color-neutral-100)' }}>
@@ -182,7 +178,6 @@ export default function ContactDetail() {
                     </div>
                   ))}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-secondary" disabled={busy} onClick={rotate}>Refresh connection</button>
                     <button className="btn btn-ghost" onClick={disconnect} style={{ color: 'var(--color-accent-700)' }}>Disconnect</button>
                   </div>
                 </div>

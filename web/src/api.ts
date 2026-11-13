@@ -56,7 +56,7 @@ export type PartyDetail = Party & {
   request: { id: string; direction: 'in' | 'out'; note: string; viaInvite: boolean; expiresAt: string; requestedFields: string[]; offeredLabels: string[]; offeredDetails: { label: string; value: string }[] } | null;
   timeline: { label: string; at: string }[];
   sharedDomains?: SharedDomain[];
-  keys: { peerSigningKey: string; peerVersion: string | null; tokenIssued: { prefix: string; scopes: string[]; lastUsedAt: string | null } | null; tokenFromPeer: { stored: boolean; lastUsedAt: string | null } | null; lastSyncAt: string | null; rotatedAt: string | null } | null;
+  keys: { peerSigningKey: string; peerVersion: string | null; lastSyncAt: string | null } | null;
   usedBy: Reference[];
   /** What you asked them for when you connected, and whether it came. */
   asked: { key: string; label: string; shared: boolean }[];

@@ -246,11 +246,13 @@ async function main() {
     await a.call('PUT', `/api/parties/${cA.id}/share`, { entries: { [kyoto.id]: false } });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
     ok(!detB.sharedDomains.some((d: any) => d.domain === 'residences'), 'and unshared again');
-    const rot = await a.call('POST', `/api/federation/links/${detA.node.linkId}/rotate`, {});
-    ok(rot.rotated, 'connection refreshed (tokens rotated)');
+    // Reads between nodes are signed with each node's identity key: no stored secret, nothing to rotate.
+    ok((await fetch(`${a.base}/peer/profile`)).status === 401, 'an unsigned read gets nothing');
+    const forged = Buffer.from(JSON.stringify({ payload: { type: 'read', path: '/peer/profile', from: 'ldn_nobody', ts: Date.now(), nonce: 'x' }, signature: 'nope' })).toString('base64url');
+    ok((await fetch(`${a.base}/peer/profile`, { headers: { 'x-ld-signed': forged } })).status === 401, 'a read signed by no one we know gets nothing');
     await a.call('PUT', `/api/parties/${cA.id}/share`, { basic: true });
     detB = await b.call('GET', `/api/parties/${cB.id}?sync=1`);
-    ok(detB.sharedIn.length > 0 && !detB.syncError, 'reads still work after rotation');
+    ok(detB.sharedIn.length > 0 && !detB.syncError, 'signed reads between connected nodes work');
 
     console.log('domains');
     // Entries point to people and organisations, never typed names: one party per name, made on first use.
@@ -838,7 +840,7 @@ async function main() {
     ok(noMsg.status === 403, 'app key without messages:read is refused');
 
     const keys = (await a.call('GET', '/api/keys')).items;
-    ok(keys.some((k: any) => k.kind === 'peer') && keys.some((k: any) => k.current), 'keys list shows session and peer token');
+    ok(!keys.some((k: any) => k.kind === 'peer') && keys.some((k: any) => k.current), 'keys list shows the session, and no secrets for connected nodes');
     const app = await a.call('POST', '/api/keys', { name: 'Home Assistant', scopes: ['owner:read'] });
     const viaKey = await fetch(a.base + '/api/owner', { headers: { authorization: `Bearer ${app.secret}` } });
     ok(viaKey.status === 200, 'app key with owner:read can read owner');
@@ -953,6 +955,8 @@ async function main() {
     let heard = false;
     for (let i = 0; i < 20 && !heard; i++) { await sleep(250); heard = (await b.call('GET', `/api/parties/${mayaOnB.id}`)).node?.url === 'localhost:4205'; }
     ok(heard, "B learns Maya's new address without a new invite");
+    const afterRestore = await b.call('GET', `/api/parties/${mayaOnB.id}?sync=1`);
+    ok(afterRestore.status === 'active' && !afterRestore.syncError && afterRestore.lastActivity, "after a full recovery, B still reads what Maya shares, signed with the same identity: no reconnecting");
     const hello = await b.call('POST', `/api/messages/conversations/${mayaOnB.id}`, { body: 'Welcome back' });
     ok(hello.status === 'delivered' && (await f.call('GET', '/api/messages/unread')).count >= 1, 'and B can message the restored node straight away');
     await new Promise((r) => { F.proc.once('exit', r); F.proc.kill(); });
