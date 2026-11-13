@@ -30,10 +30,12 @@ export default function ContactDetail() {
   if (error) return <div><Link className="btn btn-ghost" to="/admin/relationships">← Relationships</Link><ErrorNote error={error} /></div>;
   if (!c || !fieldsResp) return <Loading />;
   const fields = fieldsResp.items;
-  const first = firstName(c.name);
+  // An organisation goes by its whole name: "Remove Harbor Credit Union", never "Remove Harbor".
+  const isOrg = c.type === 'organisation';
+  const first = isOrg ? c.name : firstName(c.name);
   const isNode = !!c.node;
   const s = c.status;
-  const sub = c.node ? c.node.url : c.type === 'organisation' ? 'Organisation' : '';
+  const sub = c.node ? c.node.url : '';
 
   const accept = async () => {
     if (!c.request) return;
@@ -78,7 +80,7 @@ export default function ContactDetail() {
         <div style={{ flex: 1, minWidth: 220 }}>
           <h1 style={{ margin: 0 }}>{c.name}</h1>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
-            <span className={`tag ${isNode ? 'tag-accent-2' : 'tag-neutral'}`}>{isNode ? 'On Little Dipper' : 'Person'}</span>
+            <span className={`tag ${isNode ? 'tag-accent-2' : 'tag-neutral'}`}>{isNode ? 'On Little Dipper' : isOrg ? 'Organisation' : 'Person'}</span>
             <span className={`tag ${STATUS[s][1]}`}>{STATUS[s][0]}</span>
             <span className="text-muted" style={{ fontFamily: isNode ? 'var(--mono)' : 'inherit', fontSize: 12 }}>{sub}</span>
             {c.node?.nodeId && (
@@ -89,7 +91,8 @@ export default function ContactDetail() {
             )}
           </div>
         </div>
-        {!isNode && <button className="btn btn-secondary" onClick={invite}>Invite to Little Dipper</button>}
+        {/* One owner per node: Little Dipper is for people, so organisations are never invited to run one. */}
+        {!isNode && !isOrg && <button className="btn btn-secondary" onClick={invite}>Invite to Little Dipper</button>}
         {isNode && s === 'active' && <Link className="btn btn-primary" to={`/admin/messages/${c.id}`}>Message</Link>}
       </div>
 
@@ -116,7 +119,8 @@ export default function ContactDetail() {
           <div style={{ display: 'grid', gap: 22, marginTop: 22 }}>
             <div style={{ display: 'grid', gap: 22 }}>
               {catalog && <BetweenYou c={c} />}
-              {catalog && <HowYouKnow partyId={c.id} first={first} catalog={catalog} notes={isNode ? { text: c.notes, save: (notes) => run(() => patch(`/api/parties/${c.id}`, { notes }), 'Saved').then(reload) } : undefined} />}
+              {/* How you know someone (spouse, mentor…) is about people; with an organisation, Between you says it. */}
+              {catalog && !isOrg && <HowYouKnow partyId={c.id} first={first} catalog={catalog} notes={isNode ? { text: c.notes, save: (notes) => run(() => patch(`/api/parties/${c.id}`, { notes }), 'Saved').then(reload) } : undefined} />}
               {/* One contact card: what they share (kept up to date by them), plus anything you added yourself. */}
               <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

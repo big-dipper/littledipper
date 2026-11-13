@@ -350,9 +350,12 @@ export function displayValue(p: PartDef, v: unknown): string {
     case 'record': { const n = Array.isArray(v) ? v.length : 1; return `${n} linked ${n === 1 ? 'entry' : 'entries'}`; }
     case 'party': case 'contact': return (Array.isArray(v) ? v : [v]).map((x) => partyName(String(x))).join(', ');
     case 'date': { const [y, m, d] = String(v).split('-'); return [d && String(+d), m && MONTH_NAMES[+m - 1], y].filter(Boolean).join(' '); }
-    default: return String(v);
+    // Phone numbers are stored as +15035550148 and read as (503) 555-0148, wherever they turn up.
+    default: return E164.test(String(v)) ? displayPhone(String(v)) : String(v);
   }
 }
+
+const E164 = /^\+[1-9]\d{6,14}(;ext=\d+)?$/;
 
 const DAYS: Record<string, string> = { MO: 'Monday', TU: 'Tuesday', WE: 'Wednesday', TH: 'Thursday', FR: 'Friday', SA: 'Saturday', SU: 'Sunday' };
 const NTH: Record<string, string> = { '1': 'first', '2': 'second', '3': 'third', '4': 'fourth', '-1': 'last' };

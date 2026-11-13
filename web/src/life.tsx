@@ -1,6 +1,6 @@
 /** Shared pieces for the "My data" area: catalog types, group styling, dates, and the schema-driven record editor. */
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { del, FILE_ACCEPT, get, longDate, patch, post, uploadDocument, type DocRef, type Sensitivity } from './api';
+import { del, displayPhone, FILE_ACCEPT, get, longDate, patch, post, uploadDocument, type DocRef, type Sensitivity } from './api';
 import { DocTiles } from './docs';
 import { Confirm, Pills, Toggle, useAction, useToast, type ConfirmCfg } from './ui';
 import { zoneFor, zoneLabel } from './zones';
@@ -191,7 +191,8 @@ export function show(p: Part, v: unknown, contacts: ContactLite[], linked?: Reco
     case 'party': case 'contact': return (Array.isArray(v) ? v : [v]).map((x) => contacts.find((c) => c.id === x)?.name ?? 'Removed contact').join(', ');
     case 'last4': return `•••• ${v}`;
     case 'url': return String(v).replace(/^https?:\/\//, '').replace(/\/$/, '');
-    default: return String(v);
+    // Phone numbers are stored as +15035550148 and read as (503) 555-0148, wherever they turn up.
+    default: return /^\+[1-9]\d{6,14}(;ext=\d+)?$/.test(String(v)) ? displayPhone(String(v)) : String(v);
   }
 }
 
