@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { ago, copy, del, get, post, put, type PartyDetail } from '../../api';
 import { Confirm, Pills, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { AssistantActivity } from './Apps';
+import { useAdmin } from './Layout';
 
 type Share = PartyDetail['share'];
 type Write = 'none' | 'suggest' | 'make';
@@ -21,6 +22,8 @@ const WRITE_TEXT: Record<Write, string> = {
 };
 
 export default function AssistantPanel({ c, onShare }: { c: PartyDetail; onShare: (s: Share) => void }) {
+  const { node } = useAdmin();
+  const stale = node.reconnect.some((x) => x.party === c.id);
   const { run, busy } = useAction();
   const toast = useToast();
   const { data: keys, reload } = useAsync(() => get<{ items: KeyRow[] }>('/api/keys'), []);
@@ -57,6 +60,11 @@ export default function AssistantPanel({ c, onShare }: { c: PartyDetail; onShare
         </span>
       </div>
 
+      {stale && (
+        <div style={{ borderRadius: 16, background: 'var(--color-accent-100)', padding: '12px 14px', fontSize: 13.5 }}>
+          Your Little Dipper was restored, so {c.name} needs to sign in again. Open {c.name} and connect it to your Little Dipper as before: you’ll see your choices for it already filled in.
+        </div>
+      )}
       <div style={{ display: 'grid', gap: 6 }}>
         <div style={{ fontWeight: 600, fontSize: 14 }}>What it can change</div>
         <Pills value={write} onChange={(w) => send({ write: w }, 'Saved')} options={WRITES} />

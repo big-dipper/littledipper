@@ -62,6 +62,13 @@ async function prune() {
   if (existsSync(blobDir())) for (const f of readdirSync(blobDir())) if (!kept.has(f)) unlinkSync(path.join(blobDir(), f));
 }
 
+/** Remember the restore: an assistant's sign-in changes every half hour, so any backup is behind it. */
+async function markRestored() {
+  const { getNode } = await import('./node.js');
+  const n = await getNode();
+  await ctx.store.update('nodes', n._id, { restoredAt: new Date().toISOString() });
+}
+
 export async function listBackups() {
   const docs = await ctx.store.find<BackupDoc>('backups', {}, { sort: { at: -1 } });
   return docs.map((b) => ({ ...b, available: existsSync(path.join(dir(), b.file)) }));
@@ -75,6 +82,7 @@ export async function restoreBackup(id: string) {
   await createBackup('pre-restore');
   const keep = await ctx.store.dump();
   await ctx.store.restore({ ...data, backups: keep.backups, challenges: [] });
+  await markRestored();
   // Bring back the contents of any page deleted since this backup.
   for (const f of data.files ?? []) {
     if (!(await ctx.store.getBlob(f._id)) && existsSync(blobFile(f._id))) await ctx.store.putBlob(f._id, readFileSync(blobFile(f._id)));
@@ -136,6 +144,7 @@ export async function restoreBundle(raw: string) {
   const { bundle, data } = openBundle(raw, ctx.keys);
   const keep = await ctx.store.dump();
   await ctx.store.restore({ ...data, backups: keep.backups, challenges: [] });
+  await markRestored();
   return putBundleFiles(bundle);
 }
 
@@ -185,6 +194,7 @@ export async function restoreOnFreshNode(kit: unknown, passphrase: string, raw: 
   const keys = openKit(kit, passphrase);
   const { bundle, data } = openBundle(raw, keys);
   await ctx.store.restore({ ...data, backups: [], challenges: [] });
+  await markRestored();
   await saveKeystore(ctx.store, { signing: keys.signing, masterKey: keys.masterKey });
   ctx.keys = { signing: keys.signing, masterKey: keys.masterKey };
   const files = await putBundleFiles(bundle);

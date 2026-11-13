@@ -4,7 +4,7 @@ import { config, VERSION } from '../config.js';
 import { ctx } from '../ctx.js';
 import { fingerprint, encryptWithPassphrase, decrypt, isEncrypted } from '../crypto.js';
 import { audit, ownerActor, systemActor } from '../audit.js';
-import { bad, COOKIE, cookieOpts, HttpError, issueKey, rateLimit, requireOwner, requireSession, requireSetup, startSession, deviceLabel } from '../auth.js';
+import { bad, COOKIE, cookieOpts, HttpError, issueKey, rateLimit, requireOwner, requireSession, requireSetup, startSession, deviceLabel, type ApiKeyDoc } from '../auth.js';
 import { canonicalUrl, checkClaimToken, descriptor, displayAddr, getNode, issueClaimLink, type NodeDoc } from '../node.js';
 import { backupBundle, createBackup, deviceCopyStatus, listBackups, markDeviceCopy, recoveryKitStatus, restoreBackup, restoreOnFreshNode, RestoreError } from '../backups.js';
 import { publicName } from '../profile.js';
@@ -72,6 +72,28 @@ export async function announceAddress(log?: (m: string) => void) {
   return { newAddress: addr, notified };
 }
 
+/** Assistants connected before the last restore that haven't been back since: one tap each, with your choices kept. */
+async function toReconnect(n: NodeDoc) {
+  if (!n.restoredAt || Date.now() - Date.parse(n.restoredAt) > 30 * 86400_000) return [];
+  const keys = await ctx.store.find<ApiKeyDoc>('apiKeys', { kind: 'app' });
+  return keys
+    .filter((k) => k.oauth && k.contactId && !k.revokedAt && (!k.lastUsedAt || k.lastUsedAt < n.restoredAt!))
+    .map((k) => ({ party: k.contactId!, name: k.name }));
+}
+
+/** Connections the node ended for safety this week (a sign-in token reused after it was swapped), not yet reconnected. */
+async function endedForSafety() {
+  const out = [];
+  for (const e of await ctx.store.find<{ _id: string; at: string; resource: string }>('audit', { action: 'oauth.reuse' })) {
+    if (Date.now() - Date.parse(e.at) > 7 * 86400_000) continue;
+    const k = await ctx.store.get<ApiKeyDoc>('apiKeys', e.resource.replace('apiKeys/', ''));
+    if (!k?.contactId) continue;
+    const newer = (await ctx.store.find<ApiKeyDoc>('apiKeys', { kind: 'app', contactId: k.contactId })).some((x) => !x.revokedAt && x.createdAt > e.at);
+    if (!newer) out.push({ party: k.contactId, name: k.name, at: e.at });
+  }
+  return out;
+}
+
 async function nodeOut() {
   const n = await getNode();
   const counts = await Promise.all(COLLECTIONS.filter((c) => c !== 'challenges').map((c) => ctx.store.count(c)));
@@ -88,6 +110,8 @@ async function nodeOut() {
     lastBackupAt: n.lastBackupAt || null,
     deviceBackup: deviceCopyStatus(n),
     recoveryKit: recoveryKitStatus(n),
+    reconnect: await toReconnect(n),
+    endedForSafety: await endedForSafety(),
     publicViewsToday: n.publicViews?.day === new Date().toISOString().slice(0, 10) ? n.publicViews.count : 0,
     claimedAt: n.claimedAt,
   };

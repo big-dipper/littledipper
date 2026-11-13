@@ -6,6 +6,8 @@ import type { Doc } from './store/index.js';
 
 export type NodeDoc = Doc & {
   type: 'node';
+  /** When this node was last restored from a backup: assistants connected before it need reconnecting (their sign-in moved on). */
+  restoredAt?: string;
   claimed: boolean;
   claimTokenHash: string | null;
   claimTokenExpiresAt: string | null;

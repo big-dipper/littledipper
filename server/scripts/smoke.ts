@@ -950,6 +950,7 @@ async function main() {
     ok(restoredF.restored && restoredF.nodeId === kit.nodeId && restoredF.address === 'http://localhost:4205' && restoredF.files > 0, `the fresh node becomes Maya's Little Dipper at its new address (${restoredF.files} files)`);
     ok((await f.call('GET', '/api/owner')).name === 'Maya Lindqvist' && countRecords(path.join(tmp, 'f')) === recordsOnA, 'the owner is signed in, with every record back');
     ok((await f.call('GET', '/api/node')).recoveryKit.due === false, 'the restored node remembers its kit was saved');
+    ok((await f.call('GET', '/api/node')).reconnect.some((x: any) => x.name === 'Muse'), 'after a restore, Home asks to reconnect the assistants whose sign-in moved on');
     await f.call('POST', '/api/node/claim/restore', { token: fToken, kit, passphrase: 'correct horse battery', backup: bundleR }, [401, 409]);
     ok(true, 'a node that was restored can’t be restored over again');
     let heard = false;

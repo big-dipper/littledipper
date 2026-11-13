@@ -90,6 +90,9 @@ export type NodeInfo = {
   deviceBackup: { lastAt: string | null; via: 'download' | 'folder' | null; remindAfterDays: number; due: boolean };
   /** Whether the owner holds a recovery kit that still works; without one, no backup restores elsewhere. */
   recoveryKit: { savedAt: string | null; due: boolean; reason: 'never' | 'key-changed' | null };
+  /** Assistants to reconnect after a restore, and connections ended for safety this week: both wait in Needs you. */
+  reconnect: { party: string; name: string }[];
+  endedForSafety: { party: string; name: string; at: string }[];
 };
 export type MessageStatus = 'queued' | 'sent' | 'delivered' | 'failed' | 'received' | 'read';
 export type Message = {

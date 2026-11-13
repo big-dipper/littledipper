@@ -40,10 +40,7 @@ async function notices(): Promise<Notice[]> {
     }
   }
 
-  // Connections ended for safety (a sign-in token reused after it was swapped).
-  for (const e of (await ctx.store.find<AuditDoc>('audit', { action: 'oauth.reuse' })).filter((x) => now - Date.parse(x.at) < WEEK)) {
-    out.push({ id: `safety:${e._id}`, kind: 'safety', at: e.at, href: '/admin/settings/apps', title: 'An assistant was disconnected for safety', text: e.text });
-  }
+  // Connections ended for safety are actions, so they're in Needs you (node info), not here.
 
   const seen = new Set((await ctx.store.find<Seen>('notices', {})).map((s) => s._id));
   return out.filter((n) => !seen.has(n.id)).sort((a, b) => b.at.localeCompare(a.at));

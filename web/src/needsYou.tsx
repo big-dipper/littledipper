@@ -54,6 +54,9 @@ export function useNeedsYou(): { items: NeedsYouItem[] | null } {
       title: a.kind === 'trip' ? a.title : a.kind === 'deadline' ? `${a.part}: ${a.title}` : `${a.title} ${a.expired ? 'has expired' : 'expires soon'}`,
       sub: a.kind === 'deadline' && a.expired ? `Passed ${fmtDate(a.date)}` : `${a.part} ${fmtDate(a.date)}`, actions: [{ label: 'Open', go: () => nav(`/admin/life/${a.domain}`) }],
     })),
+    // A connection the node ended for safety, and assistants whose sign-in a restore left behind: reconnect from its page.
+    ...node.endedForSafety.map((x) => ({ key: `safety-${x.party}`, initials: '!', title: `${x.name} was disconnected for safety`, sub: 'An old sign-in of its was used again, which can mean it was copied. Reconnect it from the assistant if this was you.', actions: [{ label: 'Open', go: () => nav(`/admin/relationships/${x.party}`) }] })),
+    ...node.reconnect.map((x) => ({ key: `reconnect-${x.party}`, initials: '↻', title: `Reconnect ${x.name}`, sub: 'Your Little Dipper was restored, so it needs to sign in again. Your choices for it are kept.', actions: [{ label: 'How', go: () => nav(`/admin/relationships/${x.party}`) }] })),
     // The recovery kit first: without it, no backup can be restored anywhere else.
     ...(node.recoveryKit.due ? [{ key: 'recovery-kit', initials: 'K', title: 'Save your recovery kit', sub: node.recoveryKit.reason === 'key-changed' ? 'Your key changed since you saved one' : 'To move your Little Dipper to a new server. Not the same as your sign-in codes', actions: [{ label: 'Save', go: () => nav('/admin/settings/address?kit=1') }] }] : []),
     // A backup on this device: asked for weekly, or when the browser paused saving to the chosen folder.
