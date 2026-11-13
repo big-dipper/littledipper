@@ -55,6 +55,8 @@ export type Rec = {
   /** Who added it, named the same way. */
   sourceLabel?: string;
   documents?: DocRef[];
+  /** Titles of the entries this one links to, by id (the owner's screens only). */
+  linked?: Record<string, string>;
 };
 export type ContactLite = { id: string; name: string; type: 'person' | 'organisation' };
 
@@ -165,7 +167,7 @@ export function money(m: { amount: number; currency: string }) {
 }
 
 /** Human value for display. */
-export function show(p: Part, v: unknown, contacts: ContactLite[]): string {
+export function show(p: Part, v: unknown, contacts: ContactLite[], linked?: Record<string, string>): string {
   if (v === undefined || v === null || v === '') return '';
   switch (p.type) {
     case 'enum': return p.options?.find(([k]) => k === v)?.[1] ?? String(v);
@@ -176,7 +178,12 @@ export function show(p: Part, v: unknown, contacts: ContactLite[]): string {
     case 'geo': { const g = v as { lat: number; lon: number }; return `${Math.abs(g.lat)}° ${g.lat >= 0 ? 'N' : 'S'}, ${Math.abs(g.lon)}° ${g.lon >= 0 ? 'E' : 'W'}`; }
     case 'timezone': return zoneLabel(String(v));
     case 'repeat': return describeRepeat(String(v));
-    case 'record': { const n = Array.isArray(v) ? v.length : 1; return `${n} linked ${n === 1 ? 'entry' : 'entries'}`; }
+    case 'record': {
+      // The linked entries by name; a count only when we don't know their names (a removed entry, an app's view).
+      const ids = (Array.isArray(v) ? v : [v]).map(String);
+      const names = ids.map((id) => linked?.[id]).filter(Boolean);
+      return names.length === ids.length ? names.join(', ') : ids.length === 1 ? 'A linked entry' : `${ids.length} linked entries`;
+    }
     case 'list': { const n = (v as unknown[]).length; return n ? `${n} ${n === 1 ? 'row' : 'rows'}` : ''; }
     case 'boolean': return v ? 'Yes' : 'No';
     case 'date': return fmtDate(String(v));
@@ -838,7 +845,7 @@ export function Details({ d, rec, revealed, contacts, skip = [] }: { d: Domain; 
     .map((p) => {
       const masked = rec.masked.includes(p.key) && !revealed;
       const v = revealed ? revealed[p.key] : rec.data[p.key];
-      return { p, text: masked ? '••••••' : show(p, v, contacts), masked };
+      return { p, text: masked ? '••••••' : show(p, v, contacts, rec.linked), masked };
     })
     .filter((r) => r.text);
   if (!rows.length && !docs.length && !lists.length) return null;

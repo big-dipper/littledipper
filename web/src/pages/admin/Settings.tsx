@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { startRegistration } from '@simplewebauthn/browser';
 import { addr, bytes, copy, del, get, longDate, patch, post, put, saveFile, whenLabel } from '../../api';
-import { Confirm, Dialog, Loading, Pills, QR, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
+import { Confirm, Dialog, Loading, Pills, QR, Toggle, useAction, useAsync, useToast, type ConfirmCfg, count } from '../../ui';
 import { useAdmin } from './Layout';
 import BigDipperSetup from './BigDipperSetup';
 import Apps from './Apps';
@@ -217,7 +217,7 @@ function HostingTab() {
     ['Provider', node.hosting.label],
     ...(node.hosting.region ? [['Region', node.hosting.region] as [string, string]] : []),
     ['Version', node.version + (node.update.available ? ' · update ready' : '')],
-    ...(tech ? [['Database', `${node.hosting.store} · ${node.hosting.documents} documents`], ['Claimed', node.claimedAt ? longDate(node.claimedAt) : '—']] as [string, string][] : [['Stored', `${node.hosting.documents} records`]] as [string, string][]),
+    ...(tech ? [['Database', `${node.hosting.store} · ${count(node.hosting.documents, 'document')}`], ['Claimed', node.claimedAt ? longDate(node.claimedAt) : '—']] as [string, string][] : [['Stored', count(node.hosting.documents, 'record')]] as [string, string][]),
   ];
   return (
     <div style={{ display: 'grid', gap: 18 }}>
@@ -301,7 +301,7 @@ function BackupsTab() {
   };
   const restore = (b: Backup) => setConfirm({
     title: `Restore the backup from ${whenLabel(b.at)}?`,
-    body: `Everything goes back to how it was then (${b.documents} documents). A safety backup of right now is taken first.`,
+    body: `Everything goes back to how it was then (${count(b.documents, 'document')}). A safety backup of right now is taken first.`,
     cta: 'Restore',
     onConfirm: async () => { if (await run(() => post(`/api/node/backups/${b._id}/restore`), 'Backup restored')) { setConfirm(null); refresh(); nav('/admin'); } },
   });

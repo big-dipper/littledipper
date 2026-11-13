@@ -25,6 +25,23 @@ const DERIVED_DOMAINS = PROFILE_DOMAINS;
 const readScopes = (d: string) => [`${d}:read`, 'records:read'];
 const writeScopes = (d: string) => [`${d}:write`, 'records:write'];
 
+/**
+ * The titles of the entries this category's records link to ("Covers: 2019 Subaru Outback", not "1 linked entry").
+ * Only for the owner's own screens: an app sees the ids, and reads the other category if its key allows.
+ */
+async function linkedTitles(d: DomainDef, recs: RecordDoc[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const parts = d.parts.filter((p) => p.type === 'record');
+  const wanted = new Set(recs.flatMap((r) => parts.flatMap((p) => [r.data[p.key]].flat())).filter((x): x is string => typeof x === 'string'));
+  if (!wanted.size) return out;
+  for (const t of new Set(parts.flatMap((p) => p.to ?? []))) {
+    const td = await getDomain(t);
+    if (!td) continue;
+    for (const r of await recordsOf(td.id)) if (wanted.has(r._id)) out[r._id] = recordOut(td, r).title;
+  }
+  return out;
+}
+
 async function domainOr404(id: string) {
   const d = await getDomain(id);
   if (!d) throw notFound('not_found');
@@ -216,14 +233,14 @@ export default async function domainRoutes(app: FastifyInstance) {
 
   const base = '/api/data/:domain';
   app.get(base, async (req) => {
-    const { d } = await ctxFor(req, false);
+    const { d, p } = await ctxFor(req, false);
     const q = req.query as { current?: string; from?: string; to?: string };
     let recs = sortRecords(d, await recordsOf(d.id));
     if (q.current === 'true') recs = recs.filter((r) => isCurrent(d, r));
     if (q.from || q.to) recs = recs.filter((r) => inRange(r, q.from, q.to));
     const docs = await documentsByRecord(d.id);
     const label = await actorLabels();
-    return { domain: d.id, items: recs.map((r) => { const out = recordOut(d, r); return { ...out, updatedByLabel: label(out.updatedBy), sourceLabel: label(out.source), documents: docs.get(r._id) ?? [] }; }) };
+    return { domain: d.id, items: recs.map((r) => { const out = recordOut(d, r); return { ...out, updatedByLabel: label(out.updatedBy), sourceLabel: label(out.source), documents: docs.get(r._id) ?? [] }; }), ...(p.isSession ? { linked: await linkedTitles(d, recs) } : {}) };
   });
 
   app.post(base, async (req, reply) => {
@@ -241,11 +258,11 @@ export default async function domainRoutes(app: FastifyInstance) {
   });
 
   app.get(`${base}/:id`, async (req) => {
-    const { d, id } = await ctxFor(req, false);
+    const { d, p, id } = await ctxFor(req, false);
     const r = await recordOr404(d, id!);
     const out = recordOut(d, r);
     const label = await actorLabels();
-    return { ...out, updatedByLabel: label(out.updatedBy), sourceLabel: label(out.source), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
+    return { ...out, updatedByLabel: label(out.updatedBy), sourceLabel: label(out.source), documents: (await documentsByRecord(d.id)).get(r._id) ?? [], ...(p.isSession ? { linked: await linkedTitles(d, [r]) } : {}) };
   });
 
   app.patch(`${base}/:id`, async (req, reply) => {

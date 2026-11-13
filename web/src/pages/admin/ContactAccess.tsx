@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { get, put, type PartyDetail as ContactDetail, type ProfileLine as Field, type SharedRecord } from '../../api';
-import { Confirm, Pills, Toggle, useAction, useAsync, type ConfirmCfg } from '../../ui';
+import { Confirm, Pills, Toggle, useAction, useAsync, type ConfirmCfg, count } from '../../ui';
 import { EntryCard, fetchCatalog, fmtRange, GROUPS, Lock, Mono, Select, type CardField, type Domain, type Rec } from '../../life';
 
 type Grants = ContactDetail['share'];
@@ -133,7 +133,7 @@ export default function ContactAccess({ c, fields, first, onGrants, onPreview }:
               <button className="bare" aria-expanded={open} onClick={() => setOpenGroups({ ...openGroups, [g.id]: !open })} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '12px 16px' }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: g.ink, flex: 'none' }} />
                 <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>{g.label}</span>
-                <span className={on ? 'tag tag-accent-2' : 'text-muted'} style={{ fontSize: on ? 11 : 12 }}>{on ? `${on} of ${list.length} shared` : `${list.length} categories`}</span>
+                <span className={on ? 'tag tag-accent-2' : 'text-muted'} style={{ fontSize: on ? 11 : 12 }}>{on ? `${on} of ${list.length} shared` : count(list.length, 'category', 'categories')}</span>
                 <span aria-hidden style={{ transform: `rotate(${open ? 90 : 0}deg)`, transition: 'transform .15s', fontSize: 12 }}>›</span>
               </button>
               {open && (

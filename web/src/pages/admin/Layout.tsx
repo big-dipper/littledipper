@@ -109,7 +109,11 @@ export default function AdminLayout() {
               <Icon name="collapse" size={18} />
             </button>
           </div>
-          <div className="text-muted mono brand-addr" style={{ padding: '2px 10px 0 50px', fontSize: 11, overflowWrap: 'anywhere' }}>{addr(node.address)}</div>
+          {/* One line: a long host address (little-dipper-production-ab12.up.railway.app) trails off; hover shows it, click copies it. */}
+          <div className="text-muted mono brand-addr" style={{ padding: '2px 10px 0 50px', fontSize: 11 }}>
+            <button type="button" title={`${addr(node.address)} · click to copy`} onClick={async () => toast((await copy(node.address)) ? 'Address copied' : addr(node.address))}
+              style={{ all: 'unset', cursor: 'pointer', display: 'block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{addr(node.address)}</button>
+          </div>
           <div className="text-muted mono brand-addr" style={{ padding: '2px 10px 14px 50px' }}>
             <button type="button" title={`${node.id} · click to copy`} onClick={async () => toast((await copy(node.id)) ? 'Node ID copied' : node.id)}
               style={{ all: 'unset', cursor: 'pointer', fontSize: 11, opacity: 0.75 }}>{node.id.slice(0, 8)}…{node.id.slice(-4)}</button>

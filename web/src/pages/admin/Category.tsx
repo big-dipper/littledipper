@@ -165,7 +165,8 @@ export default function Category() {
   const { domain = '' } = useParams();
   const contacts = useContactsLite();
   const { data: catalog, reload: reloadCatalog } = useAsync(fetchCatalog, []);
-  const { data, error, reload } = useAsync(() => get<{ items: Rec[] }>(`/api/data/${domain}`), [domain]);
+  // Each entry carries the names of what it links to, so details read "Covers: 2019 Subaru Outback".
+  const { data, error, reload } = useAsync(() => get<{ items: Rec[]; linked?: Record<string, string> }>(`/api/data/${domain}`).then((r) => ({ ...r, items: r.items.map((x) => ({ ...x, linked: r.linked })) })), [domain]);
   const { data: deleted, reload: reloadDeleted } = useAsync(() => get<{ items: Version[]; keepDays: number }>(`/api/data/${domain}/deleted`), [domain]);
   const { run } = useAction();
   const [editing, setEditing] = useState<Rec | 'new' | null>(null);

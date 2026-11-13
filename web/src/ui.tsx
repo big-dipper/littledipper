@@ -156,3 +156,6 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
 
 export const Loading = () => <p className="text-muted" style={{ fontSize: 14 }}>Loading…</p>;
 export const ErrorNote = ({ error }: { error: Error }) => <p style={{ color: 'var(--color-accent-700)', fontSize: 14 }}>{error.message}</p>;
+
+/** "1 entry", "3 entries": a count with its noun, never "1 entries". */
+export const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

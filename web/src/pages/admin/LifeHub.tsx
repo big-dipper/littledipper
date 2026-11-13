@@ -64,7 +64,7 @@ export default function LifeHub() {
       {!q && (
         <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'center', marginTop: 22, fontSize: 13 }} className="text-muted">
           <span><strong style={{ color: 'var(--color-text)' }}>{started}</strong> of {domains.length} categories started</span>
-          <span><strong style={{ color: 'var(--color-text)' }}>{entries}</strong> entries</span>
+          <span><strong style={{ color: 'var(--color-text)' }}>{entries}</strong> {entries === 1 ? 'entry' : 'entries'}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Lock style={{ color: 'var(--color-accent-700)' }} /> Secret details are encrypted and never leave without your confirmation</span>
         </div>
       )}
