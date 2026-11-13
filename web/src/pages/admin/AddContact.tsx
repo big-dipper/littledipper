@@ -12,7 +12,7 @@ export default function AddContact({ initialTab = 'person', initialAddress, onCl
   const toast = useToast();
   const { run, busy } = useAction();
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [person, setPerson] = useState<{ type: 'person' | 'organisation'; name: string; email: string; phone: string }>({ type: 'person', name: '', email: '', phone: '' });
+  const [person, setPerson] = useState<{ type: 'person' | 'organisation' | 'assistant'; name: string; email: string; phone: string }>({ type: 'person', name: '', email: '', phone: '' });
   const [nodeUrl, setNodeUrl] = useState(initialAddress ?? '');
   const [found, setFound] = useState<Lookup | null>(null);
   const [lookupError, setLookupError] = useState('');
@@ -54,7 +54,7 @@ export default function AddContact({ initialTab = 'person', initialAddress, onCl
   };
 
   return (
-    <Dialog title="Add a contact" onClose={onClose} width={560} actions={
+    <Dialog title="Add someone" onClose={onClose} width={560} actions={
       tab === 'person' ? <>
         <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary" disabled={busy} onClick={savePerson}>Save</button>
@@ -68,17 +68,19 @@ export default function AddContact({ initialTab = 'person', initialAddress, onCl
           : <button className="btn btn-primary" disabled={busy} onClick={createInvite}>Create link</button>}
       </>
     }>
-      <Pills value={tab} options={[['person', 'Person'], ['node', 'On Little Dipper'], ['invite', 'Invite link']]} onChange={setTab} />
+      <Pills value={tab} options={[['person', 'By name'], ['node', 'On Little Dipper'], ['invite', 'Invite link']]} onChange={setTab} />
 
       {tab === 'person' && (
         <form className="dialog-body" style={{ opacity: 1, display: 'grid', gap: 12 }} onSubmit={(e) => { e.preventDefault(); savePerson(); }}>
-          <div className="text-muted" style={{ fontSize: 13 }}>For people who don't use Little Dipper. Stored only on your Little Dipper; nothing is sent to them.</div>
-          <Pills value={person.type} options={[['person', 'A person'], ['organisation', 'An organisation']]} onChange={(v) => setPerson({ ...person, type: v as 'person' | 'organisation' })} />
+          <div className="text-muted" style={{ fontSize: 13 }}>{person.type === 'assistant'
+            ? 'An AI assistant that can’t connect itself. After you save, choose what it sees and can change on its page, then make it a key.'
+            : 'Someone who isn’t on Little Dipper. Kept only on your Little Dipper; nothing is sent to them.'}</div>
+          <Pills value={person.type} options={[['person', 'A person'], ['organisation', 'An organisation'], ['assistant', 'An assistant']]} onChange={(v) => setPerson({ ...person, type: v as 'person' | 'organisation' | 'assistant' })} />
           <div className="field"><label htmlFor="cn">Name</label><input id="cn" className="input" value={person.name} onChange={(e) => setPerson({ ...person, name: e.target.value })} /></div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
+          {person.type !== 'assistant' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
             <div className="field"><label htmlFor="ce">Email</label><input id="ce" className="input" type="email" value={person.email} onChange={(e) => setPerson({ ...person, email: e.target.value })} /></div>
             <div className="field"><label htmlFor="cp">Phone</label><input id="cp" className="input" type="tel" value={person.phone} onChange={(e) => setPerson({ ...person, phone: e.target.value })} /></div>
-          </div>
+          </div>}
           <button type="submit" hidden />
         </form>
       )}
