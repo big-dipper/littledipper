@@ -145,7 +145,7 @@ async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> 
       if (!v || typeof v !== 'object' || Array.isArray(v)) return fail('expected an address');
       const a = v as Record<string, unknown>;
       const extra = Object.keys(a).filter((k) => !(ADDRESS_KEYS as readonly string[]).includes(k));
-      if (extra.length) fail(`addresses have no ${extra.join(', ')}`);
+      if (extra.length) fail(`addresses have no ${extra.join(', ')}: use street1, street2, city, region (a state or province, e.g. UT), postalCode and country (a two-letter code, e.g. US)`);
       const out: Record<string, string> = {};
       for (const k of ADDRESS_KEYS) {
         const x = String(a[k] ?? '').trim();

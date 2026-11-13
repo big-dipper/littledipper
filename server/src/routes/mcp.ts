@@ -28,6 +28,25 @@ const INSTRUCTIONS = `This is the owner's Little Dipper: their records (addresse
 
 type Json = Record<string, unknown>;
 type Call = (method: string, url: string, body?: unknown, contentType?: string) => Promise<{ status: number; body: unknown }>;
+
+/** What a value of each field type looks like, so an assistant doesn't learn it from errors (list_kinds shows it per field). */
+const FORMAT: Record<string, string> = {
+  date: 'YYYY-MM-DD, or YYYY-MM or YYYY when that is all you know',
+  datetime: '{ at: "YYYY-MM-DDTHH:MM", tz: "America/Denver" }',
+  time: 'HH:MM or HH:MM:SS',
+  country: 'a two-letter country code, e.g. "US"',
+  region: 'a country code, or country and region, e.g. "US" or "US-UT"',
+  address: '{ street1, street2, city, region (a state or province, e.g. "UT"), postalCode, country (two-letter code, e.g. "US") }; all optional except country',
+  currency: 'a three-letter currency code, e.g. "USD"',
+  money: '{ amount: number, currency: "USD" }',
+  last4: 'exactly four digits, e.g. "4821"',
+  phone: 'as written, e.g. "(801) 555-0100" or "+18015550100"',
+  party: 'the id of a person or organisation from find_parties, or "new:<ref>" listed in newParties',
+  contact: 'the id of a person or organisation from find_parties, or "new:<ref>" listed in newParties',
+  record: 'the id of a record of a kind in pointsTo',
+  enum: 'one of the option values',
+  boolean: 'true or false',
+};
 type Tool = { name: string; title: string; description: string; inputSchema: Json; annotations?: Json; run: (args: Json, call: Call) => Promise<unknown> };
 
 const str = (description: string) => ({ type: 'string', description });
@@ -115,6 +134,7 @@ const TOOLS: Tool[] = [
           kind: d.id, label: d.label, description: d.description, dated: d.dated, count: d.count, currentCount: d.currentCount,
           fields: (d.parts as Json[]).filter((p) => !p.deprecated).map((p) => ({
             key: p.key, label: p.label, type: p.type, required: !!p.required, sensitivity: p.sensitivity,
+            ...(FORMAT[String(p.type)] ? { format: FORMAT[String(p.type)] + (p.periodic ? ', plus period: "hour" | "week" | "month" | "year" | "once"' : '') } : {}),
             ...(p.options ? { options: (p.options as [string, string][]).map(([k, l]) => ({ value: k, label: l })) } : {}),
             ...(p.of ? { rowFields: (p.of as Json[]).map((x) => ({ key: x.key, label: x.label, type: x.type })) } : {}),
             ...(p.to ? { pointsTo: p.to, many: !!p.many } : {}),
