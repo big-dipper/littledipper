@@ -161,11 +161,11 @@ export default function Apps({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-/** How to connect each assistant. "Tested" only once someone has run the six phase-1 jobs with it. */
-const ASSISTANTS: { name: string; status: 'Tested' | 'Should work'; how: string }[] = [
-  { name: 'Muse', status: 'Should work', how: 'Ask Muse to connect to your Little Dipper and give it the address below. Muse sends you a link: open it, and your Little Dipper asks what Muse may do.' },
-  { name: 'Claude', status: 'Should work', how: 'In Claude’s settings, add a custom connector and paste the address below. Claude opens your Little Dipper so you can approve it.' },
-  { name: 'ChatGPT', status: 'Should work', how: 'In ChatGPT’s settings, add a connector (it may need developer mode turned on) and paste the address below. ChatGPT opens your Little Dipper so you can approve it.' },
+/** How to connect each assistant. */
+const ASSISTANTS: { name: string; how: string }[] = [
+  { name: 'Muse', how: 'Ask Muse to connect to your Little Dipper and give it the address below. Muse sends you a link: open it, and your Little Dipper asks what Muse may do.' },
+  { name: 'Claude', how: 'In Claude’s settings, add a custom connector and paste the address below. Claude opens your Little Dipper so you can approve it.' },
+  { name: 'ChatGPT', how: 'In ChatGPT’s settings, add a connector (it may need developer mode turned on) and paste the address below. ChatGPT opens your Little Dipper so you can approve it.' },
 ];
 
 /** Steps to connect each assistant, with the address to paste. `bare`: no card or heading (the AI assistants page has its own). */
@@ -184,7 +184,7 @@ export function ConnectAssistant({ bare = false, featured }: { bare?: boolean; f
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {ASSISTANTS.map((x) => (
           <button key={x.name} className={`btn ${open === x.name ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 13 }} onClick={() => setOpen(open === x.name ? null : x.name)}>
-            {x.name} <span style={{ opacity: 0.7, fontWeight: 400, marginLeft: 6 }}>{x.status}</span>
+            {x.name}
           </button>
         ))}
         <button className={`btn ${open === 'other' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 13 }} onClick={() => setOpen(open === 'other' ? null : 'other')}>Another assistant</button>
@@ -196,9 +196,6 @@ export function ConnectAssistant({ bare = false, featured }: { bare?: boolean; f
             <span className="mono" style={{ fontSize: 13, background: 'var(--color-neutral-100)', padding: '6px 12px', borderRadius: 999, overflowWrap: 'anywhere' }}>{mcp}</span>
             <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { await copy(mcp); toast('Address copied'); }}>Copy</button>
           </div>
-          {open !== 'other' && ASSISTANTS.find((x) => x.name === open)?.status === 'Should work' && (
-            <div className="text-muted" style={{ fontSize: 12 }}>“Should work” means it follows the standard but nobody has tried every step with it yet. Tell us how it goes.</div>
-          )}
         </div>
       )}
     </div>
