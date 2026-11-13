@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ago, copy, del, get, patch, post, shortDate } from '../../api';
 import { Confirm, Dialog, ErrorNote, Loading, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { ENDPOINTS, MDARK, SCOPES } from '../../reference';
@@ -196,18 +196,19 @@ const ASSISTANTS: { name: string; status: 'Tested' | 'Should work'; how: string 
   { name: 'ChatGPT', status: 'Should work', how: 'In ChatGPT’s settings, add a connector (it may need developer mode turned on) and paste the address below. ChatGPT opens your Little Dipper so you can approve it.' },
 ];
 
-function ConnectAssistant() {
+/** Steps to connect each assistant, with the address to paste. `bare`: no card or heading (the AI assistants page has its own). */
+export function ConnectAssistant({ bare = false }: { bare?: boolean }) {
   const toast = useToast();
   const { node } = useAdmin();
   const [open, setOpen] = useState<string | null>(null);
   // The node's own address, not the browser's: assistants must reach the server, and it's the one OAuth uses.
   const mcp = `${node.address}/api/mcp`;
   return (
-    <div className="card" style={{ marginTop: 24, padding: '18px 22px', gap: 12 }}>
-      <div>
+    <div className={bare ? undefined : 'card'} style={bare ? { marginTop: 12, display: 'grid', gap: 12 } : { marginTop: 24, padding: '18px 22px', gap: 12 }}>
+      {!bare && <div>
         <div style={{ fontWeight: 600 }}>Connect an AI assistant</div>
-        <div className="text-muted" style={{ fontSize: 13.5 }}>It asks you here, on your Little Dipper, what it may see and do. You can watch what it does, undo it, and disconnect it any time.</div>
-      </div>
+        <div className="text-muted" style={{ fontSize: 13.5 }}>It asks you here, on your Little Dipper, what it may see and do. You can watch what it does, undo it, and disconnect it any time. <Link to="/admin/assistants">Why connect one?</Link></div>
+      </div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {ASSISTANTS.map((x) => (
           <button key={x.name} className={`btn ${open === x.name ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 13 }} onClick={() => setOpen(open === x.name ? null : x.name)}>

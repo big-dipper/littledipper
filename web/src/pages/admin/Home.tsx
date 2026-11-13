@@ -39,11 +39,11 @@ export default function Home() {
         <div aria-hidden style={{ position: 'absolute', right: 150, bottom: -60, width: 120, height: 120, borderRadius: '50%', background: 'var(--color-accent-2-700)', opacity: 0.5 }} />
         <div style={{ flex: 1, minWidth: 260, position: 'relative' }}>
           <div className="card-kicker" style={{ color: 'var(--color-accent-300)' }}>AI assistants</div>
-          <div className="card-title" style={{ fontSize: 22, marginTop: 4 }}>Give an assistant access to what you choose</div>
-          <div style={{ fontSize: 13, color: 'var(--color-neutral-400)', marginTop: 4, maxWidth: 560 }}>It gets its own key. You pick which categories it can read, and you can revoke it at any time.</div>
+          <div className="card-title" style={{ fontSize: 22, marginTop: 4 }}>Let an assistant do the tedious part</div>
+          <div style={{ fontSize: 13, color: 'var(--color-neutral-400)', marginTop: 4, maxWidth: 560 }}>Claude, ChatGPT or another assistant can fill in your Little Dipper from documents you already have and answer questions about your own life. You decide what it sees.</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
-          <Link className="btn btn-primary" to="/admin/settings/apps?preset=assistant" style={{ background: 'var(--color-accent-2-600)' }}>Connect an assistant</Link>
+          <Link className="btn btn-primary" to="/admin/assistants" style={{ background: 'var(--color-accent-2-600)' }}>See what it can do</Link>
         </div>
       </div>
 

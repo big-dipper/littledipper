@@ -19,6 +19,7 @@ import TasksPage from './pages/admin/TasksPage';
 import ContactDetail from './pages/admin/ContactDetail';
 import Messages from './pages/admin/Messages';
 import Review from './pages/admin/Review';
+import Assistants from './pages/admin/Assistants';
 import Receipts from './pages/admin/Receipts';
 import Documents from './pages/admin/Documents';
 import SharedDocument from './pages/SharedDocument';
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="activity" element={<Activity />} />
             <Route path="tasks" element={<TasksPage />} />
             <Route path="review" element={<Review />} />
+            <Route path="assistants" element={<Assistants />} />
             <Route path="messages/:contactId" element={<Messages />} />
             <Route path="public" element={<PublicEditor />} />
             <Route path="apps" element={<AppsRedirect />} />
