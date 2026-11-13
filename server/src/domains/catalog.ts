@@ -378,8 +378,10 @@ const DEFS: Def[] = [
       { key: 'routingNumber', label: 'Routing number', type: 'text', when: { part: 'kind', in: ['checking', 'savings'] }, hint: 'Identifies the bank; printed on cheques' },
       { key: 'account', label: 'Card for account', type: 'record', to: ['financial_accounts'], when: { part: 'kind', in: ['debit_card'] } },
       { key: 'finances', label: 'What it pays for', type: 'record', to: ['vehicles', 'real_estate'], when: { part: 'kind', in: ['loan', 'mortgage'] } },
-      { key: 'balance', label: 'Balance', type: 'money', sensitivity: 'secret' },
-      { key: 'balanceAsOf', label: 'Balance as of', type: 'date' },
+      // A typed-in bank or card balance is stale the next day, so only loans keep one: what's owed moves slowly.
+      // Live balances can come later from a synced account or the latest statement.
+      { key: 'balance', label: 'Amount owed', type: 'money', sensitivity: 'secret', when: { part: 'kind', in: ['loan', 'mortgage'] } },
+      { key: 'balanceAsOf', label: 'As of', type: 'date', when: { part: 'kind', in: ['loan', 'mortgage'] } },
       { key: 'ownedWith', label: 'Owned with', type: 'party', many: true, hint: 'Anyone on the account with you' },
       { key: 'status', label: 'Status', type: 'enum', options: o('current', 'past_due=Past due', 'charged_off=Charged off', 'in_collections=In collections', 'settled', 'paid_in_full=Paid in full', 'closed') },
       { key: 'statusSince', label: 'Status since', type: 'date' },

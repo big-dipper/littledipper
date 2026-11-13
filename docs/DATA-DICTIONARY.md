@@ -455,8 +455,8 @@ One entry: account · Group: money · Default sensitivity: sensitive · Keeps da
 | Routing number | `routingNumber` | text |  | follows the entry | Identifies the bank; printed on cheques; only when kind is checking or savings |
 | Card for account | `account` | link to financial_accounts |  | follows the entry | only when kind is debit_card |
 | What it pays for | `finances` | link to vehicles or real_estate |  | follows the entry | only when kind is loan or mortgage |
-| Balance | `balance` | money |  | secret |  |
-| Balance as of | `balanceAsOf` | date |  | follows the entry |  |
+| Amount owed | `balance` | money |  | secret | only when kind is loan or mortgage |
+| As of | `balanceAsOf` | date |  | follows the entry | only when kind is loan or mortgage |
 | Owned with | `ownedWith` | party |  | follows the entry | Anyone on the account with you |
 | Status | `status` | one of: current, past_due, charged_off, in_collections, settled, paid_in_full, closed |  | follows the entry |  |
 | Status since | `statusSince` | date |  | follows the entry |  |
