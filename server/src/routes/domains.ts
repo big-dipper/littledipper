@@ -436,13 +436,16 @@ export default async function domainRoutes(app: FastifyInstance) {
   });
 
   // ── review: changes assistants proposed, waiting for the owner ─────────
-  // The owner sees every item; an assistant's key sees its own (secret values masked).
-  const reviewOut = async (r: ReviewDoc, owner: boolean) => {
+  // The owner sees every item; an assistant's key sees its own. Secret values it can't read stay masked even in its own
+  // suggestions (the same key serves every conversation, so one chat mustn't read back what another sent); a value
+  // too short to show its last four says it's hidden, so it never reads as blank.
+  const reviewOut = async (r: ReviewDoc, owner: boolean, secretFields: string[] = []) => {
     const d = await getDomain(r.domain);
     const input = reviewInput(r);
     const current = r.recordId ? await ctx.store.get<RecordDoc>('records', r.recordId) : null;
     const plainNow = current ? plainData(current) : {};
-    const show = (k: string, v: unknown) => (!owner && d?.parts.some((x) => x.key === k && partSens(d, x) === 'secret') ? mask(String(v)) : v);
+    const hidden = (v: unknown) => { const m = mask(String(v)); return m.trim() === '••••' ? '•••• (hidden)' : m; };
+    const show = (k: string, v: unknown) => (!owner && !secretFields.includes(`${r.domain}.${k}`) && d?.parts.some((x) => x.key === k && partSens(d, x) === 'secret') ? hidden(v) : v);
     return {
       id: r._id, by: r.by, keyId: r.keyId, domain: r.domain, domainLabel: d?.label ?? r.domain, recordId: r.recordId,
       recordTitle: d && current ? recordOut(d, current).title : null, recordGone: !!r.recordId && !current,
@@ -477,7 +480,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     const status = q.status === 'all' ? null : q.status || 'pending';
     let items = await ctx.store.find<ReviewDoc>('reviews', status ? { status } : {}, { sort: { createdAt: -1 } });
     if (!p.isSession) items = items.filter((r) => r.keyId === p.key._id);
-    return { items: await Promise.all(items.slice(0, 200).map((r) => reviewOut(r, p.isSession))) };
+    return { items: await Promise.all(items.slice(0, 200).map((r) => reviewOut(r, p.isSession, p.key.assistant?.secretFields ?? []))) };
   });
 
   const reviewOr404 = async (id: string) => {

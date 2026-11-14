@@ -527,7 +527,8 @@ const DEFS: Def[] = [
       { key: 'plate', label: 'Plate', type: 'text' },
       { key: 'registeredIn', label: 'Registered in', type: 'region' },
       { key: 'registrationExpires', label: 'Registration expires', type: 'date', remind: true },
-      { key: 'heldAs', label: 'Held as', type: 'enum', options: o('owned', 'financed', 'leased', 'company=Company car') },
+      { key: 'heldAs', label: 'Held as', type: 'enum', options: o('owned', 'financed', 'leased', 'rented', 'company=Company car') },
+      { key: 'heldFrom', label: 'Rented from', type: 'party', expects: 'organisation', when: { part: 'heldAs', in: ['rented'] }, hint: 'The rental company, e.g. Hertz' },
       { key: 'ownedWith', label: 'Owned with', type: 'party', many: true, hint: 'Anyone else on the title' },
     ],
     companions: [
@@ -536,6 +537,7 @@ const DEFS: Def[] = [
       { domain: 'insurance', label: 'Is it insured?' },
       { domain: 'financial_accounts', label: 'The loan', when: { part: 'heldAs', in: ['financed'] } },
       { document: 'contract', label: 'The lease', when: { part: 'heldAs', in: ['leased'] } },
+      { document: 'contract', label: 'The rental agreement', when: { part: 'heldAs', in: ['rented'] } },
     ],
   },
   {

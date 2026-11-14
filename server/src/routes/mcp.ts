@@ -253,7 +253,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'upload_document', title: 'Upload a document',
-    description: 'Save a photo (JPEG, PNG, WebP, HEIC) or PDF as a new document, optionally filed on a record (e.g. a receipt photo on its receipt, a policy on its insurance record).',
+    description: 'Save a small photo (JPEG, PNG, WebP, HEIC) or PDF you have as bytes, as a new document, optionally filed on a record. For files you can only see elsewhere (Drive, email), ask the owner to upload them in Documents, then file them with file_document: never retype a file as base64.',
     inputSchema: obj({
       name: str('File name, e.g. receipt.jpg'), mimeType: str('image/jpeg, image/png, image/webp, image/heic or application/pdf'),
       contentBase64: str('The file, base64-encoded.'), title: str('A title for the document.'), documentKind: str('e.g. receipt, insurance card.'),
@@ -266,6 +266,27 @@ const TOOLS: Tool[] = [
       const link = a.fileOnKind && a.fileOnId ? `${a.fileOnKind}:${a.fileOnId}` : undefined;
       const d = await ok(call('POST', `/api/documents${q({ name: a.name, title: a.title, kind: a.documentKind, date: a.date, link })}`, bytes, String(a.mimeType)));
       return { id: d.id, title: d.title, kind: d.kind, filedOn: d.links };
+    },
+  },
+  {
+    name: 'file_document', title: 'File a document',
+    description: 'File a document that is already on the node (the owner uploads files themselves in Documents; find them with search_documents, status "inbox") on the record it belongs to. Give recordId to file it on an existing record, or data (and validFrom/validTo) to propose a new record from it, e.g. a receipt from a receipt photo. If you can make changes and only give recordId, it is filed straight away; otherwise it waits for the owner on the document.',
+    inputSchema: obj({
+      id: str('The document id.'), kind: str('The kind of record, from list_kinds.'), recordId: str('An existing record of that kind.'),
+      data: recordFields.data, validFrom: recordFields.validFrom, validTo: recordFields.validTo, note: str('Why it belongs there, for the owner.'),
+      title: str('Optional: a better title for the document.'), documentKind: str('Optional: e.g. receipt, lease, birth certificate.'), date: str('Optional: the date on the document, YYYY-MM-DD.'),
+    }, ['id', 'kind']),
+    run: async (a, call) => {
+      const id = encodeURIComponent(String(a.id));
+      const doc = await ok(call('GET', `/api/documents/${id}`));
+      const details = Object.fromEntries([['title', a.title], ['kind', a.documentKind], ['date', a.date]].filter(([, v]) => v));
+      if (a.recordId && !a.data) {
+        const links = [...(doc.links as Json[]).map((l) => ({ domain: l.domain, recordId: l.recordId })), { domain: a.kind, recordId: a.recordId }];
+        const r = await call('PATCH', `/api/documents/${id}`, { ...details, links, status: 'filed' });
+        if (r.status < 400) { const d = r.body as Json; return { id: d.id, title: d.title, filed: true, filedOn: d.links }; }
+      }
+      const d = await ok(call('POST', `/api/documents/${id}/suggestions`, { domain: a.kind, recordId: a.recordId, data: a.data, validFrom: a.validFrom, validTo: a.validTo, note: a.note }));
+      return { id: d.id, title: d.title, filed: false, message: 'Waiting for the owner on the document: they accept it with one click.' };
     },
   },
   {

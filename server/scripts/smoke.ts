@@ -431,6 +431,20 @@ async function main() {
     await a.call('POST', `/api/reviews/${secretItem.id}/reject`);
     await a.call('PATCH', `/api/data/employment/${job.id}`, { notes: '' });
     ok((await maker('get_record', { kind: 'employment', id: job.id })).structuredContent.data.employeeId !== 'AS-0042', 'secret fields stay masked for an assistant by default');
+    // Files the owner uploads, an assistant files (it never retypes a file as base64).
+    const ownerUpload = async (name: string) => (await (await fetch(`${a.base}/api/documents?name=${name}`, { method: 'POST', headers: { 'content-type': 'application/pdf', origin: a.base, cookie: [...a.jar].map(([k, v]) => `${k}=${v}`).join('; ') }, body: Buffer.from('%PDF-1.4\n%%EOF') })).json()).id as string;
+    const filer = as((await asParty('make', { everything: true, name: 'Filer (make)' })).secret);
+    const offerDoc = await ownerUpload('offer.pdf');
+    const filed = (await filer('file_document', { id: offerDoc, kind: 'employment', recordId: job.id, documentKind: 'contract' })).structuredContent;
+    const offerAfter = await a.call('GET', `/api/documents/${offerDoc}`);
+    ok(filed.filed && offerAfter.status === 'filed' && offerAfter.links.some((l: any) => l.recordId === job.id), 'an assistant that makes changes files an uploaded document on its record');
+    const suggestFiler = as((await asParty('suggest', { everything: true, name: 'Filer (suggest)' })).secret);
+    const payDoc = await ownerUpload('paystub.pdf');
+    const waiting = (await suggestFiler('file_document', { id: payDoc, kind: 'employment', recordId: job.id, note: 'Pay stub' })).structuredContent;
+    const payAfter = await a.call('GET', `/api/documents/${payDoc}`);
+    ok(!waiting.filed && payAfter.status === 'inbox' && payAfter.suggestions.length === 1, 'an assistant that suggests leaves it waiting on the document for the owner');
+    await a.call('POST', `/api/documents/${payDoc}/suggestions/${payAfter.suggestions[0].id}/accept`, {});
+    ok((await a.call('GET', `/api/documents/${payDoc}`)).links.some((l: any) => l.recordId === job.id), 'one click files it');
     const trusted = as(await asKey('answer', true));
     ok((await trusted('get_record', { kind: 'employment', id: job.id })).structuredContent.data.employeeId === 'AS-0042', 'an assistant reads secret details only once the owner includes them for that category');
     const leaving = await asParty('suggest', { name: 'Muse (leaving)' });
