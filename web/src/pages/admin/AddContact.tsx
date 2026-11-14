@@ -12,7 +12,7 @@ export default function AddContact({ initialTab = 'person', initialAddress, onCl
   const toast = useToast();
   const { run, busy } = useAction();
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [person, setPerson] = useState<{ type: 'person' | 'organisation' | 'assistant'; name: string; email: string; phone: string }>({ type: 'person', name: '', email: '', phone: '' });
+  const [person, setPerson] = useState<{ type: 'person' | 'organisation' | 'assistant'; name: string; email: string; phone: string; website: string }>({ type: 'person', name: '', email: '', phone: '', website: '' });
   const [nodeUrl, setNodeUrl] = useState(initialAddress ?? '');
   const [found, setFound] = useState<Lookup | null>(null);
   const [lookupError, setLookupError] = useState('');
@@ -39,7 +39,7 @@ export default function AddContact({ initialTab = 'person', initialAddress, onCl
 
   const savePerson = async () => {
     if (!person.name.trim()) return toast('Add a name first');
-    const r = await run(() => post('/api/parties', { type: person.type, name: person.name, methods: [...(person.email.trim() ? [{ kind: 'email', value: person.email, primary: true }] : []), ...(person.phone.trim() ? [{ kind: 'phone', value: person.phone, primary: true }] : [])] }), `${person.name} added`);
+    const r = await run(() => post('/api/parties', { type: person.type, name: person.name, methods: [...(person.email.trim() ? [{ kind: 'email', value: person.email, primary: true }] : []), ...(person.phone.trim() ? [{ kind: 'phone', value: person.phone, primary: true }] : []), ...(person.type === 'organisation' && person.website.trim() ? [{ kind: 'website', value: person.website, primary: true }] : [])] }), `${person.name} added`);
     if (r) onDone(r.id);
   };
 
@@ -78,6 +78,7 @@ export default function AddContact({ initialTab = 'person', initialAddress, onCl
           <Pills value={person.type} options={[['person', 'A person'], ['organisation', 'An organisation'], ['assistant', 'An assistant']]} onChange={(v) => setPerson({ ...person, type: v as 'person' | 'organisation' | 'assistant' })} />
           <div className="field"><label htmlFor="cn">Name</label><input id="cn" className="input" value={person.name} onChange={(e) => setPerson({ ...person, name: e.target.value })} /></div>
           {person.type !== 'assistant' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
+            {person.type === 'organisation' && <div className="field" style={{ gridColumn: '1 / -1' }}><label htmlFor="cw">Website</label><input id="cw" className="input" inputMode="url" placeholder="example.com" value={person.website} onChange={(e) => setPerson({ ...person, website: e.target.value })} /></div>}
             <div className="field"><label htmlFor="ce">Email</label><input id="ce" className="input" type="email" value={person.email} onChange={(e) => setPerson({ ...person, email: e.target.value })} /></div>
             <div className="field"><label htmlFor="cp">Phone</label><input id="cp" className="input" type="tel" value={person.phone} onChange={(e) => setPerson({ ...person, phone: e.target.value })} /></div>
           </div>}

@@ -59,7 +59,8 @@ const recordFields = {
   newParties: {
     type: 'array', maxItems: 10,
     description: 'People and organisations this record needs that aren\'t on the node yet (check find_parties first). Refer to each in data as "new:<ref>". They are created only when the owner approves; someone already on the node with the same kind and name is used instead.',
-    items: obj({ ref: str('A short id you choose, e.g. "bonneville".'), type: { type: 'string', enum: ['person', 'organisation'] }, name: str('Their name as they write it') }, ['ref', 'type', 'name']),
+    items: obj({ ref: str('A short id you choose, e.g. "bonneville".'), type: { type: 'string', enum: ['person', 'organisation'] }, name: str('Their name as they write it'),
+      website: str('Optional: an organisation\'s web address, if you know it for sure'), api: str('Optional: the address their API answers at'), mcp: str('Optional: the address of their MCP server') }, ['ref', 'type', 'name']),
   },
 };
 
@@ -112,13 +113,14 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'add_party', title: 'Add a person or organisation',
-    description: 'Add a person or organisation the owner deals with, to point records at (a receipt’s merchant, a job’s employer). Check find_parties first. Only what you know to be true: a name, and optionally an email, phone or website.',
+    description: 'Add a person or organisation the owner deals with, to point records at (a receipt’s merchant, a job’s employer). Check find_parties first. Only what you know to be true: a name, and optionally an email, phone, website, or an organisation’s API or MCP address.',
     inputSchema: obj({
       type: { type: 'string', enum: ['person', 'organisation'] }, name: str('Their name as they write it'),
-      email: str('Optional'), phone: str('Optional, with country code outside North America'), website: str('Optional'),
+      email: str('Optional'), phone: str('Optional, with country code outside North America'), website: str('Optional: their web address'),
+      api: str('Optional, organisations: the address their API answers at, if they publish one'), mcp: str('Optional, organisations: the address of their MCP server, if they publish one'),
     }, ['type', 'name']),
     run: async (a, call) => {
-      const methods = [['email', a.email], ['phone', a.phone], ['website', a.website]].filter(([, v]) => v).map(([kind, value]) => ({ kind, value }));
+      const methods = [['email', a.email], ['phone', a.phone], ['website', a.website], ['api', a.api], ['mcp', a.mcp]].filter(([, v]) => v).map(([kind, value]) => ({ kind, value }));
       const p = await ok(call('POST', '/api/parties', { type: a.type, name: a.name, methods })) as Json;
       return { id: p.id, type: p.type, name: p.name };
     },

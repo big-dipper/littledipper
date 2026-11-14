@@ -449,7 +449,7 @@ export default async function domainRoutes(app: FastifyInstance) {
       action: r.action, reason: r.reason, status: r.status, createdAt: r.createdAt, decidedAt: r.decidedAt, resultId: r.resultId ?? null,
       changes: [
         // New people and organisations it brings: created only if the owner approves.
-        ...(input.newParties ?? []).map((n) => ({ key: `${NEW}${n.ref}`, label: n.type === 'organisation' ? 'New organisation' : 'New person', secret: false, to: n.name })),
+        ...(input.newParties ?? []).map((n) => ({ key: `${NEW}${n.ref}`, label: n.type === 'organisation' ? 'New organisation' : 'New person', secret: false, to: [n.name, ...[n.website, n.api && `API ${n.api}`, n.mcp && `MCP ${n.mcp}`].filter(Boolean)].join(' · ') })),
         ...Object.entries(input.data ?? {}).map(([k, v]) => {
           const part = d?.parts.find((x) => x.key === k);
           const secret = !!(d && part && partSens(d, part) === 'secret');

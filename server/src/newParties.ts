@@ -11,8 +11,11 @@ import { ctx } from './ctx.js';
 import { newId } from './crypto.js';
 import { bad } from './auth.js';
 import type { PartyDoc } from './federation.js';
+import { checkUrl, type ContactMethod } from './methods.js';
 
-export type NewParty = { ref: string; type: 'person' | 'organisation'; name: string };
+/** Organisations can come with their web, API and MCP addresses. */
+const ADDRESSES = ['website', 'api', 'mcp'] as const;
+export type NewParty = { ref: string; type: 'person' | 'organisation'; name: string; website?: string; api?: string; mcp?: string };
 export const NEW = 'new:';
 const MAX = 10;
 
@@ -30,7 +33,9 @@ export function checkNewParties(v: unknown): NewParty[] {
     seen.add(ref);
     if (p.type !== 'person' && p.type !== 'organisation') throw bad('invalid_value', 'newParties: type is person or organisation');
     if (!name) throw bad('invalid_value', 'newParties: each needs a name');
-    return { ref, type: p.type, name };
+    const out: NewParty = { ref, type: p.type, name };
+    for (const k of ADDRESSES) if (p[k]) out[k] = checkUrl(String(p[k]));
+    return out;
   });
 }
 
@@ -67,10 +72,13 @@ export async function createParties(list: NewParty[]): Promise<Map<string, strin
     const found = await existingParty(p);
     if (found) { ids.set(p.ref, found._id); continue; }
     const c: PartyDoc = {
-      _id: newId('pty'), type: p.type, name: p.name, methods: [], notes: '', affiliations: [], node: null, sharedIn: [], sharedInFetchedAt: null, createdAt: new Date().toISOString(),
+      _id: newId('pty'), type: p.type, name: p.name, methods: addressesOf(p), notes: '', affiliations: [], node: null, sharedIn: [], sharedInFetchedAt: null, createdAt: new Date().toISOString(),
     };
     await ctx.store.insert('parties', c);
     ids.set(p.ref, c._id);
   }
   return ids;
 }
+
+/** The web, API and MCP addresses a new party came with, as contact methods. */
+export const addressesOf = (p: NewParty): ContactMethod[] => ADDRESSES.filter((k) => p[k]).map((k) => ({ kind: k, value: p[k] as string }));

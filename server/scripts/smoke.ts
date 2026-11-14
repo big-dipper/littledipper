@@ -400,13 +400,17 @@ async function main() {
     ok((await a.call('GET', `/api/data/employment/${initech.id}`)).notes === '' && (await a.call('GET', '/api/reviews?status=rejected')).items.length === 1, 'a turned-down suggestion changes nothing');
     // A suggestion can bring the new organisations it needs; they exist only once the owner approves (BRY-114).
     const partyNames = async () => (await a.call('GET', '/api/parties')).items.map((x: any) => x.name);
-    const withNew = (await suggester('add_record', { kind: 'employment', data: { employer: 'new:pp', title: 'Engineer' }, newParties: [{ ref: 'pp', type: 'organisation', name: 'Pied Piper' }] })).structuredContent;
+    const withNew = (await suggester('add_record', { kind: 'employment', data: { employer: 'new:pp', title: 'Engineer' }, newParties: [{ ref: 'pp', type: 'organisation', name: 'Pied Piper', website: 'piedpiper.com', mcp: 'https://piedpiper.com/mcp' }] })).structuredContent;
     ok(withNew.status === 'pending_review' && !(await partyNames()).includes('Pied Piper'), 'a suggestion can name a new organisation, and nothing is created yet');
     const npItem = (await a.call('GET', '/api/reviews')).items.find((r: any) => r.id === withNew.reviewId);
-    ok(npItem.changes.some((c: any) => c.label === 'New organisation' && c.to === 'Pied Piper') && npItem.changes.some((c: any) => c.key === 'employer' && c.to === 'Pied Piper (new)'), 'the owner sees the new organisation as part of the suggestion');
+    ok(npItem.changes.some((c: any) => c.label === 'New organisation' && c.to === 'Pied Piper · https://piedpiper.com/ · MCP https://piedpiper.com/mcp') && npItem.changes.some((c: any) => c.key === 'employer' && c.to === 'Pied Piper (new)'), 'the owner sees the new organisation as part of the suggestion');
     const npSaved = await a.call('POST', `/api/reviews/${withNew.reviewId}/approve`);
     const pp = (await a.call('GET', '/api/parties')).items.find((x: any) => x.name === 'Pied Piper');
     ok(pp && pp.type === 'organisation' && npSaved.record.data.employer === pp.id, 'approving creates the organisation and the entry together');
+    const ppMethods = (await a.call('GET', `/api/parties/${pp.id}`)).methods;
+    ok(ppMethods.some((m: any) => m.kind === 'website' && m.value === 'https://piedpiper.com/') && ppMethods.some((m: any) => m.kind === 'mcp'), 'a new organisation keeps the web and MCP addresses it came with');
+    const badAddr = await a.call('POST', '/api/parties', { type: 'organisation', name: 'Bad Address Co', methods: [{ kind: 'api', value: 'not a url at all' }] }, [400]);
+    ok(badAddr.code === 'invalid_value', 'an API address must be a web address');
     const ppAgain = (await suggester('add_record', { kind: 'employment', data: { employer: 'new:x', title: 'Again' }, newParties: [{ ref: 'x', type: 'organisation', name: 'pied piper' }] })).structuredContent;
     const reused = await a.call('POST', `/api/reviews/${ppAgain.reviewId}/approve`);
     ok(reused.record.data.employer === pp.id && (await partyNames()).filter((n: string) => n.toLowerCase() === 'pied piper').length === 1, 'an organisation already on the node is used, not added twice');

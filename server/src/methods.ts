@@ -1,12 +1,14 @@
 /**
  * Contact methods: one shape for everyone, the owner's and every party's (email, phone, postal address,
- * website, social and messaging handles). Values are checked by kind; phones are stored in E.164
+ * website, social and messaging handles, and for organisations the addresses their API and MCP server answer at). Values are checked by kind; phones are stored in E.164
  * (+15035550148) and shown in a friendlier form.
  */
 import { bad } from './auth.js';
 import { isPartialDate } from './domains/records.js';
 
-export const METHOD_KINDS = ['email', 'phone', 'postal', 'website', 'social', 'messaging'] as const;
+export const METHOD_KINDS = ['email', 'phone', 'postal', 'website', 'social', 'messaging', 'api', 'mcp'] as const;
+/** Kinds whose value is a web address. API and MCP addresses are where an organisation's software (and, later, an assistant acting for you) reaches it. */
+export const URL_KINDS: MethodKind[] = ['website', 'api', 'mcp'];
 export type MethodKind = (typeof METHOD_KINDS)[number];
 export type PostalAddress = { street1?: string; street2?: string; city?: string; region?: string; postalCode?: string; country: string };
 
@@ -76,6 +78,12 @@ function checkPostal(v: unknown): PostalAddress {
   return out as PostalAddress;
 }
 
+/** A web address, with https:// added if it was left off. */
+export function checkUrl(raw: string): string {
+  const t = raw.trim();
+  try { return new URL(/^https?:\/\//i.test(t) ? t : `https://${t}`).toString(); } catch { throw bad('invalid_value', `${raw} isn’t a web address`); }
+}
+
 /** One method, checked and normalised. `country` is where the owner lives, for phone numbers typed without a code. */
 export function checkMethod(input: unknown, country = 'US'): ContactMethod {
   const m = (input ?? {}) as Partial<ContactMethod> & Record<string, unknown>;
@@ -94,8 +102,8 @@ export function checkMethod(input: unknown, country = 'US'): ContactMethod {
       value = e;
       break;
     }
-    case 'website':
-      try { value = new URL(/^https?:\/\//.test(String(raw)) ? String(raw) : `https://${raw}`).toString(); } catch { throw bad('invalid_value', `${raw} isn’t a web address`); }
+    case 'website': case 'api': case 'mcp':
+      value = checkUrl(String(raw ?? ''));
       break;
     case 'social': case 'messaging':
       if (!raw || String(raw).length > 200) throw bad('invalid_value', 'Add the handle or number');

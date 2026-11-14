@@ -38,7 +38,7 @@ export type ProfileResp = { items: ProfileLine[]; lines: { key: string; label: s
 export type PostalAddress = { street1?: string; street2?: string; city?: string; region?: string; postalCode?: string; country: string };
 /** One shape for every contact method, yours and every party's. Phones are E.164 (+15035550148). */
 export type ContactMethod = {
-  kind: 'email' | 'phone' | 'postal' | 'website' | 'social' | 'messaging'; value: string | PostalAddress;
+  kind: 'email' | 'phone' | 'postal' | 'website' | 'social' | 'messaging' | 'api' | 'mcp'; value: string | PostalAddress;
   service?: string; label?: string; primary?: boolean; validFrom?: string | null; validTo?: string | null;
 };
 export type ContactStatus = 'plain' | 'pending_in' | 'pending_out' | 'active';

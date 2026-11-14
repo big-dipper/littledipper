@@ -127,7 +127,7 @@ export default function ContactDetail() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="card-kicker">Contact info</div>
                   {/* A connected person's card is what they share. Details you added before connecting stay editable. */}
-                  {(!isNode || c.methods.length > 0) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, birthDate: c.birthDate ?? '', notes: c.notes, methods: c.methods.length ? c.methods : [{ kind: 'email', value: '' }] })}>Edit</button>}
+                  {(!isNode || c.methods.length > 0) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, birthDate: c.birthDate ?? '', notes: c.notes, methods: c.methods.length ? c.methods : [nextDetail(c.type, [])] })}>Edit</button>}
                 </div>
                 {isNode && c.sharedIn.map((m) => (
                   <Row key={m.key} label={m.label} value={m.key === 'little_dipper' ? m.value.split(' · ')[0] : m.value} />
@@ -200,12 +200,12 @@ export default function ContactDetail() {
             <div key={i} className="text-muted" style={{ fontSize: 13 }}>{m.label || 'Postal address'}: {displayMethod(m)}</div>
           ) : (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: 8 }}>
-              <Select value={m.kind} onChange={(v) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, kind: (v || 'email') as ContactMethod['kind'] } : x)) })} options={STRING_KINDS.map((k) => [k, KIND_LABEL[k]])} />
-              <input className="input" aria-label={KIND_LABEL[m.kind]} value={m.value} placeholder={m.kind === 'social' || m.kind === 'messaging' ? '@handle' : ''} onChange={(e) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) })} />
+              <Select value={m.kind} onChange={(v) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, kind: (v || 'email') as ContactMethod['kind'] } : x)) })} options={STRING_KINDS(edit.type).map((k) => [k, KIND_LABEL[k]])} />
+              <input className="input" aria-label={KIND_LABEL[m.kind]} value={m.value} placeholder={PLACEHOLDER[m.kind] ?? ''} onChange={(e) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) })} />
               {(m.kind === 'social' || m.kind === 'messaging') && <input className="input" style={{ gridColumn: 2 }} aria-label="Service" placeholder="Service, e.g. Signal" value={m.service ?? ''} onChange={(e) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, service: e.target.value } : x)) })} />}
             </div>
           )))}
-          <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 13 }} onClick={() => setEdit({ ...edit, methods: [...edit.methods, { kind: 'phone', value: '' }] })}>Add a detail</button>
+          <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 13 }} onClick={() => setEdit({ ...edit, methods: [...edit.methods, nextDetail(edit.type, edit.methods)] })}>Add a detail</button>
           <div className="field"><label htmlFor="notes">Notes</label><textarea id="notes" className="input" value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} style={{ borderRadius: 20 }} /></div>
         </Dialog>
       )}
@@ -216,8 +216,12 @@ export default function ContactDetail() {
 }
 
 type Edit = { name: string; type: 'person' | 'organisation' | 'assistant'; birthDate: string; notes: string; methods: ContactMethod[] };
-const KIND_LABEL: Record<ContactMethod['kind'], string> = { email: 'Email', phone: 'Phone', postal: 'Postal address', website: 'Website', social: 'Social', messaging: 'Messaging' };
-const STRING_KINDS: ContactMethod['kind'][] = ['email', 'phone', 'website', 'social', 'messaging'];
+const KIND_LABEL: Record<ContactMethod['kind'], string> = { email: 'Email', phone: 'Phone', postal: 'Postal address', website: 'Website', social: 'Social', messaging: 'Messaging', api: 'API address', mcp: 'MCP address' };
+/** The details you can type for each kind of party. Organisations lead with their website, and can have the addresses their software answers at. */
+const STRING_KINDS = (type: Edit['type']): ContactMethod['kind'][] => type === 'person' ? ['email', 'phone', 'website', 'social', 'messaging'] : ['website', 'email', 'phone', 'api', 'mcp', 'social', 'messaging'];
+const PLACEHOLDER: Partial<Record<ContactMethod['kind'], string>> = { social: '@handle', messaging: '@handle', website: 'example.com', api: 'https://api.example.com', mcp: 'https://example.com/mcp' };
+/** A new empty detail: an organisation's website first, if it doesn't have one yet. */
+const nextDetail = (type: Edit['type'], methods: ContactMethod[]): ContactMethod => ({ kind: type !== 'person' && !methods.some((m) => m.kind === 'website') ? 'website' : type === 'person' && !methods.length ? 'email' : 'phone', value: '' });
 function saveContact(id: string, e: Edit) {
   const methods = e.methods.filter((m) => typeof m.value === 'object' || m.value.trim());
   return patch(`/api/parties/${id}`, { name: e.name, type: e.type, notes: e.notes, methods, ...(e.type === 'person' ? { birthDate: e.birthDate || null } : {}) });
