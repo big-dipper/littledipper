@@ -175,6 +175,10 @@ async function main() {
     await b.call('PUT', '/api/public-profile', { connectButton: true });
     const pubOpen = await (await fetch('http://localhost:4202/public/profile')).json();
     ok(pubOpen.connectButton === true && pubOpen.connectRequests === undefined, 'the Connect button is its own setting');
+    ok(pubOpen.madeWith === true, 'the “Made with Little Dipper” line is on by default');
+    await b.call('PUT', '/api/public-profile', { madeWith: false });
+    ok((await (await fetch('http://localhost:4202/public/profile')).json()).madeWith === false, 'one switch turns it off');
+    await b.call('PUT', '/api/public-profile', { madeWith: true });
     await b.call('PUT', '/api/public-profile', { connectRequests: 'off' });
     ok((await a.call('POST', '/api/federation/lookup', { address: 'localhost:4202' })).acceptsRequests === false, 'invite-only: the lookup says so before you write anything');
     ok((await (await fetch('http://localhost:4202/public/profile')).json()).connectButton === false, 'invite-only hides the Connect button even when it’s on');

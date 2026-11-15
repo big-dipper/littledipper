@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { addr, copy, get } from '../api';
+import { addr, BIG_DIPPER, copy, get } from '../api';
 import { Circle, Dialog, ErrorNote, Loading, useAsync, useToast } from '../ui';
 import { ProfileView, type ProfileViewData } from '../profile';
 
-type Profile = ProfileViewData & { connectButton: boolean; address: string; ownerFirstName: string };
+type Profile = ProfileViewData & { connectButton: boolean; madeWith?: boolean; address: string; ownerFirstName: string };
 
 export default function PublicProfile() {
   const toast = useToast();
@@ -39,6 +39,7 @@ export default function PublicProfile() {
         </div>
         <ProfileView p={p} actions={p.connectButton && <button className="btn btn-primary" onClick={() => setConnect(true)}>Connect with me</button>} />
         <p className="text-muted" style={{ fontSize: 12, marginTop: 56 }}>Your data, not your definition.{!isOwner && <> · <Link to="/login" style={{ color: 'inherit' }}>Owner sign in</Link></>}</p>
+        {p.madeWith !== false && <MadeWith />}
       </div>
 
       {connect && (
@@ -52,5 +53,14 @@ export default function PublicProfile() {
         </Dialog>
       )}
     </div>
+  );
+}
+
+/** The quiet line at the foot of a public page (on unless the owner turns it off). A plain link: no referral code, nothing that ties a visitor to this page. */
+export function MadeWith({ size = 12 }: { size?: number }) {
+  return (
+    <p className="text-muted" style={{ fontSize: size, marginTop: 6 }}>
+      Made with Little Dipper · <a href={`${BIG_DIPPER}/`} rel="noopener" style={{ color: 'inherit' }}>Make your own</a>
+    </p>
   );
 }

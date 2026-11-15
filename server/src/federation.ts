@@ -101,6 +101,8 @@ export type PublicProfileDoc = Doc & {
   connectRequests: 'off' | 'anyone';
   /** A "Connect with me" button on your public page, which gives visitors your address. Off unless you turn it on, and only shown while requests by address are allowed. */
   connectButton?: boolean;
+  /** "Made with Little Dipper · Make your own" at the foot of the public page: a plain link to Big Dipper, no tracking. On unless turned off (missing = on). */
+  madeWith?: boolean;
   /** Layout of the public page. Missing on profiles from before sections: just the details. */
   sections?: import('./publicProfile.js').PublicSection[];
 };

@@ -1,3 +1,4 @@
+import { MadeWith } from '../PublicProfile';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { addr, ApiError, del, get, patch, put, SENS, shrink, uploadDocument, type DocFull, type ProfileLine as Field } from '../../api';
@@ -11,7 +12,7 @@ type Section =
   | { type: 'about'; text: string }
   | { type: 'domain'; domain: string; title?: string; parts: string[]; scope: 'all' | 'current'; hidden: string[] }
   | { type: 'resume'; documentId: string; title?: string };
-type PP = { nameId: string | null; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'anyone'; connectButton?: boolean; sections: Section[]; view: ProfileViewData };
+type PP = { nameId: string | null; headline: string; fieldKeys: string[]; connectRequests: 'off' | 'anyone'; connectButton?: boolean; madeWith?: boolean; sections: Section[]; view: ProfileViewData };
 type Option = { domain: string; label: string; dated: boolean; parts: { key: string; label: string }[]; defaultParts: string[]; records: { id: string; title: string; current: boolean; validFrom: string | null; validTo: string | null }[] };
 
 const DOMAIN_TITLES: Record<string, string> = { contact_methods: 'Contact', employment: 'Work history', education: 'Education', credentials: 'Licenses & certifications' };
@@ -224,6 +225,16 @@ export default function PublicEditor() {
               </div>
             </div>
           </div>
+          <div className="card" style={{ padding: '20px 24px', gap: 10 }}>
+            <div className="card-kicker">Little Dipper line</div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <Toggle on={pp.madeWith !== false} label="Show Made with Little Dipper" onChange={() => save({ madeWith: pp.madeWith === false })} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Show “Made with Little Dipper · Make your own”</div>
+                <div className="text-muted" style={{ fontSize: 12 }}>One small line at the foot of your page, so visitors can find out how to get their own. It’s a plain link: it doesn’t tell anyone who sent them.</div>
+              </div>
+            </div>
+          </div>
         </div>
         <div style={{ position: 'sticky', top: 0 }}>
           <div className="text-muted" style={{ fontSize: 12, marginBottom: 8 }}>Live preview: exactly what visitors see</div>
@@ -232,6 +243,7 @@ export default function PublicEditor() {
             <div style={{ position: 'relative' }}>
               <ProfileView p={{ ...pp.view, headline: header.headline }} compact
                 actions={pp.connectButton && pp.connectRequests === 'anyone' && <span className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}>Connect with me</span>} />
+              {pp.madeWith !== false && <MadeWith size={11} />}
             </div>
           </div>
         </div>
