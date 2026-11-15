@@ -118,6 +118,16 @@ if (process.argv.includes('blank')) {
   await new Promise(() => {});
 }
 
+/** Wait (up to five minutes) until this demo answers at its public address. */
+async function reachable(url: string) {
+  for (let i = 0; i < 60; i++) {
+    const ok = await fetch(`${url}/api/node/status`).then(async (r) => r.ok && (await r.json()).demo === true).catch(() => false);
+    if (ok) return;
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  throw new Error(`${url} never answered`);
+}
+
 /** Start Maya and Theo and fill them with sample data. */
 async function run() {
   const maya = await node(PORT, 'Maya Lindqvist', 'maya', PUBLIC_URL);
@@ -209,6 +219,8 @@ async function run() {
   await theo.call('POST', '/api/data/contact_methods', { data: { kind: 'phone', value: '(206) 555-0199', primary: true } });
   // Theo asks to connect (with a note, offering his phone, asking for Maya's address) and waits for Maya: the connect moment.
   const invite = await call('POST', '/api/federation/invites', { expiresIn: '7d' });
+  // Hosted, Theo reaches Maya at her public address, which the host may not route yet on the very first fill.
+  if (HOSTED) await reachable(PUBLIC_URL);
   await theo.call('POST', '/api/federation/requests', { address: invite.url, note: 'Hi Maya, it’s Theo from the studio', share: { basic: true, lines: ['phone'] }, asks: ['address'] });
   return { maya, theo };
 }
