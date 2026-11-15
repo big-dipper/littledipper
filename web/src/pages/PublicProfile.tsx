@@ -38,8 +38,12 @@ export default function PublicProfile() {
           <button className="btn btn-secondary" onClick={() => toast('API documentation is coming soon')}>API docs</button>
         </div>
         <ProfileView p={p} actions={p.connectButton && <button className="btn btn-primary" onClick={() => setConnect(true)}>Connect with me</button>} />
-        <p className="text-muted" style={{ fontSize: 12, marginTop: 56 }}>Your data, not your definition.{!isOwner && <> · <Link to="/login" style={{ color: 'inherit' }}>Owner sign in</Link></>}</p>
-        {p.madeWith !== false && <MadeWith />}
+        {/* One quiet line: the Little Dipper credit (if the owner keeps it) and the owner's way in. */}
+        <p className="text-muted" style={{ fontSize: 12, marginTop: 56 }}>
+          {p.madeWith !== false && <MadeWithText />}
+          {p.madeWith !== false && !isOwner && ' · '}
+          {!isOwner && <Link to="/login" style={{ color: 'inherit' }}>Owner sign in</Link>}
+        </p>
       </div>
 
       {connect && (
@@ -57,10 +61,7 @@ export default function PublicProfile() {
 }
 
 /** The quiet line at the foot of a public page (on unless the owner turns it off). A plain link: no referral code, nothing that ties a visitor to this page. */
+const MadeWithText = () => <>Made with Little Dipper · <a href={`${BIG_DIPPER}/`} rel="noopener" style={{ color: 'inherit' }}>Make your own</a></>;
 export function MadeWith({ size = 12 }: { size?: number }) {
-  return (
-    <p className="text-muted" style={{ fontSize: size, marginTop: 6 }}>
-      Made with Little Dipper · <a href={`${BIG_DIPPER}/`} rel="noopener" style={{ color: 'inherit' }}>Make your own</a>
-    </p>
-  );
+  return <p className="text-muted" style={{ fontSize: size, marginTop: 6 }}><MadeWithText /></p>;
 }
