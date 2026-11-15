@@ -14,6 +14,7 @@ import {
 import { canonicalUrl, getNode } from '../node.js';
 import { ownerName } from '../profile.js';
 import { getOwner, ownerFor, type OwnerDoc, type PasskeyRec } from '../owner.js';
+import { DEMO } from '../demo.js';
 
 /** WebAuthn binds to the hostname the browser is on; accept only our own addresses. */
 async function rp(req: FastifyRequest) {
@@ -195,7 +196,8 @@ export default async function authRoutes(app: FastifyInstance) {
 
   // The demo only: a one-click sign-in link it prints (LD_DEMO_SIGNIN is never set on a real node).
   if (process.env.LD_DEMO_SIGNIN) app.get('/api/auth/demo', async (req, reply) => {
-    if ((req.query as { t?: string }).t !== process.env.LD_DEMO_SIGNIN) throw new HttpError(401, 'bad_link', 'That link isn’t right');
+    // The shared public demo is open to anyone, so its link needs no secret (and the sign-in page can offer it).
+    if (!DEMO && (req.query as { t?: string }).t !== process.env.LD_DEMO_SIGNIN) throw new HttpError(401, 'bad_link', 'That link isn’t right');
     await startSession(reply, 'Demo link');
     return reply.redirect('/admin');
   });

@@ -86,6 +86,8 @@ export type NodeInfo = {
   version: string; update: { current: string; latest: string; available: boolean; notes: string; canSelfUpdate: boolean };
   hosting: { provider: string; label: string; region: string; store: string; documents: number };
   lastBackupAt: string | null; publicViewsToday: number; claimedAt: string | null;
+  /** The shared, hourly-refilled demo (never a real node). */
+  demo?: boolean;
   /** Whether a backup has reached the owner's own device lately; `due` drives the reminder. */
   deviceBackup: { lastAt: string | null; via: 'download' | 'folder' | null; remindAfterDays: number; due: boolean };
   /** Whether the owner holds a recovery kit that still works; without one, no backup restores elsewhere. */

@@ -21,6 +21,7 @@ import documentRoutes from './routes/documents.js';
 import bigDipperRoutes from './routes/bigDipper.js';
 import copyRoutes from './routes/copies.js';
 import calendarRoutes from './routes/calendar.js';
+import { demoGuard } from './demo.js';
 
 const MIME: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8', '.svg': 'image/svg+xml',
@@ -53,6 +54,8 @@ export async function buildApp(opts: { onRoute?: (method: string, url: string) =
     app.addHook('onRoute', (r) => { for (const m of [r.method].flat()) seen(m, r.url); });
   }
   await app.register(cookie);
+  // The hosted demo only: switch off what would spoil it for the next visitor (see demo.ts).
+  demoGuard(app);
 
   // Old custom domains keep answering with redirects to the canonical address for 90 days.
   app.addHook('onRequest', async (req, reply) => {

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { apply, cached, normalise, useFollowDevice, type Appearance } from '../../appearance';
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { addr, ApiError, copy, get, initials, patch, post, type NodeInfo, type Owner } from '../../api';
+import { addr, ApiError, BIG_DIPPER, copy, get, initials, patch, post, type NodeInfo, type Owner } from '../../api';
 import { Loading, useToast } from '../../ui';
 import { Icon, type IconName } from '../../icons';
 import { autoSave } from '../../deviceBackup';
@@ -68,7 +68,8 @@ export default function AdminLayout() {
       const [o, nd, reqs, unread, docs, reviews, ns] = await Promise.all([get<Owner>('/api/owner'), get<NodeInfo>('/api/node'), get('/api/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/messages/unread'), get<{ items: unknown[] }>('/api/documents?status=inbox'), get<{ items: unknown[] }>('/api/reviews'), get<{ items: Notice[] }>('/api/notifications')]);
       setOwner(o);
       // The look saved on your Little Dipper wins; before you've chosen one, this device's stays.
-      if (o.prefs.appearance) { const a = normalise(o.prefs.appearance); setLook(a); apply(a); }
+      // In the shared demo everyone is Maya, so each visitor's look stays on their own device.
+      if (o.prefs.appearance && !nd.demo) { const a = normalise(o.prefs.appearance); setLook(a); apply(a); }
       setNode(nd);
       setPendingIn(reqs.items.length);
       setUnreadMessages(unread.count);
@@ -103,7 +104,7 @@ export default function AdminLayout() {
     setLook(a);
     apply(a);
     setOwner({ ...owner, prefs: { ...owner.prefs, appearance: a } });
-    patch('/api/owner', { prefs: { appearance: a } }).catch(() => { /* still shown here; saved next time */ });
+    if (!node?.demo) patch('/api/owner', { prefs: { appearance: a } }).catch(() => { /* still shown here; saved next time */ });
   };
   const signOut = async () => {
     await post('/api/auth/logout');
@@ -163,10 +164,21 @@ export default function AdminLayout() {
           </div>
         </aside>
         <main className="main">
+          {node?.demo && <DemoNotice />}
           <Outlet />
         </main>
         <ActionBar notices={notices} onGo={(href) => nav(href)} onDismiss={async (id) => { await post(`/api/notifications/${encodeURIComponent(id)}/dismiss`); setN((v) => v + 1); }} />
       </div>
     </AdminCtx.Provider>
+  );
+}
+
+/** The hosted demo: say plainly what this is, once, at the top of every page. */
+function DemoNotice() {
+  return (
+    <div className="demo-notice" role="note">
+      <strong>You’re trying the shared demo.</strong> Everyone who visits is Maya, and it all resets every hour, so please don’t enter anything real.{' '}
+      <a href={`${BIG_DIPPER}/get-started`}>Get your own Little Dipper</a>
+    </div>
   );
 }

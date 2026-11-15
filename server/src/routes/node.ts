@@ -8,6 +8,7 @@ import { bad, COOKIE, cookieOpts, HttpError, issueKey, rateLimit, requireOwner, 
 import { canonicalUrl, checkClaimToken, descriptor, displayAddr, getNode, issueClaimLink, type NodeDoc } from '../node.js';
 import { backupBundle, createBackup, deviceCopyStatus, listBackups, markDeviceCopy, recoveryKitStatus, restoreBackup, restoreOnFreshNode, RestoreError } from '../backups.js';
 import { publicName } from '../profile.js';
+import { DEMO } from '../demo.js';
 import { BUILT_IN_DOMAINS } from '../domains/catalog.js';
 import { buildRecord, recordVersion } from '../domains/records.js';
 import { runMigrations } from '../migrate.js';
@@ -108,12 +109,15 @@ async function nodeOut() {
     update: await updateInfo(),
     hosting: { provider: n.hosting.provider, label: config.hosting.label, region: n.hosting.region, store: 'SQLite', documents: docs },
     lastBackupAt: n.lastBackupAt || null,
-    deviceBackup: deviceCopyStatus(n),
-    recoveryKit: recoveryKitStatus(n),
+    // The shared demo can't save either (see demo.ts), so it never asks.
+    deviceBackup: DEMO ? { ...deviceCopyStatus(n), due: false } : deviceCopyStatus(n),
+    recoveryKit: DEMO ? { ...recoveryKitStatus(n), due: false } : recoveryKitStatus(n),
     reconnect: await toReconnect(n),
     endedForSafety: await endedForSafety(),
     publicViewsToday: n.publicViews?.day === new Date().toISOString().slice(0, 10) ? n.publicViews.count : 0,
     claimedAt: n.claimedAt,
+    /** The shared, hourly-refilled demo (never a real node): the app says so and keeps changes it can't save on this device. */
+    ...(DEMO ? { demo: true } : {}),
   };
 }
 
@@ -135,6 +139,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
       hosting: { label: config.hosting.label, region: n.hosting.region },
       storage: docs ? 'In use' : 'Ready and empty',
       claimHint: n.claimed ? null : 'Open the claim link from your installer or run `little-dipper claim-link`',
+      ...(DEMO ? { demo: true } : {}),
     };
   });
 

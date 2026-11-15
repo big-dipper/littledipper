@@ -11,7 +11,7 @@ export default function Login() {
   const [params] = useSearchParams();
   const raw = params.get('next') || '';
   const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/admin';
-  const [status, setStatus] = useState<{ address: string; claimed: boolean } | null>(null);
+  const [status, setStatus] = useState<{ address: string; claimed: boolean; demo?: boolean } | null>(null);
   const [brand, setBrand] = useState('Little Dipper');
   const [mode, setMode] = useState<'passkey' | 'pw' | 'recovery'>('passkey');
   const [pending, setPending] = useState(false);
@@ -71,7 +71,14 @@ export default function Login() {
         <h1>Sign in</h1>
         <p className="text-muted">Owner access to <strong style={{ color: 'var(--color-text)' }}>{status ? addr(status.address) : '…'}</strong></p>
 
-        {mode === 'passkey' && (
+        {status?.demo && (
+          <div className="demo-notice" style={{ marginTop: 24 }}>
+            <strong>This is the shared demo.</strong> It refreshes every hour, which signs everyone out. Step back in as Maya:
+            <a className="btn btn-primary" href="/api/auth/demo" style={{ display: 'block', textAlign: 'center', marginTop: 12, fontSize: 16, padding: 12 }}>Open the demo</a>
+          </div>
+        )}
+
+        {mode === 'passkey' && !status?.demo && (
           <>
             <button className="btn btn-primary" onClick={passkey} disabled={pending} style={{ width: '100%', fontSize: 16, padding: 14, marginTop: 24 }}>{pending ? 'Waiting for your device…' : 'Sign in with passkey'}</button>
             {/* Someone who lost their passkey sees the way back in straight away, not one level down. */}
