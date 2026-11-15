@@ -519,6 +519,12 @@ async function main() {
     const prot = await maker2('PATCH', `/api/data/names/${lex.id}`, { sensitivity: 'secret' });
     ok(prot.status === 202 && prot.body.message.includes('owner’s call'), 'who can see an entry is the owner’s call: an assistant’s change waits in Review');
     ok((await maker2('PATCH', '/api/owner', { prefs: { showTechnical: true } })).status === 403, 'only the owner changes their account settings');
+    await a.call('PATCH', '/api/owner', { prefs: { showTechnical: true } });
+    const myLook = { theme: 'forest', mode: 'dark', textSize: 'larger', font: 'classic' };
+    const afterLook = await a.call('PATCH', '/api/owner', { prefs: { appearance: myLook } });
+    ok(JSON.stringify(afterLook.prefs.appearance) === JSON.stringify(myLook) && afterLook.prefs.showTechnical === true, 'appearance is saved on the node, and saving it leaves other preferences alone');
+    ok((await a.call('PATCH', '/api/owner', { prefs: { appearance: { ...myLook, mode: 'neon' } } }, [400])).code === 'invalid_value', 'an unknown light/dark mode is refused');
+    await a.call('PATCH', '/api/owner', { prefs: { showTechnical: false } });
     for (const r of (await a.call('GET', '/api/reviews')).items) await a.call('POST', `/api/reviews/${r.id}/reject`);
     // OAuth: an assistant platform connects without anyone copying a key
     const prm = await (await fetch(`${a.base}/.well-known/oauth-protected-resource`)).json();

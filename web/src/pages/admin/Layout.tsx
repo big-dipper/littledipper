@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { apply, cached, normalise, useFollowDevice, type Appearance } from '../../appearance';
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { addr, ApiError, copy, get, initials, patch, post, type NodeInfo, type Owner } from '../../api';
 import { Loading, useToast } from '../../ui';
@@ -8,6 +9,8 @@ import ActionBar, { type Notice } from './ActionBar';
 
 type Admin = {
   owner: Owner;
+  appearance: Appearance;
+  setAppearance: (a: Appearance) => void;
   node: NodeInfo;
   tech: boolean;
   setTech: (v: boolean) => void;
@@ -53,6 +56,8 @@ export default function AdminLayout() {
   const [authError, setAuthError] = useState(false);
   const [n, setN] = useState(0);
   const [rail, setRail] = useState(readRail);
+  const [look, setLook] = useState<Appearance>(cached);
+  useFollowDevice(look);
   const toggleRail = () => setRail((v) => {
     try { localStorage.setItem(RAIL_KEY, v ? '0' : '1'); } catch { /* fine: just not remembered */ }
     return !v;
@@ -62,6 +67,8 @@ export default function AdminLayout() {
     try {
       const [o, nd, reqs, unread, docs, reviews, ns] = await Promise.all([get<Owner>('/api/owner'), get<NodeInfo>('/api/node'), get('/api/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/messages/unread'), get<{ items: unknown[] }>('/api/documents?status=inbox'), get<{ items: unknown[] }>('/api/reviews'), get<{ items: Notice[] }>('/api/notifications')]);
       setOwner(o);
+      // The look saved on your Little Dipper wins; before you've chosen one, this device's stays.
+      if (o.prefs.appearance) { const a = normalise(o.prefs.appearance); setLook(a); apply(a); }
       setNode(nd);
       setPendingIn(reqs.items.length);
       setUnreadMessages(unread.count);
@@ -92,6 +99,12 @@ export default function AdminLayout() {
     await patch('/api/owner', { prefs: { showTechnical: v } });
     if (!v && loc.pathname.startsWith('/admin/reference')) nav('/admin');
   };
+  const setAppearance = (a: Appearance) => {
+    setLook(a);
+    apply(a);
+    setOwner({ ...owner, prefs: { ...owner.prefs, appearance: a } });
+    patch('/api/owner', { prefs: { appearance: a } }).catch(() => { /* still shown here; saved next time */ });
+  };
   const signOut = async () => {
     await post('/api/auth/logout');
     nav('/login', { replace: true });
@@ -99,7 +112,7 @@ export default function AdminLayout() {
   const isOn = (to: string) => (to === '/admin' ? loc.pathname === '/admin' : to === '/admin/life' ? loc.pathname.startsWith(to) && !loc.pathname.startsWith('/admin/life/notes') : loc.pathname.startsWith(to));
 
   return (
-    <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, pendingReview, refresh: () => setN((x) => x + 1), version: n, notices }}>
+    <AdminCtx.Provider value={{ owner, appearance: look, setAppearance, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, pendingReview, refresh: () => setN((x) => x + 1), version: n, notices }}>
       <div className="shell">
         <aside className="sidebar" aria-label="Main" data-rail={rail ? '1' : '0'}>
           <div className="side-head">

@@ -377,7 +377,7 @@ function ConnectCard({ c, first, sub, sharing, choice, setChoice, relation, setR
 }) {
   const give = giveList(sharing, choice);
   // The two sides of the exchange are white cards that stand off the blue; the note is a blue speech bubble, so neither blends.
-  const panel = { padding: '14px 18px', borderRadius: 20, background: '#fff', border: '1px solid var(--color-accent-200)', display: 'grid', gap: 6, alignContent: 'start' } as const;
+  const panel = { padding: '14px 18px', borderRadius: 20, background: 'var(--color-paper)', border: '1px solid var(--color-accent-200)', display: 'grid', gap: 6, alignContent: 'start' } as const;
   return (
     <div className="card" style={{ marginTop: 22, padding: '26px 28px', gap: 26, background: 'var(--color-accent-100)', maxWidth: 720 }}>
       <div style={{ display: 'grid', gap: 10 }}>

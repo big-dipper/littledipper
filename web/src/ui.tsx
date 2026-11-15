@@ -17,7 +17,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastCtx.Provider value={show}>
       {children}
       {msg && (
-        <div role="status" style={{ position: 'fixed', left: '50%', bottom: 28, transform: 'translateX(-50%)', background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', padding: '12px 22px', borderRadius: 999, fontSize: 14, boxShadow: 'var(--shadow-lg)', zIndex: 60, maxWidth: '90vw' }}>{msg}</div>
+        <div role="status" className="night" style={{ position: 'fixed', left: '50%', bottom: 28, transform: 'translateX(-50%)', background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', padding: '12px 22px', borderRadius: 999, fontSize: 14, boxShadow: 'var(--shadow-lg)', zIndex: 60, maxWidth: '90vw' }}>{msg}</div>
       )}
     </ToastCtx.Provider>
   );

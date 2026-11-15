@@ -6,10 +6,11 @@ import { Confirm, Dialog, Loading, Pills, QR, Toggle, useAction, useAsync, useTo
 import { useAdmin } from './Layout';
 import BigDipperSetup from './BigDipperSetup';
 import Apps from './Apps';
+import { AppearanceControls } from './Appearance';
 import { downloadBackup, useDeviceBackup } from '../../deviceBackup';
 
-type Tab = 'address' | 'hosting' | 'backups' | 'security' | 'apps' | 'big-dipper';
-const TABS: [Tab, string][] = [['address', 'Address'], ['hosting', 'Hosting'], ['backups', 'Backups'], ['security', 'Security'], ['apps', 'Apps and access'], ['big-dipper', 'Big Dipper']];
+type Tab = 'address' | 'hosting' | 'backups' | 'security' | 'appearance' | 'apps' | 'big-dipper';
+const TABS: [Tab, string][] = [['address', 'Address'], ['hosting', 'Hosting'], ['backups', 'Backups'], ['security', 'Security'], ['appearance', 'Appearance'], ['apps', 'Apps and access'], ['big-dipper', 'Big Dipper']];
 
 const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 14 }}>
@@ -38,6 +39,7 @@ export default function Settings() {
       {tab === 'hosting' && <HostingTab />}
       {tab === 'backups' && <BackupsTab />}
       {tab === 'security' && <SecurityTab />}
+      {tab === 'appearance' && <div className="card" style={{ padding: '20px 22px', maxWidth: 640 }}><AppearanceControls /></div>}
       {tab === 'apps' && <Apps embedded />}
       {tab === 'big-dipper' && <BigDipperSetup />}
     </div>

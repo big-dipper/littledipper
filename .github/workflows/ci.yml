@@ -21,6 +21,8 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
+      - name: Every theme readable (contrast)
+        run: npm run check-themes -w web
 
       - name: Compatibility (nothing removed or changed, only added)
         working-directory: server

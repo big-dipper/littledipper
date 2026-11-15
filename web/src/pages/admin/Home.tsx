@@ -34,7 +34,7 @@ export default function Home() {
 
       <ThisWeek />
 
-      <div className="card" style={{ padding: '22px 26px', flexDirection: 'row', alignItems: 'center', gap: 22, flexWrap: 'wrap', background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', position: 'relative', overflow: 'hidden' }}>
+      <div className="card night" style={{ padding: '22px 26px', flexDirection: 'row', alignItems: 'center', gap: 22, flexWrap: 'wrap', background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', position: 'relative', overflow: 'hidden' }}>
         <div aria-hidden style={{ position: 'absolute', right: -70, top: -90, width: 260, height: 260, borderRadius: '50%', background: 'var(--color-accent-700)', opacity: 0.5 }} />
         <div aria-hidden style={{ position: 'absolute', right: 150, bottom: -60, width: 120, height: 120, borderRadius: '50%', background: 'var(--color-accent-2-700)', opacity: 0.5 }} />
         <div style={{ flex: 1, minWidth: 260, position: 'relative' }}>

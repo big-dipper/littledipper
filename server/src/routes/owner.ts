@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { bad, HttpError, requireOwner } from '../auth.js';
 import { mask } from '../fields.js';
-import { getOwner } from '../owner.js';
+import { checkAppearance, getOwner } from '../owner.js';
 import { ownerEmail, ownerName, profileLines, PROFILE_LINES } from '../profile.js';
 import { type LinkDoc, type PublicProfileDoc } from '../federation.js';
 import { ALWAYS_SHARED, basicLines, RELATIONS, suggestions, whatTheyGet, type Relation } from '../shares.js';
@@ -24,12 +24,16 @@ export default async function ownerRoutes(app: FastifyInstance) {
   app.patch('/api/owner', async (req) => {
     const p = await requireOwner(req, 'owner:write');
     if (p.key.assistant) throw new HttpError(403, 'owner_only', 'Only the owner changes their account settings.');
-    const body = (req.body || {}) as { name?: string; email?: string; prefs?: { showTechnical?: boolean } };
+    const body = (req.body || {}) as { name?: string; email?: string; prefs?: { showTechnical?: boolean; appearance?: unknown } };
     if (body.name !== undefined || body.email !== undefined) throw bad('computed', 'Your name comes from Names and your email from Contact methods. Change them there.');
     const o = (await getOwner())!;
     if (body.prefs) {
       if (!p.isSession) throw bad('session_required');
-      await ctx.store.update('owners', o._id, { prefs: { ...o.prefs, showTechnical: !!body.prefs.showTechnical } });
+      // Only what's sent changes: saving a theme leaves "Show technical details" as it was.
+      const prefs = { ...o.prefs };
+      if (body.prefs.showTechnical !== undefined) prefs.showTechnical = !!body.prefs.showTechnical;
+      if (body.prefs.appearance !== undefined) prefs.appearance = checkAppearance(body.prefs.appearance);
+      await ctx.store.update('owners', o._id, { prefs });
     }
     const out = (await getOwner())!;
     return { id: out._id, name: await ownerName(), email: await ownerEmail(), prefs: out.prefs };

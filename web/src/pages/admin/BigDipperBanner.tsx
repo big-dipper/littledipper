@@ -32,7 +32,7 @@ export default function BigDipperBanner() {
   const started = bd.chosen.length > 0 || !!bd.contact;
 
   return (
-    <section aria-label="Big Dipper" className="card" style={{ marginTop: 22, padding: '24px 26px', gap: 18, background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', position: 'relative', overflow: 'hidden' }}>
+    <section aria-label="Big Dipper" className="card night" style={{ marginTop: 22, padding: '24px 26px', gap: 18, background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', position: 'relative', overflow: 'hidden' }}>
       <div aria-hidden style={{ position: 'absolute', right: -80, bottom: -120, width: 280, height: 280, borderRadius: '50%', background: 'var(--color-accent-800)', opacity: 0.6 }} />
       <Dipper style={{ right: 24, top: 18, opacity: 0.9 }} />
       <div style={{ position: 'relative', maxWidth: 600 }}>

@@ -40,7 +40,7 @@ const Tick = () => (
 export default function Assistants() {
   return (
     <div data-screen-label="AI assistants" style={{ maxWidth: 880, display: 'grid', gap: 28, paddingBottom: 8 }}>
-      <section className="card" style={{ padding: 'clamp(24px, 4vw, 36px)', gap: 14, background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', position: 'relative', overflow: 'hidden' }}>
+      <section className="card night" style={{ padding: 'clamp(24px, 4vw, 36px)', gap: 14, background: 'var(--color-neutral-900)', color: 'var(--color-neutral-100)', position: 'relative', overflow: 'hidden' }}>
         <div aria-hidden style={{ position: 'absolute', right: -90, bottom: -150, width: 340, height: 340, borderRadius: '50%', background: 'var(--color-accent-800)', opacity: 0.6 }} />
         <div aria-hidden style={{ position: 'absolute', right: 230, bottom: -70, width: 130, height: 130, borderRadius: '50%', background: 'var(--color-accent-2-800)', opacity: 0.5 }} />
         <span className="card-kicker" style={{ position: 'relative', color: 'var(--color-accent-300)' }}>AI assistants · optional</span>

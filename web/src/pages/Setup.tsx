@@ -195,7 +195,7 @@ export default function Setup() {
             {!hostKnown && <Pills value={hostTab} onChange={setHostTab} options={Object.entries(HOST).map(([k, h]) => [k as HostTab, h.label])} style={{ margin: '24px 0 14px' }} />}
             <div className="card" style={{ padding: '20px 24px', gap: 12 }}>
               <div style={{ fontSize: 14 }}>{host.text}</div>
-              <div className="mono" style={{ background: 'var(--color-neutral-900)', color: 'var(--color-neutral-200)', borderRadius: 20, padding: '14px 18px', fontSize: 12.5, lineHeight: 1.7, overflowX: 'auto' }}>
+              <div className="mono night" style={{ background: 'var(--color-neutral-900)', color: 'var(--color-neutral-200)', borderRadius: 20, padding: '14px 18px', fontSize: 12.5, lineHeight: 1.7, overflowX: 'auto' }}>
                 <div style={{ color: 'var(--color-neutral-400)' }}>{host.cmd}</div>
                 <div style={{ color: 'var(--color-accent-300)' }}>{host.out(nodeAddr)}</div>
               </div>

@@ -43,7 +43,7 @@ function TaskCard({ m, items, name, onAnswer, busy }: { m: Message; items: Messa
       : m.kind === 'task.reply' ? [mine ? 'You answered' : `${first} answered`, b.answer === 'accepted' ? `Taking care of it: ${title}` : `Can’t take this one right now: ${title}`]
         : [mine ? 'You finished' : `${first} finished`, b.done === false ? `Not done after all: ${title}` : `✓ ${title}`];
   return (
-    <div style={{ maxWidth: 'min(420px, 85%)', padding: '12px 16px', borderRadius: 18, background: '#fff', border: '1px solid var(--color-accent-200)', display: 'grid', gap: 4, fontSize: 14 }}>
+    <div style={{ maxWidth: 'min(420px, 85%)', padding: '12px 16px', borderRadius: 18, background: 'var(--color-paper)', border: '1px solid var(--color-accent-200)', display: 'grid', gap: 4, fontSize: 14 }}>
       <div className="card-kicker">{kicker}</div>
       <div style={{ fontWeight: m.kind === 'task.assign' ? 600 : 400 }}>{line}</div>
       {m.kind === 'task.assign' && due && <div className="text-muted" style={{ fontSize: 12 }}>{new Date(`${due}T12:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</div>}

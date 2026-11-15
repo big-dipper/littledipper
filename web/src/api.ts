@@ -104,7 +104,7 @@ export type Conversation = {
   last: { id: string; direction: 'in' | 'out'; kind: string; preview: string; status: MessageStatus; at: string };
   unread: number; canMessage: boolean;
 };
-export type Owner = { id: string; name: string; email: string; prefs: { showTechnical: boolean }; role: string };
+export type Owner = { id: string; name: string; email: string; prefs: { showTechnical: boolean; appearance?: import('./appearance').Appearance }; role: string };
 export type AuditEvent = { _id: string; at: string; action: string; text: string; tone: 'peer' | 'request' | 'owner' | 'system'; actor?: { type: string; id: string } };
 
 // ── formatting ─────────────────────────────────────────────────────────
