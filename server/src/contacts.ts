@@ -166,17 +166,19 @@ export async function syncContact(c: PartyDoc) {
   return (await ctx.store.get<PartyDoc>('parties', c._id))!;
 }
 
-export async function newNodeParty(opts: { name: string; address: string; nodeId: string; signingKey: string; version: string | null; status: LinkDoc['status']; requestId: string }) {
+export async function newNodeParty(opts: { name: string; address: string; nodeId: string; signingKey: string; version: string | null; status: LinkDoc['status']; requestId: string; kind?: 'node' | 'service'; capabilities?: string[] }) {
   const contactId = newId('pty');
   const linkId = newId('lnk');
   const t = now();
   const contact: PartyDoc = {
-    _id: contactId, type: 'person', name: opts.name, methods: [], notes: '', affiliations: [],
+    // A service (Big Dipper, a business) is an organisation; a node is a person.
+    _id: contactId, type: opts.kind === 'service' ? 'organisation' : 'person', name: opts.name, methods: [], notes: '', affiliations: [],
     node: { url: opts.address, nodeId: opts.nodeId, linkId }, sharedIn: [], sharedInFetchedAt: null, createdAt: t,
   };
   const link: LinkDoc = {
     _id: linkId, contactId, peerNodeId: opts.nodeId, peerUrl: opts.address, status: opts.status, peerSigningKey: opts.signingKey,
-    peerVersion: opts.version, requestId: opts.requestId, 
+    peerVersion: opts.version, requestId: opts.requestId,
+    ...(opts.kind === 'service' ? { peerKind: 'service' as const, peerCapabilities: (opts.capabilities ?? []).map(String).slice(0, 50) } : {}),
     timeline: [{ label: opts.status === 'pending_out' ? 'Request sent by you' : `Request received from ${firstName(opts.name)}`, at: t }],
     establishedAt: null, lastSyncAt: null,
   };

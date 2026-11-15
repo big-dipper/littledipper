@@ -9,8 +9,9 @@ import { ctx } from '../ctx.js';
 import { config } from '../config.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, requireOwner, requireSession } from '../auth.js';
-import { displayAddr, getNode } from '../node.js';
-import type { LinkDoc } from '../federation.js';
+import { canonicalUrl, displayAddr, getNode } from '../node.js';
+import { sendSigned } from '../federation.js';
+import type { LinkDoc, PartyDoc } from '../federation.js';
 import { requestConnection } from './contacts.js';
 
 type Option = { key: string; title: string; text: string; requires?: { setting: string; values: string[] } };
@@ -29,6 +30,17 @@ const ALL = HOSTING.map((h) => h.key);
 const SERVICES: {
   key: string; title: string; tagline: string; forYou: string[]; forOthers: string[]; thingsToKnow: string[]; price?: string; settings: Setting[];
 }[] = [
+  {
+    key: 'feedback', title: 'Feedback', tagline: 'Report a problem or share an idea, with a picture of what you see',
+    forYou: ['A feedback button in your Little Dipper: say what happened, point at it on a screenshot, send', 'A reply in Messages when it’s been filed, and later when there’s news'],
+    forOthers: ['Problems you hit get fixed for everyone', 'Your ideas shape what Little Dipper does next'],
+    thingsToKnow: [
+      'Nothing is sent until you press Send, and you see exactly what goes first.',
+      'Screenshots blur what’s on the page (names, numbers, dates) unless you choose to show it. Labels and layout stay clear.',
+      'Big Dipper files it in Linear, the tool the Little Dipper team tracks work in, with your Little Dipper’s address and Node ID so it can reply in Messages. Not your name. Linear keeps it.',
+    ],
+    settings: [],
+  },
   {
     key: 'interface', title: 'Interface checks', tagline: 'Proof your Little Dipper speaks the standard',
     forYou: ['Problems are caught before contacts or apps run into them', 'A short report in Messages after each check'],
@@ -145,6 +157,22 @@ async function saveChoices(keyId: string, c: Choice) {
   await audit({ actor: ownerActor(keyId), action: 'bigdipper.services', resource: 'big-dipper', text: names.length ? `You chose Big Dipper services: ${names.join(', ')}` : 'You turned off all Big Dipper services', tone: 'owner' });
 }
 
+const FEEDBACK_TYPES = ['bug', 'idea', 'question', 'other'];
+const SHOT_MAX = 6 * 1024 * 1024; // a data URL; about 4.5 MB of PNG
+
+async function feedbackReady(link: LinkDoc | undefined, n: Awaited<ReturnType<typeof getNode>>) {
+  return !!link && link.status === 'active' && (n.bigDipper?.services ?? []).includes('feedback') && (link.peerCapabilities ?? []).includes('feedback');
+}
+
+/** One annotation on the screenshot: a numbered pin, a lettered box or an arrow, in screenshot pixels. */
+function cleanMarks(v: unknown) {
+  if (!Array.isArray(v)) return [];
+  const num = (x: unknown) => (Number.isFinite(Number(x)) ? Math.round(Number(x)) : 0);
+  return v.slice(0, 64).filter((m) => m && ['pin', 'box', 'arrow'].includes(m.kind)).map((m) => ({
+    kind: m.kind as string, x: num(m.x), y: num(m.y), w: num(m.w), h: num(m.h), x2: num(m.x2), y2: num(m.y2), comment: String(m.comment ?? '').slice(0, 500),
+  }));
+}
+
 export default async function bigDipperRoutes(app: FastifyInstance) {
   app.get('/api/big-dipper', async (req) => {
     await requireOwner(req, 'parties:read');
@@ -156,6 +184,8 @@ export default async function bigDipperRoutes(app: FastifyInstance) {
       url: url || null,
       address: url ? displayAddr(url) : null,
       contact: link ? { contactId: link.contactId, status: link.status } : null,
+      /** The feedback button shows when you're connected, you chose Feedback, and Big Dipper offers it. */
+      feedback: await feedbackReady(link, n),
       chosen: n.bigDipper?.services ?? [],
       settings: { ...defaults(), ...(n.bigDipper?.settings ?? {}) },
       choseAt: n.bigDipper?.updatedAt ?? null,
@@ -187,5 +217,44 @@ export default async function bigDipperRoutes(app: FastifyInstance) {
     const out = await requestConnection(p.key._id, config.bigDipperUrl, { basic: false }, `Services: ${summary(choice).join('; ')}`.slice(0, 500));
     reply.code(202);
     return out;
+  });
+
+  /**
+   * Send feedback to Big Dipper: the owner's words, an optional screenshot (already blurred in the browser unless
+   * they chose otherwise) and where in the app it happened. Signed by this node; Big Dipper answers with a reference.
+   */
+  app.post('/api/big-dipper/feedback', { bodyLimit: SHOT_MAX + 256 * 1024 }, async (req) => {
+    const p = await requireSession(req);
+    if (!p.isSession) throw bad('session_required');
+    const n = await getNode();
+    const link = await bigDipperLink();
+    if (!(await feedbackReady(link, n))) throw new HttpError(409, 'feedback_off', 'Connect to Big Dipper and turn on Feedback first.');
+    const b = (req.body || {}) as { type?: string; comment?: string; screenshot?: string | null; marks?: unknown; context?: Record<string, unknown> };
+    const type = String(b.type || '');
+    if (!FEEDBACK_TYPES.includes(type)) throw bad('invalid_value', 'Choose bug, idea, question or other');
+    const comment = String(b.comment || '').trim().slice(0, 5000);
+    if (!comment) throw bad('invalid_value', 'Say what’s going on first');
+    const shot = b.screenshot ? String(b.screenshot) : null;
+    if (shot && (!shot.startsWith('data:image/png;base64,') || shot.length > SHOT_MAX)) throw bad('invalid_value', 'The screenshot must be a PNG under about 4 MB');
+    const c = b.context || {};
+    const vp = c.viewport as { w?: unknown; h?: unknown } | undefined;
+    // Where it happened, and on what: never the owner's name or data (Big Dipper knows the node from the connection).
+    const context = {
+      route: String(c.route || '').slice(0, 200),
+      viewport: vp && Number.isFinite(Number(vp.w)) && Number.isFinite(Number(vp.h)) ? { w: Number(vp.w), h: Number(vp.h) } : null,
+      blurred: c.blurred !== false,
+      appearance: String(c.appearance || '').slice(0, 80),
+      version: n.version,
+      hosting: config.hosting.label,
+      userAgent: String(req.headers['user-agent'] || '').slice(0, 300),
+    };
+    const out = await sendSigned<object, { type: string; result?: { reference?: string } }>(link!.peerUrl, '/peer/services/feedback', {
+      type: 'service.call', to: link!.peerNodeId, capability: 'feedback', address: canonicalUrl(n),
+      data: { type, comment, screenshot: shot, marks: cleanMarks(b.marks), context },
+    }, link!.peerSigningKey);
+    const reference = String(out.result?.reference || '').slice(0, 40) || null;
+    const bd = await ctx.store.get<PartyDoc>('parties', link!.contactId);
+    await audit({ actor: ownerActor(p.key._id), action: 'bigdipper.feedback', resource: `parties/${link!.contactId}`, text: `You sent ${bd?.name || 'Big Dipper'} feedback${reference ? ` (${reference})` : ''}${shot ? ', with a screenshot' : ''}`, tone: 'owner' });
+    return { sent: true, reference };
   });
 }

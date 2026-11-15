@@ -182,7 +182,7 @@ export async function requestConnection(keyId: string, address: string, choice: 
   const shareProfile = choice.basic !== false;
   const requestId = newId('req');
   const name = d.displayName || displayAddr(d.address);
-  const { contact, link } = await newNodeParty({ name, address: d.address, nodeId: d.nodeId, signingKey: d.signingKey, version: d.version, status: 'pending_out', requestId });
+  const { contact, link } = await newNodeParty({ name, address: d.address, nodeId: d.nodeId, signingKey: d.signingKey, version: d.version, status: 'pending_out', requestId, kind: d.kind === 'service' ? 'service' : 'node', capabilities: d.capabilities });
   try {
     await sendRequest(link, offered, await offerDetails(shareProfile, offered), requested, note.slice(0, 500), invite);
   } catch (e) {

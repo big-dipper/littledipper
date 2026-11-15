@@ -14,6 +14,7 @@ import { readWhen, sayWhen } from '../../quickAdd';
 import { useUpdates } from '../../needsYou';
 import { useAdmin } from './Layout';
 import { AppearanceButton } from './Appearance';
+import { FeedbackButton } from '../../feedback/FeedbackButton';
 
 export type Notice = { id: string; kind: string; title: string; text: string; href: string; at: string };
 export type Ask = { messageId: string; party: { id: string; name: string }; title: string; due: string | null; at: string };
@@ -69,7 +70,7 @@ export default function ActionBar({ notices, onDismiss, onGo }: { notices: Notic
     </>
   );
 
-  if (!view) return <aside className="actionbar" data-open="0" aria-label="Actions">{doors}<AppearanceButton /></aside>;
+  if (!view) return <aside className="actionbar" data-open="0" aria-label="Actions">{doors}<div className="ab-foot"><FeedbackButton /><AppearanceButton /></div></aside>;
 
   return (
     <>

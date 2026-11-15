@@ -122,6 +122,7 @@
     "POST /api/auth/totp/setup",
     "POST /api/auth/totp/verify",
     "POST /api/big-dipper/connect",
+    "POST /api/big-dipper/feedback",
     "POST /api/catalog",
     "POST /api/copies",
     "POST /api/data/{}",

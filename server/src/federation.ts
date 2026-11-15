@@ -55,6 +55,10 @@ export type LinkDoc = Doc & {
   timeline: { label: string; at: string }[];
   establishedAt: string | null;
   lastSyncAt: string | null;
+  /** 'service' for something that only interacts (Big Dipper, a business using the service kit); absent for a node. */
+  peerKind?: 'node' | 'service';
+  /** What a service offers (e.g. "feedback"), from its descriptor when we connected. */
+  peerCapabilities?: string[];
 };
 
 export type RequestDoc = Doc & {

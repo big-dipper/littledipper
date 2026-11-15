@@ -909,7 +909,7 @@ async function main() {
 
     console.log('big dipper');
     let bdv = await a.call('GET', '/api/big-dipper');
-    ok(bdv.available && bdv.services.length === 3 && bdv.chosen.length === 0 && bdv.settings['upgrades.mode'] === 'notify' && bdv.boundaries.length === 4, 'Big Dipper: available, three services, nothing chosen, notices by default');
+    ok(bdv.available && bdv.services.length === 4 && bdv.services[0].key === 'feedback' && bdv.chosen.length === 0 && bdv.settings['upgrades.mode'] === 'notify' && bdv.boundaries.length === 4, 'Big Dipper: available, four services (feedback first), nothing chosen, notices by default');
     await a.call('PUT', '/api/big-dipper', { services: ['telepathy'] }, [400]);
     await a.call('PUT', '/api/big-dipper', { services: ['upgrades'], settings: { 'upgrades.hosting': 'manual', 'upgrades.mode': 'all' } }, [400]);
     await a.call('PUT', '/api/big-dipper', { services: ['identity', 'upgrades'], settings: { 'upgrades.hosting': 'platform', 'upgrades.mode': 'all', 'identity.recheck': 'biennial' } });
@@ -1013,6 +1013,57 @@ async function main() {
     const hello = await b.call('POST', `/api/messages/conversations/${mayaOnB.id}`, { body: 'Welcome back' });
     ok(hello.status === 'delivered' && (await f.call('GET', '/api/messages/unread')).count >= 1, 'and B can message the restored node straight away');
     await new Promise((r) => { F.proc.once('exit', r); F.proc.kill(); });
+
+    console.log('a service (Big Dipper) and feedback');
+    // A real service built with the kit, the way Big Dipper is: Little Dipper connects to it and sends feedback.
+    const { identityFromSecret } = await import('../../kit/protocol.js');
+    const { createService, fastifyAdapter } = await import('../../kit/service.js');
+    const Fastify = (await import('fastify')).default;
+    const toService: any[] = [];
+    const svcApp = Fastify({ bodyLimit: 8 * 1024 * 1024 });
+    const svc = createService({
+      identity: identityFromSecret('smoke-test-service-secret'), address: 'http://localhost:4210', displayName: 'Big Dipper', version: '0.0.1', acceptDelayMs: 200,
+      capabilities: { async feedback({ caller, data }) { toService.push({ caller, data }); setTimeout(() => svc.sendMessage(caller, 'Thanks, filed as SMK-1.').catch(() => {}), 100); return { reference: 'SMK-1' }; } },
+    });
+    fastifyAdapter(svcApp, svc);
+    await svcApp.listen({ port: 4210, host: '127.0.0.1' });
+    try {
+      const desc = await (await fetch('http://localhost:4210/.well-known/little-dipper')).json();
+      ok(desc.kind === 'service' && desc.capabilities.join() === 'feedback' && desc.claimed, 'a service describes itself as a service, with what it offers');
+      const H = await startNode(4207, path.join(tmp, 'h'), { LD_BIG_DIPPER_URL: 'http://localhost:4210' });
+      extra.push(H.proc);
+      const h = new Client('http://localhost:4207');
+      await claim(h, H.claimUrl, 'Sam Rivera', new SoftKey());
+      ok((await h.call('GET', '/api/big-dipper')).feedback === false, 'no feedback button before connecting to Big Dipper');
+      const con = await h.call('POST', '/api/big-dipper/connect', { services: ['feedback'] }, [202]);
+      let bd: any;
+      for (let i = 0; i < 30; i++) { await sleep(150); bd = await h.call('GET', '/api/big-dipper'); if (bd.contact?.status === 'active') break; }
+      ok(bd.contact?.status === 'active' && bd.feedback === true, 'the service accepts on its own, and the feedback button appears');
+      const party = await h.call('GET', `/api/parties/${con.contactId}`);
+      ok(party.type === 'organisation' && !party.share.basic, 'Big Dipper is an organisation, and gets no profile');
+      await h.call('POST', '/api/big-dipper/feedback', { type: 'telepathy', comment: 'hi' }, [400]);
+      await h.call('POST', '/api/big-dipper/feedback', { type: 'bug', comment: '   ' }, [400]);
+      await h.call('POST', '/api/big-dipper/feedback', { type: 'bug', comment: 'x', screenshot: 'data:image/jpeg;base64,AAAA' }, [400]);
+      const sent = await h.call('POST', '/api/big-dipper/feedback', {
+        type: 'bug', comment: 'The calendar shows the wrong week', screenshot: 'data:image/png;base64,iVBORw0KGgo=',
+        marks: [{ kind: 'pin', x: 10, y: 20, comment: 'here' }, { kind: 'laser', x: 1, y: 1 }], context: { route: '/admin/calendar', viewport: { w: 1440, h: 900 }, blurred: true },
+      });
+      const got = toService[0];
+      ok(sent.reference === 'SMK-1' && got?.caller.address === 'http://localhost:4207' && got.data.comment === 'The calendar shows the wrong week', 'feedback reaches the service, signed by the node, and comes back with a reference');
+      ok(got.data.marks.length === 1 && got.data.context.route === '/admin/calendar' && got.data.context.blurred === true && !JSON.stringify(got.data).includes('Sam Rivera'), 'only known marks travel, with where it happened and never the owner’s name');
+      let thanks = false;
+      for (let i = 0; i < 20 && !thanks; i++) { await sleep(150); thanks = (await h.call('GET', `/api/messages/conversations/${con.contactId}`)).items.some((m: any) => m.direction === 'in' && m.body === 'Thanks, filed as SMK-1.'); }
+      ok(thanks, 'the service’s reply lands in Messages');
+      ok((await h.call('GET', '/api/audit')).items.some((e: any) => e.action === 'bigdipper.feedback'), 'sending feedback is in the activity log');
+      await h.call('PUT', '/api/big-dipper', { services: ['interface'] });
+      await h.call('POST', '/api/big-dipper/feedback', { type: 'bug', comment: 'hi' }, [409]);
+      ok((await h.call('GET', '/api/big-dipper')).feedback === false, 'turn Feedback off and the button goes, and sending is refused');
+      await h.call('DELETE', `/api/federation/links/${party.node.linkId}`);
+      ok((await h.call('GET', '/api/big-dipper')).feedback === false, 'disconnecting Big Dipper takes the button away');
+      await new Promise((r) => { H.proc.once('exit', r); H.proc.kill(); });
+    } finally {
+      await svcApp.close();
+    }
 
     console.log('preset claim code');
     // Railway's template sets LD_CLAIM_TOKEN; the owner may claim days later, after restarts.
