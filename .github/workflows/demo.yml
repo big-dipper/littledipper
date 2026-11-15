@@ -1,0 +1,33 @@
+# The public demo's image: ghcr.io/<owner>/littledipper:demo, built from Dockerfile.demo on every push to main.
+# A tag on the same (public) package as real nodes; real nodes follow version tags only, so they never pick it up.
+name: Demo image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.demo
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/littledipper:demo
+          cache-from: type=gha,scope=demo
+          cache-to: type=gha,mode=max,scope=demo
