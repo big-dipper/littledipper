@@ -37,7 +37,7 @@ class Client {
 function startNode(port: number, dir: string, extra: Record<string, string> = {}): Promise<{ proc: ChildProcess; claimUrl: string }> {
   return new Promise((resolve, reject) => {
     // Node itself, not npx: killing an npx wrapper leaves the server running on Linux.
-    const proc = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], { cwd: path.resolve(import.meta.dirname, '..'), env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: `http://localhost:${port}`, LD_RETRY_BASE_MS: '300', ...extra } });
+    const proc = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], { cwd: path.resolve(import.meta.dirname, '..'), env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: `http://localhost:${port}`, LD_RETRY_BASE_MS: '300', LD_BIG_DIPPER_URL: 'off', ...extra } });
     let claimUrl = '';
     proc.stdout!.on('data', (d: Buffer) => {
       const s = d.toString();

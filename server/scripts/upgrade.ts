@@ -59,7 +59,7 @@ function client() {
 function start(serverDir: string, dataDir: string): Promise<{ proc: ChildProcess; claimUrl: string | null }> {
   const proc = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], {
     cwd: serverDir,
-    env: { ...process.env, PORT: String(PORT), LD_DATA_DIR: dataDir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: BASE, LD_COOKIE_SUFFIX: 'upgrade' },
+    env: { ...process.env, PORT: String(PORT), LD_DATA_DIR: dataDir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: BASE, LD_COOKIE_SUFFIX: 'upgrade', LD_BIG_DIPPER_URL: 'off' },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   return new Promise((resolve, reject) => {

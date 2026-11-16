@@ -106,7 +106,7 @@ Card and bank numbers are stored as the last four digits only, and the model has
 
 ## Not built yet / known gaps
 
-- Big Dipper itself doesn't exist yet. Settings → Big Dipper presents the services and saves the owner's choices; connecting works once `LD_BIG_DIPPER_URL` is set. The API docs site is out of scope, and **API docs** is a stub.
+- Big Dipper's service is at `https://big-dipper-service.onrender.com` (override with `LD_BIG_DIPPER_URL`, or `off` to hide connecting). Nothing is sent there until the owner connects; its first service is feedback. The API docs site is out of scope, and **API docs** is a stub.
 - The "people my contacts know" (`fof`) check uses hashed mutual-contact hints supplied by the requester. These are not yet cryptographically verified.
 - The recovery kit holds the signing and backup keys, but not recovery codes, which are only ever stored hashed.
 - Backups stay on the node and on the owner's device (download, or a chosen folder in Chrome and Edge). Other destinations such as S3 or Big Dipper are not built yet; see [docs/design/BACKUPS.md](docs/design/BACKUPS.md).

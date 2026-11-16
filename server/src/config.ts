@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-export const VERSION = '0.4.5';
+export const VERSION = '0.4.6';
 
 function detectHosting(): { provider: 'render' | 'railway' | 'fly' | 'docker' | 'other'; region: string; label: string } {
   const e = process.env;
@@ -41,7 +41,8 @@ export const config = {
   /** Optional: JSON endpoint returning { version, notes } for the latest release. */
   updateFeedUrl: process.env.LD_UPDATE_FEED_URL || '',
   /** Big Dipper's node address, once it exists. Empty: the Contacts banner says "coming soon". */
-  bigDipperUrl: (process.env.LD_BIG_DIPPER_URL || '').replace(/\/+$/, ''),
+  // Where Big Dipper's service lives. Nothing is sent there until the owner connects. LD_BIG_DIPPER_URL=off turns it off.
+  bigDipperUrl: (process.env.LD_BIG_DIPPER_URL === 'off' ? '' : process.env.LD_BIG_DIPPER_URL || 'https://big-dipper-service.onrender.com').replace(/\/+$/, ''),
   /** Allow plain http for peers on these hosts (local development). */
   devInsecurePeers: process.env.LD_ALLOW_HTTP_PEERS === '1' || /^http:\/\/(localhost|127\.)/.test(publicUrl()),
   sessionDays: 30,

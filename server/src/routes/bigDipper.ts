@@ -2,7 +2,7 @@
  * Big Dipper, the optional companion service. One connection, separate opt-in services.
  * Big Dipper doesn't exist yet: this is the owner's experience (benefits, risks, options) and a saved choice.
  * How each service works is decided when Big Dipper is built (OPEN-QUESTIONS 6, 15, 16).
- * Until LD_BIG_DIPPER_URL is set, owners can choose and we keep the choice.
+ * With LD_BIG_DIPPER_URL=off, owners can still choose and we keep the choice.
  */
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';

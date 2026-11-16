@@ -84,7 +84,7 @@ async function node(port: number, name: string, who: string, publicUrl = '') {
   dirs.push(dir);
   const proc = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], {
     cwd: path.resolve(import.meta.dirname, '..'),
-    env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: origin, LD_COOKIE_SUFFIX: String(port), LD_DEMO_SIGNIN: signin, ...hosted },
+    env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: origin, LD_COOKIE_SUFFIX: String(port), LD_DEMO_SIGNIN: signin, LD_BIG_DIPPER_URL: process.env.LD_BIG_DIPPER_URL || 'off', ...hosted },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   procs.push(proc);
