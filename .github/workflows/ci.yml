@@ -33,6 +33,12 @@ jobs:
           npx tsx scripts/compat-selftest.ts
           npm run compat -- --base "$BASE"
 
+      - name: API spec is current (docs/openapi.json, every route described)
+        working-directory: server
+        env:
+          LOG_LEVEL: silent
+        run: npm run openapi -- --check
+
       - name: Smoke test (two nodes, end to end)
         run: npm run smoke -w server
 
