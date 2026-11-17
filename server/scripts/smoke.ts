@@ -1100,6 +1100,7 @@ async function main() {
         await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'ftp://nope', model: 'fake-1', apiKey: 'test-key-1234' }, [400]);
         const m = await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', model: 'fake-1', apiKey: 'test-key-1234', label: 'Fake' });
         ok(m.apiKey === '…1234' && !JSON.stringify(await iu.call('GET', '/api/ai/models')).includes('test-key'), 'a model is added, and its API key never comes back');
+        ok(m.privacy.level === 'local' && m.privacy.goesTo === 'localhost' && m.privacy.does.startsWith('Suggests') && m.privacy.verifiedPrivate === false, 'each model says plainly where your words go and what it can do');
         const asParty = await iu.call('GET', `/api/parties/${m.assistant.id}`);
         ok(asParty.type === 'assistant' && asParty.share.write === 'suggest', 'the model is an assistant that suggests changes, managed on its page');
         await iu.call('PUT', '/api/ai/settings', { prompts: ['  '] }, [400]);

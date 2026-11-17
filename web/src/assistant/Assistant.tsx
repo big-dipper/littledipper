@@ -13,7 +13,8 @@ import { Icon } from '../icons';
 import { useAdmin } from '../pages/admin/Layout';
 
 type Provider = 'anthropic' | 'openai';
-type Model = { id: string; label: string; provider: Provider; baseUrl: string | null; model: string; apiKey: string; instructions: string; assistant: { id: string; name: string } | null };
+type Model = { id: string; label: string; provider: Provider; baseUrl: string | null; model: string; apiKey: string; instructions: string; privacy: Privacy; assistant: { id: string; name: string } | null };
+type Privacy = { level: 'local' | 'company' | 'router' | 'unknown'; levelLabel: string; goesTo: string; operator: string; site: string | null; note: string; inTransit: string; yourKey: string; sees: string; does: string; verifiedPrivate: boolean };
 type Prompt = { id: string; text: string };
 type Settings = { instructions: string; prompts: Prompt[] };
 type ToolNote = { name: string; title: string; ok: boolean; note?: string; pending?: boolean };
@@ -78,6 +79,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   const [view, setView] = useState<'chat' | 'settings' | 'history'>('chat');
   const [settings, setSettings] = useState<Settings>({ instructions: '', prompts: [] });
   const [showPrompts, setShowPrompts] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [chat, setChat] = useState<Chat | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [text, setText] = useState('');
@@ -188,6 +190,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                 {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
             ) : <strong>{view === 'settings' ? 'Settings' : view === 'history' ? 'Conversations' : model?.label ?? 'Your assistant'}</strong>}
+            {view === 'chat' && model && <button type="button" className="bare ai-info-btn" data-level={model.privacy.level} onClick={() => setShowPrivacy(!showPrivacy)} aria-expanded={showPrivacy} title="Where your words go">ⓘ</button>}
           </div>
           <div className="ai-head-actions">
             {models?.length ? <>
@@ -199,6 +202,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
           </div>
         </header>
 
+        {showPrivacy && view === 'chat' && model && <div className="ai-privacy-pop"><PrivacyBox m={model} /></div>}
         {models === null ? <div className="fb-body text-muted">Loading…</div>
           : !models.length ? <div className="fb-body"><Models models={models} onChange={async (id) => { await loadModels(); if (id) { setModelId(id); setView('chat'); } }} /></div>
           : view === 'settings' ? (
@@ -361,6 +365,25 @@ function Prompts({ prompts, onSave }: { prompts: Prompt[]; onSave: (p: { id?: st
   );
 }
 
+/** Where your words go with this model, and what it can do on your Little Dipper, in plain words. */
+function PrivacyBox({ m }: { m: Model }) {
+  const p = m.privacy;
+  return (
+    <div className="ai-privacy" data-level={p.level}>
+      <div className="ai-privacy-head"><span className="ai-privacy-dot" />{p.levelLabel}</div>
+      <dl>
+        <dt>Your words go to</dt><dd>{p.operator}{p.goesTo && p.operator !== p.goesTo ? <span className="text-muted"> ({p.goesTo})</span> : null}</dd>
+        <dt>On the way</dt><dd>{p.inTransit}</dd>
+        <dt>Their side</dt><dd>{p.note}{p.site ? <> <a href={`https://${p.site}`} target="_blank" rel="noreferrer">{p.site}</a></> : null}</dd>
+        <dt>It can see</dt><dd>{p.sees}</dd>
+        <dt>It can do</dt><dd>{p.does}{m.assistant && <> · <Link to={`/admin/relationships/${m.assistant.id}`}>change</Link></>}</dd>
+        <dt>Your API key</dt><dd>{p.yourKey}</dd>
+      </dl>
+      {!p.verifiedPrivate && p.level !== 'local' && <p className="ai-privacy-foot">Not verified private: the service can technically read what it processes. Verified-private models are on the way.</p>}
+    </div>
+  );
+}
+
 /** Add, see and remove models. The API key is pasted here and never shown again. */
 function Models({ models, onChange }: { models: Model[]; onChange: (newId?: string) => Promise<void> }) {
   const [provider, setProvider] = useState<Provider>('anthropic');
@@ -390,7 +413,7 @@ function Models({ models, onChange }: { models: Model[]; onChange: (newId?: stri
             <div>
               <strong>{m.label}</strong>
               <div className="text-muted" style={{ fontSize: 12.5 }}>{m.provider === 'anthropic' ? 'Anthropic' : m.baseUrl ? new URL(m.baseUrl).host : ''} · {m.model} · key {m.apiKey}</div>
-              {m.assistant && <Link to={`/admin/relationships/${m.assistant.id}`} style={{ fontSize: 13 }}>What it can see and change</Link>}
+              <PrivacyBox m={m} />
             </div>
             <button type="button" className="bare fb-plain" onClick={async () => { await del(`/api/ai/models/${m.id}`); await onChange(); }}>Remove</button>
           </div>

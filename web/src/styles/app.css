@@ -296,8 +296,9 @@ a.pp-contact:hover { background: var(--color-neutral-100); }
 .ai-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px 12px 22px; border-bottom: 1px solid var(--color-divider); }
 .ai-title { display: flex; align-items: center; gap: 8px; color: var(--color-accent-700); min-width: 0; }
 .ai-title strong { color: var(--color-text); font-size: 16px; }
-.ai-model { font: inherit; font-weight: 600; color: var(--color-text); background: transparent; border: 1px solid var(--color-divider); border-radius: 10px; padding: 4px 8px; max-width: 200px; }
-.ai-head-actions { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+.ai-model { font: inherit; font-weight: 600; color: var(--color-text); background: transparent; border: 1px solid var(--color-divider); border-radius: 10px; padding: 4px 8px; max-width: 170px; min-width: 0; }
+.ai-head-actions { display: flex; gap: 0; flex-wrap: nowrap; justify-content: flex-end; flex: none; }
+.ai-head-actions .fb-plain { padding: 6px 6px; }
 .ai-convo { display: flex; flex-direction: column; gap: 14px; }
 .ai-empty { margin: auto 0; }
 .ai-hello { font-family: var(--font-heading); font-size: 26px; margin: 0 0 6px; }
@@ -351,3 +352,19 @@ a.pp-contact:hover { background: var(--color-neutral-100); }
 .ai-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .ai-saved { font-size: 12.5px; }
 .ai-prompt-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--color-divider); font-size: 14px; }
+
+/* Where your words go: a calm summary per model. The dot's colour says how private it is. */
+.ai-info-btn { color: color-mix(in srgb, var(--color-text) 55%, transparent); cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 8px; }
+.ai-info-btn:hover, .ai-info-btn[aria-expanded='true'] { background: var(--color-surface); color: var(--color-text); }
+.ai-privacy-pop { padding: 12px 16px; border-bottom: 1px solid var(--color-divider); background: var(--color-surface); max-height: 50vh; overflow-y: auto; }
+.ai-privacy { margin-top: 10px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--color-divider); background: var(--color-paper); font-size: 13px; }
+.ai-privacy-pop .ai-privacy { margin-top: 0; }
+.ai-privacy-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 8px; }
+.ai-privacy-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--color-neutral-400); flex: none; }
+.ai-privacy[data-level='local'] .ai-privacy-dot { background: var(--color-accent-2-500, #7a8a5e); }
+.ai-privacy[data-level='company'] .ai-privacy-dot { background: #c9a227; }
+.ai-privacy[data-level='router'] .ai-privacy-dot, .ai-privacy[data-level='unknown'] .ai-privacy-dot { background: var(--color-accent-600); }
+.ai-privacy dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; margin: 0; }
+.ai-privacy dt { color: color-mix(in srgb, var(--color-text) 58%, transparent); }
+.ai-privacy dd { margin: 0; }
+.ai-privacy-foot { margin: 10px 0 0; font-size: 12px; color: color-mix(in srgb, var(--color-text) 62%, transparent); }
