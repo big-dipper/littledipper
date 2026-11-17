@@ -118,7 +118,7 @@ export async function runTurn(app: FastifyInstance, chatId: string, input: { tex
   const turns = dec<Turn[]>(chat.turnsEnc);
   const native = dec<unknown[]>(chat.nativeEnc);
   const startLen = native.length;
-  const usage: Usage = { input: 0, output: 0 };
+  const usage: Usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const tools: ToolNote[] = [];
   const followed = { all: (await getSettings()).instructions, model: modelInstructions(model) };
   const system = withInstructions(followed);
@@ -147,6 +147,7 @@ export async function runTurn(app: FastifyInstance, chatId: string, input: { tex
       const r = await adapter.turn(native, specs, system, (t) => { reply += t; emit({ type: 'text', text: t }); });
       native.push(r.message);
       usage.input += r.usage.input; usage.output += r.usage.output;
+      usage.cacheRead! += r.usage.cacheRead ?? 0; usage.cacheWrite! += r.usage.cacheWrite ?? 0;
       if (r.stop === 'stopped') { stopNote = r.stopNote; break; }
       if (r.stop === 'end') break;
       if (!r.calls.length) continue; // paused: send it back so it carries on
@@ -194,7 +195,7 @@ export async function runTurn(app: FastifyInstance, chatId: string, input: { tex
   const title = chat.title === 'New conversation' ? text.split('\n')[0].slice(0, 70) : chat.title;
   await ctx.store.update('chats', chatId, {
     turnsEnc: enc(turns), nativeEnc: enc(native), title, updatedAt: at,
-    usage: { input: chat.usage.input + usage.input, output: chat.usage.output + usage.output },
+    usage: { input: chat.usage.input + usage.input, output: chat.usage.output + usage.output, cacheRead: (chat.usage.cacheRead ?? 0) + (usage.cacheRead ?? 0), cacheWrite: (chat.usage.cacheWrite ?? 0) + (usage.cacheWrite ?? 0) },
   });
   emit({ type: 'done', turn: botTurn, usage });
 }

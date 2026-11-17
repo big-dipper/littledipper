@@ -20,7 +20,7 @@ type Settings = { instructions: string; prompts: Prompt[] };
 type ToolNote = { name: string; title: string; ok: boolean; note?: string; pending?: boolean; reviewIds?: string[] };
 type Change = { key: string; label: string; secret: boolean; to: unknown; from?: unknown };
 type Review = { id: string; domainLabel: string; recordTitle: string | null; action: 'create' | 'update'; status: 'pending' | 'approved' | 'rejected'; changes: Change[] };
-type Usage = { input: number; output: number };
+type Usage = { input: number; output: number; cacheRead?: number; cacheWrite?: number };
 type Turn =
   | { role: 'user'; text: string; files: { id: string; name: string }[]; at: string }
   | { role: 'assistant'; text: string; tools: ToolNote[]; stopNote?: string; error?: string; usage: Usage; at: string; followed?: { all: string; model: string } };
@@ -37,7 +37,10 @@ const PRICES: [RegExp, number, number][] = [
 ];
 function cost(m: Model | undefined, u: Usage) {
   const p = m && m.provider === 'anthropic' ? PRICES.find(([re]) => re.test(m.model)) : undefined;
-  return p ? (u.input * p[1] + u.output * p[2]) / 1e6 : null;
+  if (!p) return null;
+  // Cache reads cost a tenth of the input price; writing to the cache costs a quarter more.
+  const read = u.cacheRead ?? 0, write = u.cacheWrite ?? 0, plain = Math.max(0, u.input - read - write);
+  return (plain * p[1] + write * p[1] * 1.25 + read * p[1] * 0.1 + u.output * p[2]) / 1e6;
 }
 const tokens = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
@@ -313,7 +316,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                   {text.trim() && !settings.prompts.some((p) => p.text === text.trim()) && <button type="button" className="bare fb-plain" onClick={() => savePrompts([...settings.prompts, { text: text.trim() }])}>Save as a prompt</button>}
                 </div>
                 {chat && (chat.usage.input + chat.usage.output > 0) && (
-                  <div className="ai-meter text-muted">This conversation: {tokens(chat.usage.input)} in · {tokens(chat.usage.output)} out{spent !== null ? ` · about $${spent < 0.01 ? spent.toFixed(3) : spent.toFixed(2)}` : ''}</div>
+                  <div className="ai-meter text-muted">This conversation: {tokens(chat.usage.input)} in{chat.usage.cacheRead ? ` (${tokens(chat.usage.cacheRead)} cached)` : ''} · {tokens(chat.usage.output)} out{spent !== null ? ` · about $${spent < 0.01 ? spent.toFixed(3) : spent.toFixed(2)}` : ''}</div>
                 )}
               </footer>
             </>

@@ -17,7 +17,8 @@ import type { AiModelDoc } from './models.js';
 export type ToolSpec = { name: string; description: string; inputSchema: Record<string, unknown> };
 export type ToolCall = { id: string; name: string; input: unknown; invalid?: string };
 export type ToolOutcome = { id: string; content: string; isError: boolean };
-export type Usage = { input: number; output: number };
+/** input: all input tokens; cacheRead / cacheWrite: the part read from or written to the provider's prompt cache (priced differently). */
+export type Usage = { input: number; output: number; cacheRead?: number; cacheWrite?: number };
 export type TurnResult = {
   /** The model's message, to append to history as is. */
   message: unknown;
@@ -123,7 +124,8 @@ export function anthropicAdapter(m: AiModelDoc, apiKey: string): Adapter {
           if (attempt >= 2) throw new ModelError('The model kept sending a tool call that couldn\'t be read.');
         }
       }
-      const usage = { input: (message.usage.input_tokens ?? 0) + (message.usage.cache_read_input_tokens ?? 0) + (message.usage.cache_creation_input_tokens ?? 0), output: message.usage.output_tokens ?? 0 };
+      const cacheRead = message.usage.cache_read_input_tokens ?? 0, cacheWrite = message.usage.cache_creation_input_tokens ?? 0;
+      const usage = { input: (message.usage.input_tokens ?? 0) + cacheRead + cacheWrite, output: message.usage.output_tokens ?? 0, cacheRead, cacheWrite };
       const text = message.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('');
       const uses = message.content.filter((b): b is Anthropic.Beta.Messages.BetaToolUseBlock => b.type === 'tool_use');
       const assistant = { role: 'assistant', content: message.content };
