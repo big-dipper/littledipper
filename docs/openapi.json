@@ -30,6 +30,9 @@
       "name": "OAuth"
     },
     {
+      "name": "AI"
+    },
+    {
       "name": "Owner"
     },
     {
@@ -136,6 +139,248 @@
         "summary": "MCP resource metadata (path form)",
         "description": "The same resource metadata at the path-specific address some MCP clients ask for.\n\n**Who:** Anyone.",
         "security": [],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/ai/chats": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "getApiAiChats",
+        "summary": "Conversations with the owner’s models, newest first",
+        "description": "Conversations with the owner’s models, newest first: { id, modelId, title, usage: { input, output }, updatedAt }.\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "postApiAiChats",
+        "summary": "Start a conversation",
+        "description": "Start a conversation { model }.\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/ai/chats/{id}": {
+      "delete": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "deleteApiAiChatsId",
+        "summary": "Delete a conversation",
+        "description": "Delete a conversation.\n\n**Who:** The owner, signed in (passkey session).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "getApiAiChatsId",
+        "summary": "A conversation and its turns",
+        "description": "A conversation and its turns: what the owner said (and pages attached), what the model answered and which tools it used.\n\n**Who:** The owner, signed in (passkey session).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/ai/chats/{id}/messages": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "postApiAiChatsIdMessages",
+        "summary": "Say something",
+        "description": "Say something { text, files?: [fileId], context? }. The node calls the model and runs the tools it asks for with its assistant key, so Review and undo apply. Answers as text/event-stream: text, tool (start, done), then done or error.\n\n**Who:** The owner, signed in (passkey session).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/ai/models": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "getApiAiModels",
+        "summary": "The owner’s AI models",
+        "description": "The owner’s AI models: label, provider, model name, API address, the assistant it acts as, and the last characters of its API key (never the key).\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "postApiAiModels",
+        "summary": "Add a model",
+        "description": "Add a model { label?, provider: anthropic|openai, model, apiKey, baseUrl? (openai) }. It becomes an assistant that sees everything but secret details and suggests changes, changeable on its page.\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/ai/models/{id}": {
+      "delete": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "deleteApiAiModelsId",
+        "summary": "Remove a model",
+        "description": "Remove a model. Its assistant key ends at once; its conversations and its page stay.\n\n**Who:** The owner, signed in (passkey session).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "patchApiAiModelsId",
+        "summary": "Change a model’s label, model name, API address or key",
+        "description": "Change a model’s label, model name, API address or key.\n\n**Who:** The owner, signed in (passkey session).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/ai/providers": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "getApiAiProviders",
+        "summary": "The kinds of AI service a model can come from",
+        "description": "The kinds of AI service a model can come from: Claude (Anthropic), or any OpenAI-compatible service.\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
         "responses": {
           "default": {
             "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
@@ -7660,6 +7905,7 @@
   },
   "x-capabilities": [
     "address-change",
+    "ai.chat",
     "assistants",
     "backups.device",
     "calendar",

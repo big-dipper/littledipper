@@ -84,7 +84,7 @@ async function previousChoice(name: string): Promise<Choice | null> {
 }
 
 /** The assistant's party: the one you connected before under this name, or a new one. */
-async function assistantParty(name: string) {
+export async function assistantParty(name: string) {
   const found = (await ctx.store.find<PartyDoc>('parties', { type: 'assistant' })).find((p) => p.name.toLowerCase() === name.toLowerCase());
   if (found) return found;
   const c: PartyDoc = {

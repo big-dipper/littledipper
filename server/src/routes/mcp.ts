@@ -16,7 +16,7 @@ import { canonicalUrl, getNode } from '../node.js';
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_BATCH = 50;
 
-const INSTRUCTIONS = `This is the owner's Little Dipper: their records (addresses, jobs, IDs, insurance, vehicles and more, each with when it applied), their documents, and the dates that matter.
+export const INSTRUCTIONS = `This is the owner's Little Dipper: their records (addresses, jobs, IDs, insurance, vehicles and more, each with when it applied), their documents, and the dates that matter.
 - Call whoami first to see which kinds of records your key can read or change, and your mode: answer (read only), suggest (your changes wait for the owner to approve them) or make (your changes are saved, except secret values and core identity, which always wait for approval: legal names, birth, citizenship, IDs, the current address, email and phone). In suggest mode, documents you upload wait unfiled in the owner's inbox.
 - When a change comes back "pending_review", tell the owner it's waiting for them in Review. Don't say it's saved. list_review_items shows what's still waiting.
 - Call get_profile for the owner's current facts (names, birth, citizenship, where they live, main email and phone). The profile is worked out from their records: to change a line, change the record it comes from (each line says which).
@@ -26,8 +26,8 @@ const INSTRUCTIONS = `This is the owner's Little Dipper: their records (addresse
 - Fields marked secret come back masked unless the owner has let you read that field.
 - There is no delete tool. If something was filed wrong, tell the owner: they can undo or remove it.`;
 
-type Json = Record<string, unknown>;
-type Call = (method: string, url: string, body?: unknown, contentType?: string) => Promise<{ status: number; body: unknown }>;
+export type Json = Record<string, unknown>;
+export type Call = (method: string, url: string, body?: unknown, contentType?: string) => Promise<{ status: number; body: unknown }>;
 
 /** What a value of each field type looks like, so an assistant doesn't learn it from errors (list_kinds shows it per field). */
 const FORMAT: Record<string, string> = {
@@ -47,7 +47,7 @@ const FORMAT: Record<string, string> = {
   enum: 'one of the option values',
   boolean: 'true or false',
 };
-type Tool = { name: string; title: string; description: string; inputSchema: Json; annotations?: Json; run: (args: Json, call: Call) => Promise<unknown> };
+export type Tool = { name: string; title: string; description: string; inputSchema: Json; annotations?: Json; run: (args: Json, call: Call) => Promise<unknown> };
 
 const str = (description: string) => ({ type: 'string', description });
 const obj = (properties: Json, required: string[] = []) => ({ type: 'object', properties, required, additionalProperties: false });
@@ -65,7 +65,7 @@ const recordFields = {
 };
 
 /** The REST answer, or a ToolError the assistant can read and explain. */
-class ToolError extends Error {}
+export class ToolError extends Error {}
 async function ok(p: ReturnType<Call>) {
   const r = await p;
   if (r.status >= 400) {
@@ -86,7 +86,8 @@ const day = (d: Date) => d.toISOString().slice(0, 10);
 /** A saved record, or the note that it's waiting in Review. */
 const written = (b: Json) => (b.status === 'pending_review' ? b : { ...brief(b), ...(b.pendingReview ? { pendingReview: b.pendingReview } : {}) });
 
-const TOOLS: Tool[] = [
+/** The tools, shared with the in-app assistant (ai/engine.ts): same calls, same rules. */
+export const TOOLS: Tool[] = [
   {
     name: 'whoami', title: 'What can I do here?',
     description: 'Your connection to this Little Dipper: your name, the scopes your key carries (which kinds of records you can read or change) and when it expires. Call this first.',

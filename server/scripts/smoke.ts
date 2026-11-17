@@ -1065,6 +1065,69 @@ async function main() {
       await svcApp.close();
     }
 
+    console.log('the in-app assistant (a fake OpenAI-compatible model)');
+    {
+      // A stand-in model service: first it asks to add a pet, then, given the tool result, it answers.
+      const seen: any[] = [];
+      const fake = (await import('node:http')).createServer((req, res) => {
+        let body = '';
+        req.on('data', (d) => (body += d));
+        req.on('end', () => {
+          const j = JSON.parse(body || '{}');
+          seen.push({ auth: req.headers.authorization, path: req.url, body: j });
+          if (req.headers.authorization !== 'Bearer test-key-1234') { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'bad key' } })); return; }
+          res.writeHead(200, { 'content-type': 'text/event-stream' });
+          const send = (o: unknown) => res.write(`data: ${JSON.stringify(o)}\n\n`);
+          const last = j.messages[j.messages.length - 1];
+          if (last.role === 'user') {
+            send({ choices: [{ delta: { content: 'Let me add Juniper. ' } }] });
+            send({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'add_record', arguments: '{"kind":"pets",' } }] } }] });
+            send({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"data":{"name":"Juniper","species":"Dog"}}' } }] }, finish_reason: 'tool_calls' }] });
+          } else {
+            send({ choices: [{ delta: { content: 'Juniper is waiting for you in Review.' }, finish_reason: 'stop' }] });
+          }
+          send({ choices: [], usage: { prompt_tokens: 120, completion_tokens: 30 } });
+          res.end('data: [DONE]\n\n');
+        });
+      });
+      await new Promise<void>((r) => fake.listen(4211, r));
+      try {
+        const I = await startNode(4208, path.join(tmp, 'i'));
+        extra.push(I.proc);
+        const iu = new Client('http://localhost:4208');
+        await claim(iu, I.claimUrl, 'Maya Lind', new SoftKey());
+        await iu.call('POST', '/api/ai/models', { provider: 'openai', model: 'fake-1', apiKey: 'test-key-1234' }, [400]);
+        await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'ftp://nope', model: 'fake-1', apiKey: 'test-key-1234' }, [400]);
+        const m = await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', model: 'fake-1', apiKey: 'test-key-1234', label: 'Fake' });
+        ok(m.apiKey === '…1234' && !JSON.stringify(await iu.call('GET', '/api/ai/models')).includes('test-key'), 'a model is added, and its API key never comes back');
+        const asParty = await iu.call('GET', `/api/parties/${m.assistant.id}`);
+        ok(asParty.type === 'assistant' && asParty.share.write === 'suggest', 'the model is an assistant that suggests changes, managed on its page');
+        const chat = await iu.call('POST', '/api/ai/chats', { model: m.id });
+        const say = async (text: string, files: string[] = []) => {
+          const r = await fetch(`http://localhost:4208/api/ai/chats/${chat.id}/messages`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'http://localhost:4208', cookie: [...iu.jar].map(([k, v]) => `${k}=${v}`).join('; ') }, body: JSON.stringify({ text, files, context: 'Pets' }) });
+          return (await r.text()).split('\n').filter((l) => l.startsWith('data: ')).map((l) => JSON.parse(l.slice(6)));
+        };
+        const events = await say('Add my dog Juniper');
+        const toolDone = events.find((e) => e.type === 'tool' && e.phase === 'done');
+        ok(events.some((e) => e.type === 'text') && toolDone?.name === 'add_record' && toolDone.pending === true && events.at(-1).type === 'done', 'it streams its answer and runs the tool it asked for; the change waits in Review');
+        ok(seen[0].body.messages[0].role === 'system' && seen[0].body.tools.some((t: any) => t.function.name === 'add_record') && seen[1].body.messages.some((x: any) => x.role === 'tool' && x.tool_call_id === 'call_1'), 'the model gets the instructions and tools, then the tool result');
+        ok((await iu.call('GET', '/api/reviews')).items.some((r: any) => r.data?.name === 'Juniper' || JSON.stringify(r).includes('Juniper')), 'the suggestion is in Review, from the assistant');
+        const got = await iu.call('GET', `/api/ai/chats/${chat.id}`);
+        ok(got.turns.length === 2 && got.turns[1].tools[0].pending && got.usage.input === 240 && got.title === 'Add my dog Juniper', 'the conversation is kept, with what it did and the tokens it used');
+        await iu.call('PATCH', `/api/ai/models/${m.id}`, { apiKey: 'wrong-key' });
+        const failed = await say('Hello again');
+        ok(failed.some((e) => e.type === 'error' && e.code === 'model_auth') && (await iu.call('GET', `/api/ai/chats/${chat.id}`)).turns.at(-1).error, 'a refused key is said plainly, and kept in the conversation');
+        const appKey = (await iu.call('POST', '/api/keys', { name: 'script', scopes: ['records:read'] })).secret;
+        const asApp = await fetch('http://localhost:4208/api/ai/models', { headers: { authorization: `Bearer ${appKey}` } });
+        ok(asApp.status === 401 || asApp.status === 403, 'only the owner, signed in, can see or use AI models');
+        await iu.call('DELETE', `/api/ai/models/${m.id}`);
+        ok((await say('Still there?')).some((e) => e.type === 'error' && e.code === 'model_removed'), 'a removed model can’t be talked to');
+        await new Promise((r) => { I.proc.once('exit', r); I.proc.kill(); });
+      } finally {
+        fake.close();
+      }
+    }
+
     console.log('preset claim code');
     // Railway's template sets LD_CLAIM_TOKEN; the owner may claim days later, after restarts.
     const preset = 'rw' + crypto.randomBytes(16).toString('hex');
