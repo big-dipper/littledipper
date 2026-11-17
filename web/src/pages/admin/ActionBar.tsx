@@ -15,6 +15,7 @@ import { useUpdates } from '../../needsYou';
 import { useAdmin } from './Layout';
 import { AppearanceButton } from './Appearance';
 import { FeedbackButton } from '../../feedback/FeedbackButton';
+import { AssistantButton } from '../../assistant/Assistant';
 
 export type Notice = { id: string; kind: string; title: string; text: string; href: string; at: string };
 export type Ask = { messageId: string; party: { id: string; name: string }; title: string; due: string | null; at: string };
@@ -57,6 +58,7 @@ export default function ActionBar({ notices, onDismiss, onGo }: { notices: Notic
   // The two doors: + for adding (and your tasks), the bell for notifications. Shown on the rail and atop the panel.
   const doors = (
     <>
+      <AssistantButton />
       <button type="button" className="bare ab-rail-btn ab-main" data-on={view === 'add' ? '1' : '0'} onClick={() => (view === 'add' ? setView(null) : show('add'))}
         title="Add an event, task or note" aria-label={`Add an event, task or note${waiting ? ` (${waiting} waiting for your answer)` : ''}`} aria-pressed={view === 'add'}>
         <Icon name="plus" size={22} />
