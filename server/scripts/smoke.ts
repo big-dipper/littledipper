@@ -1102,6 +1102,10 @@ async function main() {
         ok(m.apiKey === '…1234' && !JSON.stringify(await iu.call('GET', '/api/ai/models')).includes('test-key'), 'a model is added, and its API key never comes back');
         const asParty = await iu.call('GET', `/api/parties/${m.assistant.id}`);
         ok(asParty.type === 'assistant' && asParty.share.write === 'suggest', 'the model is an assistant that suggests changes, managed on its page');
+        await iu.call('PUT', '/api/ai/settings', { prompts: ['  '] }, [400]);
+        const set = await iu.call('PUT', '/api/ai/settings', { instructions: 'I am paying off debt: look for ways to save.', prompts: ['Check my bills', { text: 'Write my résumé' }] });
+        ok(set.prompts.length === 2 && set.prompts.every((p: any) => p.id.startsWith('prm_')) && (await iu.call('GET', '/api/ai/settings')).instructions.includes('paying off debt'), 'standing instructions and saved prompts are kept');
+        ok((await iu.call('PATCH', `/api/ai/models/${m.id}`, { instructions: 'Answer in Spanish.' })).instructions === 'Answer in Spanish.', 'a model can have instructions of its own');
         const chat = await iu.call('POST', '/api/ai/chats', { model: m.id });
         const say = async (text: string, files: string[] = []) => {
           const r = await fetch(`http://localhost:4208/api/ai/chats/${chat.id}/messages`, { method: 'POST', headers: { 'content-type': 'application/json', origin: 'http://localhost:4208', cookie: [...iu.jar].map(([k, v]) => `${k}=${v}`).join('; ') }, body: JSON.stringify({ text, files, context: 'Pets' }) });
@@ -1110,9 +1114,11 @@ async function main() {
         const events = await say('Add my dog Juniper');
         const toolDone = events.find((e) => e.type === 'tool' && e.phase === 'done');
         ok(events.some((e) => e.type === 'text') && toolDone?.name === 'add_record' && toolDone.pending === true && events.at(-1).type === 'done', 'it streams its answer and runs the tool it asked for; the change waits in Review');
+        ok(seen[0].body.messages[0].content.includes('paying off debt') && seen[0].body.messages[0].content.includes('Answer in Spanish.'), 'every model follows the standing instructions, plus its own');
         ok(seen[0].body.messages[0].role === 'system' && seen[0].body.tools.some((t: any) => t.function.name === 'add_record') && seen[1].body.messages.some((x: any) => x.role === 'tool' && x.tool_call_id === 'call_1'), 'the model gets the instructions and tools, then the tool result');
         ok((await iu.call('GET', '/api/reviews')).items.some((r: any) => r.data?.name === 'Juniper' || JSON.stringify(r).includes('Juniper')), 'the suggestion is in Review, from the assistant');
         const got = await iu.call('GET', `/api/ai/chats/${chat.id}`);
+        ok(got.turns[1].followed?.model === 'Answer in Spanish.', 'each answer records the instructions it followed');
         ok(got.turns.length === 2 && got.turns[1].tools[0].pending && got.usage.input === 240 && got.title === 'Add my dog Juniper', 'the conversation is kept, with what it did and the tokens it used');
         await iu.call('PATCH', `/api/ai/models/${m.id}`, { apiKey: 'wrong-key' });
         const failed = await say('Hello again');

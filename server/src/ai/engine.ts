@@ -13,13 +13,16 @@ import { ctx } from '../ctx.js';
 import { HttpError, notFound } from '../auth.js';
 import { readFile } from '../files.js';
 import { INSTRUCTIONS, TOOLS, ToolError, type Call } from '../routes/mcp.js';
-import { getModel, secretsOf, type AiModelDoc } from './models.js';
+import { getModel, modelInstructions, secretsOf, type AiModelDoc } from './models.js';
+import { getSettings } from './settings.js';
 import { adapterFor, ModelError, type ToolOutcome, type Usage } from './providers.js';
 
 export type ToolNote = { name: string; title: string; ok: boolean; note?: string; pending?: boolean };
 export type Turn =
   | { role: 'user'; text: string; files: { id: string; name: string }[]; at: string }
-  | { role: 'assistant'; text: string; tools: ToolNote[]; stopNote?: string; error?: string; usage: Usage; at: string };
+  | { role: 'assistant'; text: string; tools: ToolNote[]; stopNote?: string; error?: string; usage: Usage; at: string;
+      /** The standing instructions it was following, so answers from different models and instructions can be compared. */
+      followed?: { all: string; model: string } };
 
 export type ChatDoc = {
   _id: string;
@@ -54,6 +57,16 @@ You are talking with the owner inside their own Little Dipper, in a chat panel b
 - When they attach a document and ask you to add what it says, read it, check what's already recorded (search first, so you don't add twice), then add or update the entries. Mention anything you couldn't read clearly.
 - Say what you did in one or two lines at the end, and when changes are waiting for them, say they're in Review.
 - If something needs the owner (approving, deleting, sharing), tell them where to do it rather than trying.`;
+
+/** The owner's standing instructions go after the rules, which they can't override. */
+function withInstructions(f: { all: string; model: string }) {
+  const parts = [f.all, f.model].filter(Boolean);
+  if (!parts.length) return SYSTEM;
+  return `${SYSTEM}
+
+The owner's standing instructions, in their words. Follow them in everything you do, unless they conflict with the rules above (the rules win):
+${parts.join('\n\n')}`;
+}
 
 export async function createChat(modelId: string) {
   await getModel(modelId);
@@ -105,6 +118,8 @@ export async function runTurn(app: FastifyInstance, chatId: string, input: { tex
   const startLen = native.length;
   const usage: Usage = { input: 0, output: 0 };
   const tools: ToolNote[] = [];
+  const followed = { all: (await getSettings()).instructions, model: modelInstructions(model) };
+  const system = withInstructions(followed);
   let reply = '', stopNote: string | undefined, error: string | undefined;
 
   try {
@@ -127,7 +142,7 @@ export async function runTurn(app: FastifyInstance, chatId: string, input: { tex
     native.push(adapter.userMessage(said, fileIds));
 
     for (let step = 0; step < MAX_STEPS; step++) {
-      const r = await adapter.turn(native, specs, SYSTEM, (t) => { reply += t; emit({ type: 'text', text: t }); });
+      const r = await adapter.turn(native, specs, system, (t) => { reply += t; emit({ type: 'text', text: t }); });
       native.push(r.message);
       usage.input += r.usage.input; usage.output += r.usage.output;
       if (r.stop === 'stopped') { stopNote = r.stopNote; break; }
@@ -172,7 +187,7 @@ export async function runTurn(app: FastifyInstance, chatId: string, input: { tex
 
   const at = now();
   const userTurn: Turn = { role: 'user', text, files, at };
-  const botTurn: Turn = { role: 'assistant', text: reply, tools, ...(stopNote ? { stopNote } : {}), ...(error ? { error } : {}), usage, at };
+  const botTurn: Turn = { role: 'assistant', text: reply, tools, ...(stopNote ? { stopNote } : {}), ...(error ? { error } : {}), usage, at, ...(followed.all || followed.model ? { followed } : {}) };
   turns.push(userTurn, botTurn);
   const title = chat.title === 'New conversation' ? text.split('\n')[0].slice(0, 70) : chat.title;
   await ctx.store.update('chats', chatId, {

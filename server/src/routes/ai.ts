@@ -11,6 +11,7 @@ import { audit, ownerActor } from '../audit.js';
 import { ctx } from '../ctx.js';
 import { chatOut, chatSummary, createChat, getChat, runTurn, type ChatDoc, type Event } from '../ai/engine.js';
 import { addModel, getModel, listModels, modelOut, PROVIDERS, removeModel, updateModel } from '../ai/models.js';
+import { getSettings, saveSettings } from '../ai/settings.js';
 
 export default async function aiRoutes(app: FastifyInstance) {
   app.get('/api/ai/providers', async (req) => {
@@ -41,6 +42,17 @@ export default async function aiRoutes(app: FastifyInstance) {
     const m = await removeModel((req.params as { id: string }).id);
     await audit({ actor: ownerActor(p.key._id), action: 'ai.model.remove', resource: `aiModels/${m._id}`, text: `You removed the AI model ${m.label}. Its access ended.`, tone: 'owner' });
     return { deleted: true };
+  });
+
+  /** Standing instructions every model follows, and the owner's saved prompts. */
+  app.get('/api/ai/settings', async (req) => {
+    await requireSession(req);
+    return getSettings();
+  });
+
+  app.put('/api/ai/settings', async (req) => {
+    await requireSession(req);
+    return saveSettings((req.body || {}) as { instructions?: unknown; prompts?: unknown });
   });
 
   app.get('/api/ai/chats', async (req) => {

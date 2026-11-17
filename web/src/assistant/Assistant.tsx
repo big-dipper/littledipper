@@ -8,17 +8,19 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { del, get, post } from '../api';
+import { del, get, patch, post, put } from '../api';
 import { Icon } from '../icons';
 import { useAdmin } from '../pages/admin/Layout';
 
 type Provider = 'anthropic' | 'openai';
-type Model = { id: string; label: string; provider: Provider; baseUrl: string | null; model: string; apiKey: string; assistant: { id: string; name: string } | null };
+type Model = { id: string; label: string; provider: Provider; baseUrl: string | null; model: string; apiKey: string; instructions: string; assistant: { id: string; name: string } | null };
+type Prompt = { id: string; text: string };
+type Settings = { instructions: string; prompts: Prompt[] };
 type ToolNote = { name: string; title: string; ok: boolean; note?: string; pending?: boolean };
 type Usage = { input: number; output: number };
 type Turn =
   | { role: 'user'; text: string; files: { id: string; name: string }[]; at: string }
-  | { role: 'assistant'; text: string; tools: ToolNote[]; stopNote?: string; error?: string; usage: Usage; at: string };
+  | { role: 'assistant'; text: string; tools: ToolNote[]; stopNote?: string; error?: string; usage: Usage; at: string; followed?: { all: string; model: string } };
 type Chat = { id: string; modelId: string; title: string; usage: Usage; updatedAt: string; turns?: Turn[] };
 type Doc = { id: string; title: string; pages: { id: string; name: string; type: string }[] };
 
@@ -73,7 +75,9 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   const loc = useLocation();
   const [models, setModels] = useState<Model[] | null>(null);
   const [modelId, setModelId] = useState<string>(() => { try { return localStorage.getItem(MODEL_KEY) || ''; } catch { return ''; } });
-  const [view, setView] = useState<'chat' | 'models' | 'history'>('chat');
+  const [view, setView] = useState<'chat' | 'settings' | 'history'>('chat');
+  const [settings, setSettings] = useState<Settings>({ instructions: '', prompts: [] });
+  const [showPrompts, setShowPrompts] = useState(false);
   const [chat, setChat] = useState<Chat | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [text, setText] = useState('');
@@ -89,7 +93,8 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
     setModels(r.models);
     if (!r.models.some((m) => m.id === modelId)) setModelId(r.models[0]?.id ?? '');
   });
-  useEffect(() => { loadModels().catch(() => setModels([])); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadModels().catch(() => setModels([])); get<Settings>('/api/ai/settings').then(setSettings).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const savePrompts = async (prompts: { id?: string; text: string }[]) => setSettings(await put<Settings>('/api/ai/settings', { prompts }));
   useEffect(() => { try { localStorage.setItem(MODEL_KEY, modelId); } catch { /* not remembered */ } }, [modelId]);
   const model = models?.find((m) => m.id === modelId);
 
@@ -182,20 +187,27 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
               <select className="ai-model" value={modelId} onChange={(e) => { setModelId(e.target.value); newChat(); }} aria-label="Model">
                 {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
-            ) : <strong>{view === 'models' ? 'AI models' : view === 'history' ? 'Conversations' : model?.label ?? 'Your assistant'}</strong>}
+            ) : <strong>{view === 'settings' ? 'Settings' : view === 'history' ? 'Conversations' : model?.label ?? 'Your assistant'}</strong>}
           </div>
           <div className="ai-head-actions">
             {models?.length ? <>
               <button type="button" className="bare fb-plain" onClick={newChat} disabled={busy} title="New conversation">New</button>
               <button type="button" className="bare fb-plain" onClick={() => (view === 'history' ? setView('chat') : openHistory())} disabled={busy}>{view === 'history' ? 'Back' : 'History'}</button>
-              <button type="button" className="bare fb-plain" onClick={() => setView(view === 'models' ? 'chat' : 'models')} disabled={busy}>{view === 'models' ? 'Back' : 'Models'}</button>
+              <button type="button" className="bare fb-plain" onClick={() => setView(view === 'settings' ? 'chat' : 'settings')} disabled={busy}>{view === 'settings' ? 'Back' : 'Settings'}</button>
             </> : null}
             <button type="button" className="bare fb-plain" onClick={onClose} disabled={busy} aria-label="Close">Close</button>
           </div>
         </header>
 
         {models === null ? <div className="fb-body text-muted">Loading…</div>
-          : !models.length || view === 'models' ? <Models models={models} onChange={async (id) => { await loadModels(); if (id) setModelId(id); if (id) setView('chat'); }} />
+          : !models.length ? <div className="fb-body"><Models models={models} onChange={async (id) => { await loadModels(); if (id) { setModelId(id); setView('chat'); } }} /></div>
+          : view === 'settings' ? (
+            <div className="fb-body ai-settings">
+              <Instructions settings={settings} models={models} modelId={modelId} onSettings={setSettings} onModels={loadModels} />
+              <Prompts prompts={settings.prompts} onSave={savePrompts} />
+              <Models models={models} onChange={async (id) => { await loadModels(); if (id) { setModelId(id); setView('chat'); } }} />
+            </div>
+          )
           : view === 'history' ? (
             <div className="fb-body ai-history">
               {!chats.length && <p className="text-muted">No conversations yet.</p>}
@@ -216,9 +228,17 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                   <div className="ai-empty">
                     <p className="ai-hello">What can I help with?</p>
                     <p className="text-muted" style={{ fontSize: 13.5 }}>I can find things, fill in forms from what you’ve kept, read documents and suggest updates. {model?.assistant ? <>What I can see and change is up to you, on <Link to={`/admin/relationships/${model.assistant.id}`}>my page</Link>.</> : null}</p>
+                    {settings.prompts.length > 0 && <>
+                      <div className="ai-group">Your prompts</div>
+                      <div className="ai-starters ai-mine">
+                        {settings.prompts.map((p) => <button key={p.id} type="button" onClick={() => send(p.text)}><span className="ai-star" aria-hidden>★</span>{p.text}</button>)}
+                      </div>
+                    </>}
+                    <div className="ai-group">{settings.prompts.length ? 'Or try' : 'Try'}</div>
                     <div className="ai-starters">
                       {starters(loc.pathname, doc).map((s) => <button key={s} type="button" onClick={() => send(s)}>{s}</button>)}
                     </div>
+                    {(settings.instructions || model?.instructions) && <p className="text-muted ai-following">Following your standing instructions. <button type="button" className="bare ai-link" onClick={() => setView('settings')}>See them</button></p>}
                   </div>
                 )}
                 {turns.map((t, i) => (t.role === 'user' ? (
@@ -226,7 +246,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                     {t.files.length > 0 && <div className="ai-files">📎 {t.files.length === 1 ? t.files[0].name : `${t.files.length} pages`}</div>}
                     {t.text}
                   </div>
-                ) : <Answer key={i} text={t.text} tools={t.tools} note={t.stopNote} error={t.error} />))}
+                ) : <Answer key={i} text={t.text} tools={t.tools} note={t.stopNote} error={t.error} followed={t.followed} />))}
                 {live && <Answer text={live.text} tools={live.tools} thinking={!live.text && !live.tools.some((x) => x.running)} />}
                 {error && !busy && <p className="fb-error">{error}</p>}
               </div>
@@ -237,11 +257,20 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                     Include this document ({doc.pages.length} {doc.pages.length === 1 ? 'page' : 'pages'}). It goes to {model?.provider === 'anthropic' ? 'Anthropic' : model?.baseUrl ? new URL(model.baseUrl).host : 'the model'}.
                   </label>
                 )}
+                {showPrompts && settings.prompts.length > 0 && (
+                  <div className="ai-prompt-menu" role="menu">
+                    {settings.prompts.map((p) => <button key={p.id} type="button" role="menuitem" onClick={() => { setShowPrompts(false); send(p.text); }}>{p.text}</button>)}
+                  </div>
+                )}
                 <div className="ai-input">
                   <textarea ref={input} rows={2} value={text} disabled={busy} placeholder={busy ? 'Working on it…' : 'Ask, or tell it what to do'}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }} />
                   <button type="button" className="btn btn-primary" disabled={busy || !text.trim()} onClick={() => send(text)}>Send</button>
+                </div>
+                <div className="ai-compose-tools">
+                  {settings.prompts.length > 0 && <button type="button" className="bare fb-plain" onClick={() => setShowPrompts(!showPrompts)} aria-expanded={showPrompts}>Your prompts</button>}
+                  {text.trim() && !settings.prompts.some((p) => p.text === text.trim()) && <button type="button" className="bare fb-plain" onClick={() => savePrompts([...settings.prompts, { text: text.trim() }])}>Save as a prompt</button>}
                 </div>
                 {chat && (chat.usage.input + chat.usage.output > 0) && (
                   <div className="ai-meter text-muted">This conversation: {tokens(chat.usage.input)} in · {tokens(chat.usage.output)} out{spent !== null ? ` · about $${spent < 0.01 ? spent.toFixed(3) : spent.toFixed(2)}` : ''}</div>
@@ -254,7 +283,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Answer({ text, tools, note, error, thinking }: { text: string; tools: (ToolNote & { running?: boolean })[]; note?: string; error?: string; thinking?: boolean }) {
+function Answer({ text, tools, note, error, thinking, followed }: { text: string; tools: (ToolNote & { running?: boolean })[]; note?: string; error?: string; thinking?: boolean; followed?: { all: string; model: string } }) {
   return (
     <div className="ai-msg ai-them">
       {tools.length > 0 && (
@@ -272,7 +301,63 @@ function Answer({ text, tools, note, error, thinking }: { text: string; tools: (
       {text && <Rich text={text} />}
       {note && <p className="text-muted" style={{ fontSize: 13 }}>{note}</p>}
       {error && <p className="fb-error">{error}</p>}
+      {followed && <div className="ai-followed" title={[followed.all, followed.model].filter(Boolean).join('\n\n')}>Followed your instructions{followed.model ? ', and this model’s own' : ''}</div>}
     </div>
+  );
+}
+
+/** Standing instructions: one set every model follows, and extra ones for the model chosen here (for trying models out). */
+function Instructions({ settings, models, modelId, onSettings, onModels }: { settings: Settings; models: Model[]; modelId: string; onSettings: (s: Settings) => void; onModels: () => Promise<void> }) {
+  const [all, setAll] = useState(settings.instructions);
+  const [which, setWhich] = useState(modelId);
+  const m = models.find((x) => x.id === which);
+  const [own, setOwn] = useState(m?.instructions ?? '');
+  const [saved, setSaved] = useState('');
+  useEffect(() => setAll(settings.instructions), [settings.instructions]);
+  useEffect(() => setOwn(models.find((x) => x.id === which)?.instructions ?? ''), [which, models]);
+  const flash = (s: string) => { setSaved(s); setTimeout(() => setSaved(''), 1800); };
+  return (
+    <section>
+      <div className="fb-label">Your standing instructions</div>
+      <p className="text-muted ai-help">Every model follows these in every conversation. Say how you’d like it to work for you: what you’re focused on, how to talk to you, what to always check.</p>
+      <textarea className="input ai-area" rows={4} value={all} onChange={(e) => setAll(e.target.value)} placeholder="e.g. I’m paying off debt. Always look for ways to save money. Keep answers short." />
+      <div className="ai-row">
+        <button type="button" className="btn btn-secondary" disabled={all === settings.instructions} onClick={async () => { onSettings(await put<Settings>('/api/ai/settings', { instructions: all })); flash('all'); }}>Save</button>
+        {saved === 'all' && <span className="text-muted ai-saved">Saved</span>}
+      </div>
+      {models.length > 0 && <>
+        <div className="fb-label">Extra instructions for one model</div>
+        <p className="text-muted ai-help">Added to the ones above, for this model only. Handy for trying how different models respond.</p>
+        {models.length > 1 && <select className="input" value={which} onChange={(e) => setWhich(e.target.value)} style={{ marginBottom: 8 }}>{models.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>}
+        <textarea className="input ai-area" rows={3} value={own} onChange={(e) => setOwn(e.target.value)} placeholder={`e.g. Answer in Spanish.`} />
+        <div className="ai-row">
+          <button type="button" className="btn btn-secondary" disabled={own === (m?.instructions ?? '')} onClick={async () => { await patch(`/api/ai/models/${which}`, { instructions: own }); await onModels(); flash('own'); }}>Save for {m?.label ?? 'this model'}</button>
+          {saved === 'own' && <span className="text-muted ai-saved">Saved</span>}
+        </div>
+      </>}
+    </section>
+  );
+}
+
+/** Saved prompts: one click to ask them again. */
+function Prompts({ prompts, onSave }: { prompts: Prompt[]; onSave: (p: { id?: string; text: string }[]) => Promise<void> }) {
+  const [draft, setDraft] = useState('');
+  return (
+    <section>
+      <div className="fb-label">Your prompts</div>
+      <p className="text-muted ai-help">Things you ask often, one click away. You can also save any message as a prompt while you type.</p>
+      {prompts.map((p) => (
+        <div key={p.id} className="ai-prompt-row">
+          <span>{p.text}</span>
+          <button type="button" className="bare fb-plain" onClick={() => onSave(prompts.filter((x) => x.id !== p.id))} aria-label={`Remove “${p.text}”`}>Remove</button>
+        </div>
+      ))}
+      <div className="ai-row">
+        <input className="input" style={{ flex: 1 }} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="e.g. Check my bills for anything I can cut"
+          onKeyDown={async (e) => { if (e.key === 'Enter' && draft.trim()) { await onSave([...prompts, { text: draft.trim() }]); setDraft(''); } }} />
+        <button type="button" className="btn btn-secondary" disabled={!draft.trim()} onClick={async () => { await onSave([...prompts, { text: draft.trim() }]); setDraft(''); }}>Add</button>
+      </div>
+    </section>
   );
 }
 
@@ -297,7 +382,7 @@ function Models({ models, onChange }: { models: Model[]; onChange: (newId?: stri
   }
 
   return (
-    <div className="fb-body ai-models">
+    <section className="ai-models">
       {models.length > 0 && <>
         <div className="fb-label">Your models</div>
         {models.map((m) => (
@@ -334,6 +419,6 @@ function Models({ models, onChange }: { models: Model[]; onChange: (newId?: stri
         <button type="button" className="btn btn-primary" disabled={busy || !model.trim() || !apiKey.trim() || (provider === 'openai' && !baseUrl.trim())} onClick={add}>{busy ? 'Adding…' : 'Add model'}</button>
       </div>
       <p className="text-muted" style={{ fontSize: 12.5, marginTop: 14 }}>It starts out seeing everything except secret details, and its changes wait for you in Review. Change that on its page any time.</p>
-    </div>
+    </section>
   );
 }

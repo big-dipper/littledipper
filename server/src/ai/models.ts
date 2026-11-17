@@ -13,6 +13,7 @@ import { decrypt, encrypt, newId } from '../crypto.js';
 import { ctx } from '../ctx.js';
 import type { PartyDoc } from '../federation.js';
 import { setLiveShare } from '../shares.js';
+import { checkInstructions } from './settings.js';
 
 export type Provider = 'anthropic' | 'openai';
 export const PROVIDERS: { id: Provider; label: string; hint: string }[] = [
@@ -32,6 +33,8 @@ export type AiModelDoc = {
   /** The assistant key the node uses for this model's tool calls (encrypted). */
   keyEnc: string;
   keyId: string;
+  /** Extra standing instructions for this model only (encrypted), on top of the ones every model follows. */
+  instructionsEnc?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -40,11 +43,15 @@ const now = () => new Date().toISOString();
 const keyHint = (k: string) => (k.length > 8 ? `…${k.slice(-4)}` : '…');
 
 /** As the API shows it: never the API key, never the assistant key. */
+/** This model's own standing instructions, in the clear (the owner's, for the owner). */
+export const modelInstructions = (m: AiModelDoc) => (m.instructionsEnc ? decrypt(ctx.keys.masterKey, m.instructionsEnc) : '');
+
 export async function modelOut(m: AiModelDoc) {
   const party = await ctx.store.get<PartyDoc>('parties', m.partyId);
   return {
     id: m._id, label: m.label, provider: m.provider, baseUrl: m.baseUrl, model: m.model,
     apiKey: keyHint(decrypt(ctx.keys.masterKey, m.apiKeyEnc)),
+    instructions: modelInstructions(m),
     assistant: party ? { id: party._id, name: party.name } : null,
     createdAt: m.createdAt, updatedAt: m.updatedAt,
   };
@@ -112,6 +119,10 @@ export async function updateModel(id: string, b: Record<string, unknown>) {
   if (v.model) patch.model = v.model;
   if (v.baseUrl !== undefined) patch.baseUrl = v.baseUrl;
   if (v.apiKey) patch.apiKeyEnc = encrypt(ctx.keys.masterKey, v.apiKey);
+  if (b.instructions !== undefined) {
+    const t = checkInstructions(b.instructions);
+    patch.instructionsEnc = t ? encrypt(ctx.keys.masterKey, t) : undefined;
+  }
   if ((v.provider ?? m.provider) === 'openai' && !(v.baseUrl !== undefined ? v.baseUrl : m.baseUrl)) throw bad('invalid_value', 'baseUrl is needed for this kind of service');
   await ctx.store.update('aiModels', id, patch);
   return (await ctx.store.get<AiModelDoc>('aiModels', id))!;

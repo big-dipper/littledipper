@@ -26,6 +26,7 @@ const COLLECTIONS: Record<string, { area: string; holds: string }> = {
   recordVersions: { area: 'Records', holds: 'History: a copy of a record after each change (or before a delete), with who made it. Powers undo and restore.' },
   aiModels: { area: 'Assistants', holds: 'The owner’s AI models: provider, model name, API address, the provider API key and the model’s own assistant key (both encrypted), and the assistant party it acts as.' },
   chats: { area: 'Assistants', holds: 'Conversations with the owner’s AI models: the transcript and the provider’s own message history (both encrypted), title and token use.' },
+  aiSettings: { area: 'Assistants', holds: 'One document: the owner’s standing instructions for every model and their saved prompts (encrypted).' },
   reviews: { area: 'Assistants', holds: 'Changes an assistant proposed that wait for the owner (encrypted), and their outcome.' },
   documents: { area: 'Documents', holds: 'Documents: title, kind, date, status (inbox/filed), notes, extracted text, links to records, suggestions, pages.' },
   files: { area: 'Documents', holds: 'The stored bytes of each page or file (encrypted), with type, size and who added it.' },

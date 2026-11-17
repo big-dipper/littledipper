@@ -344,8 +344,8 @@
           "AI"
         ],
         "operationId": "patchApiAiModelsId",
-        "summary": "Change a model’s label, model name, API address or key",
-        "description": "Change a model’s label, model name, API address or key.\n\n**Who:** The owner, signed in (passkey session).",
+        "summary": "Change a model’s label, model name, API address, key, or its own extra standing instructions",
+        "description": "Change a model’s label, model name, API address, key, or its own extra standing instructions.\n\n**Who:** The owner, signed in (passkey session).",
         "parameters": [
           {
             "name": "id",
@@ -376,6 +376,44 @@
         "operationId": "getApiAiProviders",
         "summary": "The kinds of AI service a model can come from",
         "description": "The kinds of AI service a model can come from: Claude (Anthropic), or any OpenAI-compatible service.\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/ai/settings": {
+      "get": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "getApiAiSettings",
+        "summary": "The owner’s standing instructions",
+        "description": "The owner’s standing instructions (every model follows them) and saved prompts: { instructions, prompts: [{ id, text }] }.\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "putApiAiSettings",
+        "summary": "Change",
+        "description": "Change { instructions?, prompts?: [text | { id?, text }] }. A model’s own extra instructions are set with PATCH /api/ai/models/{id} { instructions }.\n\n**Who:** The owner, signed in (passkey session).",
         "security": [
           {
             "ownerSession": []

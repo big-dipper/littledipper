@@ -11,7 +11,7 @@ export const COLLECTIONS = [
   'nodes', 'owners', 'parties', 'nodeLinks',
   'connectionRequests', 'invites', 'apiKeys', 'publicProfile', 'audit', 'challenges', 'backups',
   'records', 'domainDefs', 'messages', 'files', 'documents', 'shares', 'copies', 'recordVersions',
-  'reviews', 'oauthClients', 'oauthCodes', 'oauthTokens', 'notices', 'aiModels', 'chats',
+  'reviews', 'oauthClients', 'oauthCodes', 'oauthTokens', 'notices', 'aiModels', 'chats', 'aiSettings',
 ] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
