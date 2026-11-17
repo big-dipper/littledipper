@@ -460,7 +460,6 @@ function PrivacyBox({ m }: { m: Model }) {
         <dt>It can do</dt><dd>{p.does}{m.assistant && <> · <Link to={`/admin/relationships/${m.assistant.id}`}>change</Link></>}</dd>
         <dt>Your API key</dt><dd>{p.yourKey}</dd>
       </dl>
-      {!p.verifiedPrivate && p.level !== 'local' && <p className="ai-privacy-foot">Not verified private: the service can technically read what it processes. Verified-private models are on the way.</p>}
     </div>
   );
 }
