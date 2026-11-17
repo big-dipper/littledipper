@@ -388,3 +388,17 @@ a.pp-contact:hover { background: var(--color-neutral-100); }
 .ai-added { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ai-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--color-surface); border: 1px solid var(--color-divider); }
 .ai-chip button { cursor: pointer; padding: 0 4px; color: inherit; opacity: 0.6; }
+/* Selecting text in an answer: reply to it, or make it a task. */
+.ai-selbar { position: absolute; z-index: 5; transform: translateX(-50%); display: flex; gap: 2px; padding: 4px; border-radius: 12px; background: var(--color-text); color: var(--color-bg); box-shadow: var(--shadow-md); }
+.ai-selbar > button { background: transparent; border: 0; color: inherit; font: inherit; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.ai-selbar > button:hover { background: color-mix(in srgb, var(--color-bg) 18%, transparent); }
+.ai-selbar-done { font-size: 13px; font-weight: 600; padding: 6px 10px; }
+.ai-selbar-task { display: grid; gap: 6px; padding: 6px; width: 300px; background: var(--color-paper); color: var(--color-text); border-radius: 10px; }
+.ai-selbar-task input { font: inherit; font-size: 14px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--color-divider); background: var(--color-bg); color: var(--color-text); }
+.ai-selbar-row { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.ai-selbar-row .btn { margin-left: auto; font-size: 12.5px; padding: 5px 12px; }
+.ai-selbar:has(.ai-selbar-task) { background: var(--color-paper); border: 1px solid var(--color-divider); }
+.ai-quote { margin: 0 0 6px; padding: 2px 0 2px 10px; border-left: 3px solid color-mix(in srgb, var(--color-accent-700) 50%, transparent); opacity: 0.85; font-size: 13.5px; }
+.ai-quoting { display: flex; gap: 8px; align-items: flex-start; }
+.ai-quoting .ai-quote { flex: 1; margin: 0; white-space: pre-wrap; }
+.ai-quoting button { cursor: pointer; color: inherit; opacity: 0.6; padding: 0 4px; }

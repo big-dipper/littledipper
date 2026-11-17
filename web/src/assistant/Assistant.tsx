@@ -11,6 +11,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { del, get, patch, post, put } from '../api';
 import { Icon } from '../icons';
 import { useAdmin } from '../pages/admin/Layout';
+import { readWhen, sayWhen } from '../quickAdd';
 
 type Provider = 'anthropic' | 'openai';
 type Model = { id: string; label: string; provider: Provider; baseUrl: string | null; model: string; apiKey: string; instructions: string; privacy: Privacy; assistant: { id: string; name: string } | null };
@@ -89,6 +90,41 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  // Text selected in an answer: a small bar to reply to it or make it a task.
+  const [sel, setSel] = useState<{ text: string; top: number; left: number } | null>(null);
+  const [taskDraft, setTaskDraft] = useState<{ title: string; due: string | null } | null>(null);
+  const [taskDone, setTaskDone] = useState(false);
+  const [quote, setQuote] = useState<string | null>(null);
+  const readSelection = () => {
+    const s = window.getSelection();
+    const t = s?.toString().trim() ?? '';
+    const node = s?.anchorNode instanceof Element ? s.anchorNode : s?.anchorNode?.parentElement;
+    if (!s || s.isCollapsed || !t || !node?.closest('.ai-them') || !panel.current) { if (!taskDraft) setSel(null); return; }
+    const r = s.getRangeAt(0).getBoundingClientRect(), box = panel.current.getBoundingClientRect();
+    setSel({ text: t.slice(0, 2000), top: r.top - box.top, left: Math.min(Math.max(r.left - box.left + r.width / 2, 120), box.width - 120) });
+    setTaskDraft(null); setTaskDone(false);
+  };
+  const closeSel = () => { setSel(null); setTaskDraft(null); setTaskDone(false); window.getSelection()?.removeAllRanges(); };
+  const replyTo = (t: string) => {
+    setQuote(t);
+    closeSel();
+    setTimeout(() => { const el = input.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 30);
+  };
+  const startTask = (t: string) => {
+    const w = readWhen(t.replace(/\s+/g, ' '));
+    // Taking the date out can leave "expires in : renew…": drop the stranded word and stray spaces.
+    const title = (w.title || t).replace(/\s+(in|on|by|at|from|until|before)\s*(?=[:,.;]|$)/gi, '').replace(/\s+([:,.;])/g, '$1').replace(/^[\s:,.;-]+|[\s:,;-]+$/g, '').trim();
+    setTaskDraft({ title: (title || t).slice(0, 140), due: w.date });
+  };
+  const saveTask = async () => {
+    if (!taskDraft?.title.trim()) return;
+    try {
+      await post('/api/tasks', { title: taskDraft.title.trim(), due: taskDraft.due });
+      setTaskDone(true); refresh();
+      setTimeout(closeSel, 1300);
+    } catch (e) { setError((e as Error).message); }
+  };
   const [chat, setChat] = useState<Chat | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [text, setText] = useState('');
@@ -146,7 +182,8 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   }
 
   async function send(said: string) {
-    const t = said.trim() || (added.length ? 'Please read what I added, file it where it belongs, and add what it says to my Little Dipper.' : '');
+    const typed = said.trim() || (added.length ? 'Please read what I added, file it where it belongs, and add what it says to my Little Dipper.' : '');
+    const t = quote && typed ? `${quote.split('\n').map((l) => `> ${l}`).join('\n')}\n\n${typed}` : typed;
     if (!t || busy || !model) return;
     setBusy(true); setError(''); setText('');
     const files = [...(doc && attach ? doc.pages.map((p) => p.id) : []), ...added.flatMap((d) => d.pages.map((p) => p.id))];
@@ -156,7 +193,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
     try {
       if (!c || c.modelId !== model.id) c = await post<Chat>('/api/ai/chats', { model: model.id });
       const shown: Turn = { role: 'user', text: t, files: files.map((id) => ({ id, name: allDocs.flatMap((d) => d.pages).find((p) => p.id === id)?.name ?? 'page' })), at: new Date().toISOString() };
-      setAdded([]);
+      setAdded([]); setQuote(null);
       c = { ...c, turns: [...(c.turns ?? []), shown] };
       setChat(c);
       setLive({ text: '', tools: [] });
@@ -208,11 +245,29 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="fb-layer ai-layer">
       <div className="fb-scrim ai-scrim" onClick={() => !busy && onClose()} />
-      <aside className="fb-panel ai-panel" role="dialog" aria-label="Your assistant" data-dragging={dragging ? '1' : '0'}
+      <aside ref={panel} className="fb-panel ai-panel" role="dialog" aria-label="Your assistant" data-dragging={dragging ? '1' : '0'}
         onDragOver={(e) => { if (view === 'chat' && model && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
         onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
         onDrop={(e) => { e.preventDefault(); setDragging(false); if (view === 'chat' && model && !busy) upload(e.dataTransfer.files); }}>
         {dragging && <div className="ai-drop">Drop it here: I’ll file it and read it</div>}
+        {sel && (
+          <div className="ai-selbar" style={{ top: Math.max(sel.top - (taskDraft ? 96 : 46), 8), left: sel.left }} onMouseDown={(e) => { if (!(e.target instanceof HTMLInputElement)) e.preventDefault(); }}>
+            {!taskDraft ? <>
+              <button type="button" onClick={() => replyTo(sel.text)}>↩ Reply</button>
+              <button type="button" onClick={() => startTask(sel.text)}>✓ Make a task</button>
+            </> : taskDone ? <span className="ai-selbar-done">Added to your tasks</span> : (
+              <div className="ai-selbar-task">
+                <input autoFocus value={taskDraft.title} onChange={(e) => setTaskDraft({ ...taskDraft, title: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveTask(); if (e.key === 'Escape') closeSel(); }} aria-label="Task" />
+                <div className="ai-selbar-row">
+                  <span className="text-muted">{taskDraft.due ? `Due ${sayWhen(taskDraft.due, null)}` : 'No due date'}</span>
+                  {taskDraft.due && <button type="button" className="bare fb-plain" onClick={() => setTaskDraft({ ...taskDraft, due: null })}>Remove date</button>}
+                  <button type="button" className="btn btn-primary" onClick={saveTask} disabled={!taskDraft.title.trim()}>Add task</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <header className="ai-head">
           <div className="ai-title">
             <Icon name="sparkle" size={20} />
@@ -258,7 +313,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
             </div>
           ) : (
             <>
-              <div className="fb-body ai-convo" ref={scroller}>
+              <div className="fb-body ai-convo" ref={scroller} onMouseUp={() => setTimeout(readSelection, 0)} onKeyUp={readSelection} onScroll={() => !taskDraft && sel && setSel(null)}>
                 {!turns.length && !live && (
                   <div className="ai-empty">
                     <p className="ai-hello">What can I help with?</p>
@@ -279,7 +334,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                 {turns.map((t, i) => (t.role === 'user' ? (
                   <div key={i} className="ai-msg ai-me">
                     {t.files.length > 0 && <div className="ai-files">📎 {t.files.length === 1 ? t.files[0].name : `${t.files.length} pages`}</div>}
-                    {t.text}
+                    <Quoted text={t.text} />
                   </div>
                 ) : <Answer key={i} text={t.text} tools={t.tools} note={t.stopNote} error={t.error} followed={t.followed} />))}
                 {live && <Answer text={live.text} tools={live.tools} thinking={!live.text && !live.tools.some((x) => x.running)} />}
@@ -291,6 +346,12 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                     <input type="checkbox" checked={attach} onChange={(e) => setAttach(e.target.checked)} />
                     Include this document ({doc.pages.length} {doc.pages.length === 1 ? 'page' : 'pages'}). It goes to {model?.provider === 'anthropic' ? 'Anthropic' : model?.baseUrl ? new URL(model.baseUrl).host : 'the model'}.
                   </label>
+                )}
+                {quote && (
+                  <div className="ai-quoting">
+                    <blockquote className="ai-quote">{quote.length > 280 ? `${quote.slice(0, 280)}…` : quote}</blockquote>
+                    <button type="button" className="bare" aria-label="Don’t reply to this" onClick={() => setQuote(null)}>✕</button>
+                  </div>
                 )}
                 {added.length > 0 && (
                   <div className="ai-added">
@@ -304,7 +365,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
                 <div className="ai-input">
-                  <textarea ref={input} rows={2} value={text} disabled={busy} placeholder={busy ? 'Working on it…' : added.length ? 'Say what to do with it, or just send' : 'Ask, tell it what to do, or drop a file here'}
+                  <textarea ref={input} rows={2} value={text} disabled={busy} placeholder={busy ? 'Working on it…' : quote ? 'Your reply to this' : added.length ? 'Say what to do with it, or just send' : 'Ask, tell it what to do, or drop a file here'}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }} />
                   <button type="button" className="btn btn-primary" disabled={busy || uploading || (!text.trim() && !added.length)} onClick={() => send(text)}>Send</button>
@@ -313,7 +374,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                   <input ref={picker} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => { if (e.target.files) upload(e.target.files); e.target.value = ''; }} />
                   <button type="button" className="bare fb-plain" disabled={busy || uploading} onClick={() => picker.current?.click()}>{uploading ? 'Adding…' : 'Add a file'}</button>
                   {settings.prompts.length > 0 && <button type="button" className="bare fb-plain" onClick={() => setShowPrompts(!showPrompts)} aria-expanded={showPrompts}>Your prompts</button>}
-                  {text.trim() && !settings.prompts.some((p) => p.text === text.trim()) && <button type="button" className="bare fb-plain" onClick={() => savePrompts([...settings.prompts, { text: text.trim() }])}>Save as a prompt</button>}
+                  {text.trim() && !quote && !settings.prompts.some((p) => p.text === text.trim()) && <button type="button" className="bare fb-plain" onClick={() => savePrompts([...settings.prompts, { text: text.trim() }])}>Save as a prompt</button>}
                 </div>
                 {chat && (chat.usage.input + chat.usage.output > 0) && (
                   <div className="ai-meter text-muted">This conversation: {tokens(chat.usage.input)} in{chat.usage.cacheRead ? ` (${tokens(chat.usage.cacheRead)} cached)` : ''} · {tokens(chat.usage.output)} out{spent !== null ? ` · about $${spent < 0.01 ? spent.toFixed(3) : spent.toFixed(2)}` : ''}</div>
@@ -324,6 +385,14 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
       </aside>
     </div>
   );
+}
+
+/** My message: lines starting with "> " are a quote from an answer, shown as such. */
+function Quoted({ text }: { text: string }) {
+  const lines = text.split('\n');
+  const quote = lines.filter((l) => l.startsWith('> ')).map((l) => l.slice(2));
+  const rest = lines.filter((l) => !l.startsWith('> ')).join('\n').trim();
+  return <>{quote.length > 0 && <blockquote className="ai-quote">{quote.join('\n')}</blockquote>}{rest}</>;
 }
 
 function Answer({ text, tools, note, error, thinking, followed }: { text: string; tools: (ToolNote & { running?: boolean })[]; note?: string; error?: string; thinking?: boolean; followed?: { all: string; model: string } }) {
