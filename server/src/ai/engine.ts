@@ -17,7 +17,7 @@ import { getModel, modelInstructions, secretsOf, type AiModelDoc } from './model
 import { getSettings } from './settings.js';
 import { adapterFor, ModelError, type ToolOutcome, type Usage } from './providers.js';
 
-export type ToolNote = { name: string; title: string; ok: boolean; note?: string; pending?: boolean };
+export type ToolNote = { name: string; title: string; ok: boolean; note?: string; pending?: boolean; reviewIds?: string[] };
 export type Turn =
   | { role: 'user'; text: string; files: { id: string; name: string }[]; at: string }
   | { role: 'assistant'; text: string; tools: ToolNote[]; stopNote?: string; error?: string; usage: Usage; at: string;
@@ -40,7 +40,7 @@ export type ChatDoc = {
 export type Event =
   | { type: 'text'; text: string }
   | { type: 'tool'; id: string; name: string; title: string; phase: 'start' }
-  | { type: 'tool'; id: string; name: string; title: string; phase: 'done'; ok: boolean; note?: string; pending?: boolean }
+  | { type: 'tool'; id: string; name: string; title: string; phase: 'done'; ok: boolean; note?: string; pending?: boolean; reviewIds?: string[] }
   | { type: 'done'; turn: Turn; usage: Usage }
   | { type: 'error'; code: string; message: string };
 
@@ -88,10 +88,12 @@ export const chatOut = (c: ChatDoc) => ({ ...chatSummary(c), turns: dec<Turn[]>(
 const running = new Set<string>();
 
 /** What a tool did, in a line for the panel. Changes that wait for the owner are flagged. */
-function noteFor(name: string, out: unknown): { note?: string; pending?: boolean } {
+function noteFor(name: string, out: unknown): { note?: string; pending?: boolean; reviewIds?: string[] } {
   const o = (out ?? {}) as Record<string, unknown>;
-  const pending = o.status === 'pending_review' || (Array.isArray(o.results) && (o.results as Record<string, unknown>[]).some((r) => r.status === 'pending_review'));
-  if (pending) return { pending: true, note: 'Waiting for you in Review' };
+  // Suggestions waiting for the owner: the panel shows them as cards to approve right there.
+  const all = [o, o.pendingReview, ...(Array.isArray(o.results) ? (o.results as Record<string, unknown>[]) : [])] as (Record<string, unknown> | undefined)[];
+  const reviewIds = all.map((x) => (x && x.status === 'pending_review' && typeof x.reviewId === 'string' ? x.reviewId : null)).filter((x): x is string => !!x);
+  if (reviewIds.length) return { pending: true, reviewIds, note: reviewIds.length === 1 ? 'Waiting for your OK' : `${reviewIds.length} waiting for your OK` };
   if (Array.isArray(o.records)) return { note: `${o.records.length} found` };
   if (Array.isArray(o.results)) return { note: `${o.results.length} done` };
   if (Array.isArray(o.documents)) return { note: `${o.documents.length} found` };
@@ -169,7 +171,7 @@ export async function runTurn(app: FastifyInstance, chatId: string, input: { tex
           }
         }
         tools.push(note);
-        emit({ type: 'tool', id: c.id, name: c.name, title, phase: 'done', ok: note.ok, note: note.note, pending: note.pending });
+        emit({ type: 'tool', id: c.id, name: c.name, title, phase: 'done', ok: note.ok, note: note.note, pending: note.pending, reviewIds: note.reviewIds });
         outcomes.push(outcome);
       }
       native.push(...adapter.toolResults(outcomes));

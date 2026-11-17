@@ -17,7 +17,9 @@ type Model = { id: string; label: string; provider: Provider; baseUrl: string | 
 type Privacy = { level: 'local' | 'company' | 'router' | 'unknown'; levelLabel: string; goesTo: string; operator: string; site: string | null; note: string; inTransit: string; yourKey: string; sees: string; does: string; verifiedPrivate: boolean };
 type Prompt = { id: string; text: string };
 type Settings = { instructions: string; prompts: Prompt[] };
-type ToolNote = { name: string; title: string; ok: boolean; note?: string; pending?: boolean };
+type ToolNote = { name: string; title: string; ok: boolean; note?: string; pending?: boolean; reviewIds?: string[] };
+type Change = { key: string; label: string; secret: boolean; to: unknown; from?: unknown };
+type Review = { id: string; domainLabel: string; recordTitle: string | null; action: 'create' | 'update'; status: 'pending' | 'approved' | 'rejected'; changes: Change[] };
 type Usage = { input: number; output: number };
 type Turn =
   | { role: 'user'; text: string; files: { id: string; name: string }[]; at: string }
@@ -80,6 +82,10 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<Settings>({ instructions: '', prompts: [] });
   const [showPrompts, setShowPrompts] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [added, setAdded] = useState<Doc[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
   const [chat, setChat] = useState<Chat | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [text, setText] = useState('');
@@ -121,21 +127,39 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
 
   const newChat = () => { setChat(null); setLive(null); setError(''); setView('chat'); setTimeout(() => input.current?.focus(), 50); };
 
+  /** Files dropped or picked go into Documents (the inbox), then into the next message for the model to read and file. */
+  async function upload(list: FileList | File[]) {
+    const files = [...list].filter((f) => f.type.startsWith('image/') || f.type === 'application/pdf');
+    if (!files.length) { setError('Drop a photo, scan or PDF.'); return; }
+    setUploading(true); setError('');
+    try {
+      for (const f of files.slice(0, 6)) {
+        const res = await fetch(`/api/documents?name=${encodeURIComponent(f.name)}&status=inbox`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': f.type }, body: f });
+        const j = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(j?.message || `Couldn’t add ${f.name}`);
+        setAdded((a) => [...a, j as Doc]);
+      }
+    } catch (e) { setError((e as Error).message); } finally { setUploading(false); setTimeout(() => input.current?.focus(), 30); }
+  }
+
   async function send(said: string) {
-    const t = said.trim();
+    const t = said.trim() || (added.length ? 'Please read what I added, file it where it belongs, and add what it says to my Little Dipper.' : '');
     if (!t || busy || !model) return;
     setBusy(true); setError(''); setText('');
-    const files = doc && attach ? doc.pages.map((p) => p.id) : [];
+    const files = [...(doc && attach ? doc.pages.map((p) => p.id) : []), ...added.flatMap((d) => d.pages.map((p) => p.id))];
+    const extra = added.length ? ` Documents they just added (in their inbox): ${added.map((d) => `“${d.title}” (${d.id})`).join(', ')}.` : '';
+    const allDocs = [...(doc ? [doc] : []), ...added];
     let c = chat;
     try {
       if (!c || c.modelId !== model.id) c = await post<Chat>('/api/ai/chats', { model: model.id });
-      const shown: Turn = { role: 'user', text: t, files: files.map((id) => ({ id, name: doc!.pages.find((p) => p.id === id)!.name })), at: new Date().toISOString() };
+      const shown: Turn = { role: 'user', text: t, files: files.map((id) => ({ id, name: allDocs.flatMap((d) => d.pages).find((p) => p.id === id)?.name ?? 'page' })), at: new Date().toISOString() };
+      setAdded([]);
       c = { ...c, turns: [...(c.turns ?? []), shown] };
       setChat(c);
       setLive({ text: '', tools: [] });
       const res = await fetch(`/api/ai/chats/${c.id}/messages`, {
         method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: t, files, context: `${where} (${loc.pathname})` }),
+        body: JSON.stringify({ text: t, files, context: `${where} (${loc.pathname}).${extra}` }),
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => null);
@@ -156,7 +180,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
           const e = JSON.parse(line.slice(6));
           if (e.type === 'text') setLive((l) => l && { ...l, text: l.text + e.text });
           else if (e.type === 'tool' && e.phase === 'start') setLive((l) => l && { ...l, tools: [...l.tools, { id: e.id, name: e.name, title: e.title, ok: true, running: true }] });
-          else if (e.type === 'tool') setLive((l) => l && { ...l, tools: l.tools.map((x) => (x.id === e.id ? { ...x, running: false, ok: e.ok, note: e.note, pending: e.pending } : x)) });
+          else if (e.type === 'tool') setLive((l) => l && { ...l, tools: l.tools.map((x) => (x.id === e.id ? { ...x, running: false, ok: e.ok, note: e.note, pending: e.pending, reviewIds: e.reviewIds } : x)) });
           else if (e.type === 'error') setError(e.message);
         }
       }
@@ -181,7 +205,11 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="fb-layer ai-layer">
       <div className="fb-scrim ai-scrim" onClick={() => !busy && onClose()} />
-      <aside className="fb-panel ai-panel" role="dialog" aria-label="Your assistant">
+      <aside className="fb-panel ai-panel" role="dialog" aria-label="Your assistant" data-dragging={dragging ? '1' : '0'}
+        onDragOver={(e) => { if (view === 'chat' && model && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+        onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); if (view === 'chat' && model && !busy) upload(e.dataTransfer.files); }}>
+        {dragging && <div className="ai-drop">Drop it here: I’ll file it and read it</div>}
         <header className="ai-head">
           <div className="ai-title">
             <Icon name="sparkle" size={20} />
@@ -261,18 +289,26 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                     Include this document ({doc.pages.length} {doc.pages.length === 1 ? 'page' : 'pages'}). It goes to {model?.provider === 'anthropic' ? 'Anthropic' : model?.baseUrl ? new URL(model.baseUrl).host : 'the model'}.
                   </label>
                 )}
+                {added.length > 0 && (
+                  <div className="ai-added">
+                    {added.map((d) => <span key={d.id} className="ai-chip">📎 {d.title}<button type="button" className="bare" aria-label={`Don’t include ${d.title}`} onClick={() => setAdded(added.filter((x) => x.id !== d.id))}>✕</button></span>)}
+                    <span className="text-muted" style={{ fontSize: 12 }}>Saved to Documents. It goes to {model?.provider === 'anthropic' ? 'Anthropic' : model?.baseUrl ? new URL(model.baseUrl).host : 'the model'} when you send.</span>
+                  </div>
+                )}
                 {showPrompts && settings.prompts.length > 0 && (
                   <div className="ai-prompt-menu" role="menu">
                     {settings.prompts.map((p) => <button key={p.id} type="button" role="menuitem" onClick={() => { setShowPrompts(false); send(p.text); }}>{p.text}</button>)}
                   </div>
                 )}
                 <div className="ai-input">
-                  <textarea ref={input} rows={2} value={text} disabled={busy} placeholder={busy ? 'Working on it…' : 'Ask, or tell it what to do'}
+                  <textarea ref={input} rows={2} value={text} disabled={busy} placeholder={busy ? 'Working on it…' : added.length ? 'Say what to do with it, or just send' : 'Ask, tell it what to do, or drop a file here'}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }} />
-                  <button type="button" className="btn btn-primary" disabled={busy || !text.trim()} onClick={() => send(text)}>Send</button>
+                  <button type="button" className="btn btn-primary" disabled={busy || uploading || (!text.trim() && !added.length)} onClick={() => send(text)}>Send</button>
                 </div>
                 <div className="ai-compose-tools">
+                  <input ref={picker} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => { if (e.target.files) upload(e.target.files); e.target.value = ''; }} />
+                  <button type="button" className="bare fb-plain" disabled={busy || uploading} onClick={() => picker.current?.click()}>{uploading ? 'Adding…' : 'Add a file'}</button>
                   {settings.prompts.length > 0 && <button type="button" className="bare fb-plain" onClick={() => setShowPrompts(!showPrompts)} aria-expanded={showPrompts}>Your prompts</button>}
                   {text.trim() && !settings.prompts.some((p) => p.text === text.trim()) && <button type="button" className="bare fb-plain" onClick={() => savePrompts([...settings.prompts, { text: text.trim() }])}>Save as a prompt</button>}
                 </div>
@@ -296,16 +332,58 @@ function Answer({ text, tools, note, error, thinking, followed }: { text: string
             <li key={i} data-state={t.running ? 'running' : t.pending ? 'pending' : t.ok ? 'ok' : 'failed'}>
               <span className="ai-tool-dot" />
               <span>{t.title}</span>
-              {t.note && <span className="text-muted"> · {t.pending ? <Link to="/admin/review">{t.note}</Link> : t.note}</span>}
+              {t.note && <span className="text-muted"> · {t.reviewIds?.length ? (t.reviewIds.length === 1 ? 'Suggested a change' : `Suggested ${t.reviewIds.length} changes`) : t.pending ? <Link to="/admin/review">{t.note}</Link> : t.note}</span>}
             </li>
           ))}
         </ul>
       )}
+      {tools.some((t) => t.reviewIds?.length) && <ReviewCards ids={tools.flatMap((t) => t.reviewIds ?? [])} />}
       {thinking && <div className="ai-thinking"><span /><span /><span /></div>}
       {text && <Rich text={text} />}
       {note && <p className="text-muted" style={{ fontSize: 13 }}>{note}</p>}
       {error && <p className="fb-error">{error}</p>}
       {followed && <div className="ai-followed" title={[followed.all, followed.model].filter(Boolean).join('\n\n')}>Followed your instructions{followed.model ? ', and this model’s own' : ''}</div>}
+    </div>
+  );
+}
+
+/** What it suggested, right in the conversation: approve it or say no, without going to Review. */
+function ReviewCards({ ids }: { ids: string[] }) {
+  const { refresh } = useAdmin();
+  const [items, setItems] = useState<Review[] | null>(null);
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  const key = ids.join(',');
+  const load = () => get<{ items: Review[] }>('/api/reviews?status=all').then((r) => setItems(r.items.filter((x) => ids.includes(x.id))));
+  useEffect(() => { load().catch(() => setItems([])); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!items?.length) return null;
+  const decide = async (id: string, how: 'approve' | 'reject') => {
+    setBusy(id); setErr('');
+    try { await post(`/api/reviews/${id}/${how}`, {}); await load(); refresh(); } catch (e) { setErr((e as Error).message); } finally { setBusy(''); }
+  };
+  const val = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
+  return (
+    <div className="ai-reviews">
+      {items.map((r) => (
+        <div key={r.id} className="ai-review" data-status={r.status}>
+          <div className="ai-review-head">
+            <strong>{r.action === 'create' ? `New in ${r.domainLabel}` : `Change to ${r.recordTitle ?? r.domainLabel}`}</strong>
+            {r.status !== 'pending' && <span className="ai-review-done">{r.status === 'approved' ? 'Saved' : 'Not saved'}</span>}
+          </div>
+          <dl>
+            {r.changes.slice(0, 8).map((c) => <div key={c.key}><dt>{c.label}</dt><dd>{c.from !== undefined && r.action === 'update' ? <><s>{val(c.from)}</s> → </> : null}{val(c.to)}</dd></div>)}
+          </dl>
+          {r.changes.length > 8 && <div className="text-muted" style={{ fontSize: 12 }}>and {r.changes.length - 8} more</div>}
+          {r.status === 'pending' && (
+            <div className="ai-review-actions">
+              <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => decide(r.id, 'approve')}>{busy === r.id ? 'Saving…' : 'Approve'}</button>
+              <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => decide(r.id, 'reject')}>No</button>
+              <Link to="/admin/review" className="fb-plain" style={{ marginLeft: 'auto' }}>Change it in Review</Link>
+            </div>
+          )}
+        </div>
+      ))}
+      {err && <p className="fb-error">{err}</p>}
     </div>
   );
 }

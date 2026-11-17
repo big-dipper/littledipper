@@ -1114,7 +1114,7 @@ async function main() {
         };
         const events = await say('Add my dog Juniper');
         const toolDone = events.find((e) => e.type === 'tool' && e.phase === 'done');
-        ok(events.some((e) => e.type === 'text') && toolDone?.name === 'add_record' && toolDone.pending === true && events.at(-1).type === 'done', 'it streams its answer and runs the tool it asked for; the change waits in Review');
+        ok(events.some((e) => e.type === 'text') && toolDone?.name === 'add_record' && toolDone.pending === true && toolDone.reviewIds?.length === 1 && events.at(-1).type === 'done', 'it streams its answer and runs the tool it asked for; the change waits in Review');
         ok(seen[0].body.messages[0].content.includes('paying off debt') && seen[0].body.messages[0].content.includes('Answer in Spanish.'), 'every model follows the standing instructions, plus its own');
         ok(seen[0].body.messages[0].role === 'system' && seen[0].body.tools.some((t: any) => t.function.name === 'add_record') && seen[1].body.messages.some((x: any) => x.role === 'tool' && x.tool_call_id === 'call_1'), 'the model gets the instructions and tools, then the tool result');
         ok((await iu.call('GET', '/api/reviews')).items.some((r: any) => r.data?.name === 'Juniper' || JSON.stringify(r).includes('Juniper')), 'the suggestion is in Review, from the assistant');
