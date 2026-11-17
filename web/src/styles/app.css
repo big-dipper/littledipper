@@ -294,9 +294,10 @@ a.pp-contact:hover { background: var(--color-neutral-100); }
 .ai-panel { width: min(520px, 100vw); }
 .ai-scrim { background: color-mix(in srgb, var(--color-text) 10%, transparent); }
 .ai-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px 12px 22px; border-bottom: 1px solid var(--color-divider); }
-.ai-title { display: flex; align-items: center; gap: 8px; color: var(--color-accent-700); min-width: 0; }
+.ai-title { display: flex; align-items: center; gap: 6px; color: var(--color-accent-700); min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.ai-title strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ai-title strong { color: var(--color-text); font-size: 16px; }
-.ai-model { font: inherit; font-weight: 600; color: var(--color-text); background: transparent; border: 1px solid var(--color-divider); border-radius: 10px; padding: 4px 8px; max-width: 170px; min-width: 0; }
+.ai-model { font: inherit; font-weight: 600; color: var(--color-text); background: transparent; border: 1px solid var(--color-divider); border-radius: 10px; padding: 4px 8px; max-width: 100%; min-width: 0; flex: 0 1 auto; text-overflow: ellipsis; }
 .ai-head-actions { display: flex; gap: 0; flex-wrap: nowrap; justify-content: flex-end; flex: none; }
 .ai-head-actions .fb-plain { padding: 6px 6px; }
 .ai-convo { display: flex; flex-direction: column; gap: 14px; }
