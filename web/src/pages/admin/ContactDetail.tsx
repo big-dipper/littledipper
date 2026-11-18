@@ -8,6 +8,7 @@ import AssistantPanel from './AssistantPanel';
 import { fetchCatalog, fmtRange, money, PartialDate, RecordEditor, Select, useContactsLite, type Rec } from '../../life';
 import { CopyList, SendCopy } from './Copies';
 import SharedWithYou from './SharedWithYou';
+import { loadRelations, RelationsField, saveRelations, type RelDraft, type RelOption } from '../../relations';
 import { giveList, ShareChooser, toShare, useSharing, type Choice, type Relation, type SharingData } from '../../sharing';
 
 export default function ContactDetail() {
@@ -23,6 +24,9 @@ export default function ContactDetail() {
   const [sent, setSent] = useState(0);
   const { data: catalog } = useAsync(fetchCatalog, []);
   const [edit, setEdit] = useState<Edit | null>(null);
+  // How you know them, edited in the same form: the entries as they were, and the choices.
+  const [rels, setRels] = useState<{ options: RelOption[]; before: RelDraft[] } | null>(null);
+  const [relsKey, setRelsKey] = useState(0);
   const sharing = useSharing();
   const [choice, setChoice] = useState<Choice>({ extras: [] });
   const [relation, setRelation] = useState<Relation | ''>('');
@@ -121,13 +125,17 @@ export default function ContactDetail() {
             <div style={{ display: 'grid', gap: 22 }}>
               {catalog && <BetweenYou c={c} />}
               {/* How you know someone (spouse, mentor…) is about people; with an organisation, Between you says it. */}
-              {catalog && !isOrg && !isAssistant && <HowYouKnow partyId={c.id} first={first} catalog={catalog} notes={isNode ? { text: c.notes, save: (notes) => run(() => patch(`/api/parties/${c.id}`, { notes }), 'Saved').then(reload) } : undefined} />}
+              {catalog && !isOrg && !isAssistant && <HowYouKnow key={relsKey} partyId={c.id} first={first} catalog={catalog} notes={isNode ? { text: c.notes, save: (notes) => run(() => patch(`/api/parties/${c.id}`, { notes }), 'Saved').then(reload) } : undefined} />}
               {/* One contact card: what they share (kept up to date by them), plus anything you added yourself. */}
               <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div className="card-kicker">Contact info</div>
                   {/* A connected person's card is what they share. Details you added before connecting stay editable. */}
-                  {(!isNode || c.methods.length > 0) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setEdit({ name: c.name, type: c.type, birthDate: c.birthDate ?? '', notes: c.notes, methods: c.methods.length ? c.methods : [nextDetail(c.type, [])] })}>Edit</button>}
+                  {(!isNode || c.methods.length > 0) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => {
+                    setRels(null);
+                    setEdit({ name: c.name, type: c.type, birthDate: c.birthDate ?? '', notes: c.notes, methods: c.methods.length ? c.methods : [nextDetail(c.type, [])], relations: [] });
+                    if (c.type === 'person') { const r = await loadRelations(c.id); setRels({ options: r.options, before: r.current }); setEdit((e) => (e ? { ...e, relations: r.current } : e)); }
+                  }}>Edit</button>}
                 </div>
                 {isNode && c.sharedIn.map((m) => (
                   <Row key={m.key} label={m.label} value={m.key === 'little_dipper' ? m.value.split(' · ')[0] : m.value} />
@@ -191,10 +199,14 @@ export default function ContactDetail() {
       {edit && (
         <Dialog title={`Edit ${c.name}`} onClose={() => setEdit(null)} width={520} actions={<>
           <button className="btn btn-secondary" onClick={() => setEdit(null)}>Cancel</button>
-          <button className="btn btn-primary" disabled={busy} onClick={async () => { const r = await run(() => saveContact(c.id, edit), 'Saved'); if (r) { setEdit(null); reload(); } }}>Save</button>
+          <button className="btn btn-primary" disabled={busy} onClick={async () => {
+            const r = await run(async () => { const out = await saveContact(c.id, edit); if (rels && edit.type === 'person') await saveRelations(c.id, rels.before, edit.relations); return out; }, 'Saved');
+            if (r) { setEdit(null); setRelsKey((k) => k + 1); reload(); }
+          }}>Save</button>
         </>}>
           <div className="field"><label htmlFor="pname">Name</label><input id="pname" className="input" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
           <div className="field"><label>Type</label><Select value={edit.type} onChange={(v) => setEdit({ ...edit, type: (v || 'person') as Edit['type'] })} options={[['person', 'Person'], ['organisation', 'Organisation']]} /></div>
+          {edit.type === 'person' && rels && <RelationsField options={rels.options} value={edit.relations} onChange={(v) => setEdit({ ...edit, relations: v })} first={firstName(edit.name)} />}
           {edit.type === 'person' && <div className="field"><label htmlFor="pbd">Date of birth</label><PartialDate id="pbd" value={edit.birthDate} onChange={(v) => setEdit({ ...edit, birthDate: v })} /><div className="text-muted" style={{ fontSize: 12 }}>With the full date, their birthday shows on your calendar.</div></div>}
           {edit.methods.map((m, i) => (typeof m.value === 'object' ? (
             <div key={i} className="text-muted" style={{ fontSize: 13 }}>{m.label || 'Postal address'}: {displayMethod(m)}</div>
@@ -215,7 +227,7 @@ export default function ContactDetail() {
   );
 }
 
-type Edit = { name: string; type: 'person' | 'organisation' | 'assistant'; birthDate: string; notes: string; methods: ContactMethod[] };
+type Edit = { name: string; type: 'person' | 'organisation' | 'assistant'; birthDate: string; notes: string; methods: ContactMethod[]; relations: RelDraft[] };
 const KIND_LABEL: Record<ContactMethod['kind'], string> = { email: 'Email', phone: 'Phone', postal: 'Postal address', website: 'Website', social: 'Social', messaging: 'Messaging', api: 'API address', mcp: 'MCP address' };
 /** The details you can type for each kind of party. Organisations lead with their website, and can have the addresses their software answers at. */
 const STRING_KINDS = (type: Edit['type']): ContactMethod['kind'][] => type === 'person' ? ['email', 'phone', 'website', 'social', 'messaging'] : ['website', 'email', 'phone', 'api', 'mcp', 'social', 'messaging'];

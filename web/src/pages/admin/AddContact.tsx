@@ -3,6 +3,7 @@ import { copy, firstName, initials, post } from '../../api';
 import { AskChooser, ShareChooser, toShare, useSharing, type Choice, type Relation } from '../../sharing';
 import { Dialog, Pills, QR, Striped, Toggle, useAction, useAsync, useToast } from '../../ui';
 import { useAdmin } from './Layout';
+import { loadRelations, RelationsField, saveRelations, type RelDraft } from '../../relations';
 
 type Tab = 'person' | 'node' | 'invite';
 type Lookup = { nodeId: string; displayName: string | null; address: string; version: string; signingKey: string; viaInvite: boolean; acceptsRequests: boolean; existing: { contactId: string; status: string } | null };
@@ -19,6 +20,9 @@ export default function AddContact({ initialTab = 'person', initialAddress, onCl
   const sharing = useSharing();
   const [choice, setChoice] = useState<Choice>({ extras: [] });
   const [relation, setRelation] = useState<Relation | ''>('');
+  // How you know a person you add by name: saved as Relationships entries with them.
+  const [howKnow, setHowKnow] = useState<RelDraft[]>([]);
+  const { data: relChoices } = useAsync(() => loadRelations(null), []);
   const [asks, setAsks] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [exp, setExp] = useState<'24h' | '7d' | '30d'>('30d');
@@ -40,7 +44,10 @@ export default function AddContact({ initialTab = 'person', initialAddress, onCl
   const savePerson = async () => {
     if (!person.name.trim()) return toast('Add a name first');
     const r = await run(() => post('/api/parties', { type: person.type, name: person.name, methods: [...(person.email.trim() ? [{ kind: 'email', value: person.email, primary: true }] : []), ...(person.phone.trim() ? [{ kind: 'phone', value: person.phone, primary: true }] : []), ...(person.type === 'organisation' && person.website.trim() ? [{ kind: 'website', value: person.website, primary: true }] : [])] }), `${person.name} added`);
-    if (r) onDone(r.id);
+    if (r) {
+      if (person.type === 'person' && howKnow.length) await run(() => saveRelations(r.id, [], howKnow));
+      onDone(r.id);
+    }
   };
 
   const send = async () => {
@@ -77,6 +84,7 @@ export default function AddContact({ initialTab = 'person', initialAddress, onCl
             : 'Someone who isn’t on Little Dipper. Kept only on your Little Dipper; nothing is sent to them.'}</div>
           <Pills value={person.type} options={[['person', 'A person'], ['organisation', 'An organisation'], ['assistant', 'An assistant']]} onChange={(v) => setPerson({ ...person, type: v as 'person' | 'organisation' | 'assistant' })} />
           <div className="field"><label htmlFor="cn">Name</label><input id="cn" className="input" value={person.name} onChange={(e) => setPerson({ ...person, name: e.target.value })} /></div>
+          {person.type === 'person' && relChoices && <RelationsField options={relChoices.options} value={howKnow} onChange={setHowKnow} first={person.name.trim() ? firstName(person.name) : undefined} />}
           {person.type !== 'assistant' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
             {person.type === 'organisation' && <div className="field" style={{ gridColumn: '1 / -1' }}><label htmlFor="cw">Website</label><input id="cw" className="input" inputMode="url" placeholder="example.com" value={person.website} onChange={(e) => setPerson({ ...person, website: e.target.value })} /></div>}
             <div className="field"><label htmlFor="ce">Email</label><input id="ce" className="input" type="email" value={person.email} onChange={(e) => setPerson({ ...person, email: e.target.value })} /></div>
