@@ -1073,6 +1073,11 @@ async function main() {
         let body = '';
         req.on('data', (d) => (body += d));
         req.on('end', () => {
+          if (req.method === 'GET' && req.url?.endsWith('/models')) {
+            res.writeHead(req.headers.authorization === 'Bearer test-key-1234' ? 200 : 401, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ data: [{ id: 'fake-1', created: 2 }, { id: 'fake-0', created: 1 }] }));
+            return;
+          }
           const j = JSON.parse(body || '{}');
           seen.push({ auth: req.headers.authorization, path: req.url, body: j });
           if (req.headers.authorization !== 'Bearer test-key-1234') { res.writeHead(401, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'bad key' } })); return; }
@@ -1096,6 +1101,9 @@ async function main() {
         extra.push(I.proc);
         const iu = new Client('http://localhost:4208');
         await claim(iu, I.claimUrl, 'Maya Lind', new SoftKey());
+        const offered = await iu.call('POST', '/api/ai/providers/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', apiKey: 'test-key-1234' });
+        ok(offered.models.join() === 'fake-1,fake-0', 'a service lists its models, newest first, to pick from');
+        await iu.call('POST', '/api/ai/providers/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', apiKey: 'wrong-key-0000' }, [400]);
         await iu.call('POST', '/api/ai/models', { provider: 'openai', model: 'fake-1', apiKey: 'test-key-1234' }, [400]);
         await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'ftp://nope', model: 'fake-1', apiKey: 'test-key-1234' }, [400]);
         const m = await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', model: 'fake-1', apiKey: 'test-key-1234', label: 'Fake' });

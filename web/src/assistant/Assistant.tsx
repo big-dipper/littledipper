@@ -535,21 +535,51 @@ function PrivacyBox({ m }: { m: Model }) {
   );
 }
 
+const OPENAI_URL = 'https://api.openai.com/v1';
+
 /** Add, see and remove models. The API key is pasted here and never shown again. */
 function Models({ models, onChange }: { models: Model[]; onChange: (newId?: string) => Promise<void> }) {
-  const [provider, setProvider] = useState<Provider>('anthropic');
+  // Where the model runs: Claude, ChatGPT, or any other OpenAI-compatible service (open-weight models).
+  const [service, setService] = useState<'anthropic' | 'chatgpt' | 'open'>('anthropic');
+  const provider: Provider = service === 'anthropic' ? 'anthropic' : 'openai';
   const [model, setModel] = useState('claude-opus-5-5');
   const [baseUrl, setBaseUrl] = useState('');
   const [label, setLabel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const pick = (p: Provider) => { setProvider(p); setModel(p === 'anthropic' ? 'claude-opus-5-5' : ''); };
+  const [offered, setOffered] = useState<string[]>([]);
+  const [listing, setListing] = useState('');
+  const pick = (x: typeof service) => {
+    setService(x); setOffered([]); setListing('');
+    setModel(x === 'anthropic' ? 'claude-opus-5-5' : '');
+    setBaseUrl(x === 'chatgpt' ? OPENAI_URL : '');
+  };
+  const address = service === 'chatgpt' ? OPENAI_URL : baseUrl.trim();
+
+  // Once there's a key (and an address), ask the service which models it offers.
+  useEffect(() => {
+    const key = apiKey.trim();
+    if (key.length < 20 || (provider === 'openai' && !/^https?:\/\/.+/.test(address))) { setOffered([]); setListing(''); return; }
+    let live = true;
+    const t = setTimeout(async () => {
+      setListing('Looking up its models…');
+      try {
+        const r = await post<{ models: string[] }>('/api/ai/providers/models', { provider, apiKey: key, ...(provider === 'openai' ? { baseUrl: address } : {}) });
+        if (!live) return;
+        setOffered(r.models);
+        setListing(r.models.length ? '' : 'It didn’t list any models. Type the name instead.');
+        // ChatGPT: start from OpenAI's newest main model.
+        if (service === 'chatgpt' && r.models.length) setModel((m) => m || r.models.find((x) => /^gpt-[\d.]+$/.test(x)) || r.models[0]);
+      } catch (e) { if (live) { setOffered([]); setListing((e as Error).message); } }
+    }, 600);
+    return () => { live = false; clearTimeout(t); };
+  }, [apiKey, address, provider, service]);
 
   async function add() {
     setBusy(true); setError('');
     try {
-      const m = await post<Model>('/api/ai/models', { provider, model, apiKey, label: label || undefined, ...(provider === 'openai' ? { baseUrl } : {}) });
+      const m = await post<Model>('/api/ai/models', { provider, model, apiKey, label: label || (service === 'chatgpt' ? 'ChatGPT' : undefined), ...(provider === 'openai' ? { baseUrl: address } : {}) });
       setApiKey(''); setLabel('');
       await onChange(m.id);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -563,7 +593,7 @@ function Models({ models, onChange }: { models: Model[]; onChange: (newId?: stri
           <div key={m.id} className="ai-model-row">
             <div>
               <strong>{m.label}</strong>
-              <div className="text-muted" style={{ fontSize: 12.5 }}>{m.provider === 'anthropic' ? 'Anthropic' : m.baseUrl ? new URL(m.baseUrl).host : ''} · {m.model} · key {m.apiKey}</div>
+              <div className="text-muted" style={{ fontSize: 12.5 }}>{m.provider === 'anthropic' ? 'Anthropic' : m.baseUrl ? (new URL(m.baseUrl).host === 'api.openai.com' ? 'OpenAI' : new URL(m.baseUrl).host) : ''} · {m.model} · key {m.apiKey}</div>
               <PrivacyBox m={m} />
             </div>
             <button type="button" className="bare fb-plain" onClick={async () => { await del(`/api/ai/models/${m.id}`); await onChange(); }}>Remove</button>
@@ -574,23 +604,28 @@ function Models({ models, onChange }: { models: Model[]; onChange: (newId?: stri
       <div className="fb-label">{models.length ? 'Add another' : 'Add a model to talk to'}</div>
       {!models.length && <p className="text-muted" style={{ fontSize: 13.5, marginTop: 0 }}>Bring your own API key. Your Little Dipper talks to the model directly; you pay the service for what you use. What the model reads goes to the service that runs it.</p>}
       <div className="fb-kinds" role="radiogroup" aria-label="Where the model runs">
-        <button type="button" role="radio" aria-checked={provider === 'anthropic'} data-on={provider === 'anthropic' ? '1' : '0'} onClick={() => pick('anthropic')}>Claude (Anthropic)</button>
-        <button type="button" role="radio" aria-checked={provider === 'openai'} data-on={provider === 'openai' ? '1' : '0'} onClick={() => pick('openai')}>An open-weight model</button>
+        <button type="button" role="radio" aria-checked={service === 'anthropic'} data-on={service === 'anthropic' ? '1' : '0'} onClick={() => pick('anthropic')}>Claude</button>
+        <button type="button" role="radio" aria-checked={service === 'chatgpt'} data-on={service === 'chatgpt' ? '1' : '0'} onClick={() => pick('chatgpt')}>ChatGPT</button>
+        <button type="button" role="radio" aria-checked={service === 'open'} data-on={service === 'open' ? '1' : '0'} onClick={() => pick('open')}>An open-weight model</button>
       </div>
-      {provider === 'openai' && <>
+      {service === 'anthropic' && <p className="text-muted" style={{ fontSize: 12.5 }}>A key from console.anthropic.com. Billed by Anthropic per use, apart from any Claude subscription.</p>}
+      {service === 'chatgpt' && <p className="text-muted" style={{ fontSize: 12.5 }}>A key from platform.openai.com. Billed by OpenAI per use, apart from any ChatGPT subscription.</p>}
+      {service === 'open' && <>
         <div className="fb-label">The service’s API address</div>
         <input className="input" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://openrouter.ai/api/v1" style={{ width: '100%' }} />
         <p className="text-muted" style={{ fontSize: 12.5 }}>Any service with an OpenAI-compatible API: OpenRouter, Together, Fireworks, Hugging Face, your own cloud.</p>
       </>}
-      <div className="fb-label">Model</div>
-      <input className="input" value={model} onChange={(e) => setModel(e.target.value)} placeholder={provider === 'anthropic' ? 'claude-opus-5-5' : 'e.g. qwen/qwen-2.5-vl-72b-instruct'} style={{ width: '100%' }} />
       <div className="fb-label">API key</div>
       <input className="input" type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Paste it here" style={{ width: '100%' }} />
+      <div className="fb-label">Model</div>
+      <input className="input" list="ai-offered" value={model} onChange={(e) => setModel(e.target.value)} placeholder={service === 'anthropic' ? 'claude-opus-5-5' : service === 'chatgpt' ? 'Paste your key and pick one' : 'e.g. qwen/qwen-2.5-vl-72b-instruct'} style={{ width: '100%' }} />
+      <datalist id="ai-offered">{offered.map((x) => <option key={x} value={x} />)}</datalist>
+      {(listing || offered.length > 0) && <p className="text-muted" style={{ fontSize: 12.5, margin: '6px 0 0' }}>{listing || `${offered.length} models available: start typing or pick from the list.`}</p>}
       <div className="fb-label">Name <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span></div>
-      <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={provider === 'anthropic' ? 'Claude' : 'e.g. Qwen'} style={{ width: '100%' }} />
+      <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={service === 'anthropic' ? 'Claude' : service === 'chatgpt' ? 'ChatGPT' : 'e.g. Qwen'} style={{ width: '100%' }} />
       {error && <p className="fb-error" style={{ marginTop: 12 }}>{error}</p>}
       <div style={{ marginTop: 16 }}>
-        <button type="button" className="btn btn-primary" disabled={busy || !model.trim() || !apiKey.trim() || (provider === 'openai' && !baseUrl.trim())} onClick={add}>{busy ? 'Adding…' : 'Add model'}</button>
+        <button type="button" className="btn btn-primary" disabled={busy || !model.trim() || !apiKey.trim() || (provider === 'openai' && !address)} onClick={add}>{busy ? 'Adding…' : 'Add model'}</button>
       </div>
       <p className="text-muted" style={{ fontSize: 12.5, marginTop: 14 }}>It starts out seeing everything except secret details, and its changes wait for you in Review. Change that on its page any time.</p>
     </section>

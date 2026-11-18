@@ -391,6 +391,26 @@
         }
       }
     },
+    "/api/ai/providers/models": {
+      "post": {
+        "tags": [
+          "AI"
+        ],
+        "operationId": "postApiAiProvidersModels",
+        "summary": "The models a service offers, to pick one when adding it",
+        "description": "The models a service offers, to pick one when adding it: { provider, apiKey, baseUrl? }. Nothing is saved.\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
     "/api/ai/settings": {
       "get": {
         "tags": [

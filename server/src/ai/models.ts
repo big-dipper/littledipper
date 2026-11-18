@@ -18,7 +18,7 @@ import { checkInstructions } from './settings.js';
 export type Provider = 'anthropic' | 'openai';
 export const PROVIDERS: { id: Provider; label: string; hint: string }[] = [
   { id: 'anthropic', label: 'Claude (Anthropic)', hint: 'An API key from console.anthropic.com. Billed by Anthropic per use.' },
-  { id: 'openai', label: 'Another service (OpenAI-compatible)', hint: 'Most services that run open-weight models: give their API address, a model name and a key.' },
+  { id: 'openai', label: 'ChatGPT (OpenAI), or another OpenAI-compatible service', hint: 'OpenAI itself (https://api.openai.com/v1, a key from platform.openai.com), or a service that runs open-weight models: give its API address, a model name and a key.' },
 ];
 
 export type AiModelDoc = {
@@ -51,6 +51,8 @@ type Level = 'local' | 'company' | 'router' | 'unknown';
 const KNOWN: { match: RegExp; operator: string; site: string; level: Level; note: string }[] = [
   { match: /(^|\.)anthropic\.com$/, operator: 'Anthropic', site: 'anthropic.com', level: 'company',
     note: 'Runs on Anthropic\'s servers. Under Anthropic\'s API terms, what you send isn\'t used to train its models by default; check its current terms for how long it keeps requests.' },
+  { match: /^api\.openai\.com$/, operator: 'OpenAI', site: 'openai.com', level: 'company',
+    note: 'Runs on OpenAI\'s servers. Under OpenAI\'s API terms, what you send isn\'t used to train its models by default; check its current terms for how long it keeps requests.' },
   { match: /(^|\.)openrouter\.ai$/, operator: 'OpenRouter', site: 'openrouter.ai', level: 'router',
     note: 'OpenRouter passes each request to one of many companies that run the model. In your OpenRouter privacy settings you can allow only providers that don\'t keep or train on your data.' },
   { match: /(^|\.)together\.(xyz|ai)$/, operator: 'Together AI', site: 'together.ai', level: 'company', note: 'Runs open-weight models on its own servers. Check its terms for training and how long it keeps requests.' },

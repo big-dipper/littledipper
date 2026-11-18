@@ -147,7 +147,11 @@ export function anthropicAdapter(m: AiModelDoc, apiKey: string): Adapter {
 // ── OpenAI-compatible services ───────────────────────────────────────
 type OaMessage = { role: string; content?: unknown; tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[]; tool_call_id?: string };
 
+/** OpenAI itself, as opposed to the many services that copy its API: it reads PDFs, and wants max_completion_tokens. */
+export const isOpenAI = (baseUrl: string | null) => { try { return new URL(baseUrl ?? '').hostname === 'api.openai.com'; } catch { return false; } };
+
 export function openaiAdapter(m: AiModelDoc, apiKey: string): Adapter {
+  const openai = isOpenAI(m.baseUrl);
   async function expand(history: unknown[]) {
     const out: OaMessage[] = [];
     for (const msg of history as OaMessage[]) {
@@ -158,6 +162,7 @@ export function openaiAdapter(m: AiModelDoc, apiKey: string): Adapter {
         const f = await fileBytes(b.fileId);
         if (f && f.text !== null) content.push({ type: 'text', text: `The file ${f.name}:\n\n${f.text}` });
         else if (f && f.type.startsWith('image/')) content.push({ type: 'image_url', image_url: { url: `data:${f.type};base64,${f.base64}` } });
+        else if (f && openai && f.type === 'application/pdf') content.push({ type: 'file', file: { filename: f.name.endsWith('.pdf') ? f.name : `${f.name}.pdf`, file_data: `data:application/pdf;base64,${f.base64}` } });
         else content.push({ type: 'text', text: f ? `(A ${f.type === 'application/pdf' ? 'PDF' : f.type} page this kind of model can't read.)` : '(A page that has since been deleted.)' });
       }
       out.push({ ...msg, content });
@@ -175,7 +180,7 @@ export function openaiAdapter(m: AiModelDoc, apiKey: string): Adapter {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
           body: JSON.stringify({
-            model: m.model, stream: true, stream_options: { include_usage: true }, max_tokens: 16000,
+            model: m.model, stream: true, stream_options: { include_usage: true }, ...(openai ? { max_completion_tokens: 16000 } : { max_tokens: 16000 }),
             messages: [{ role: 'system', content: system }, ...(await expand(history))],
             ...(tools.length ? { tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })) } : {}),
           }),
@@ -242,3 +247,27 @@ export function openaiAdapter(m: AiModelDoc, apiKey: string): Adapter {
 }
 
 export const adapterFor = (m: AiModelDoc, apiKey: string) => (m.provider === 'anthropic' ? anthropicAdapter(m, apiKey) : openaiAdapter(m, apiKey));
+
+/**
+ * The models a service offers, for picking one by name: Anthropic's, or any OpenAI-compatible service's /models.
+ * Only chat models where we can tell (OpenAI's list includes speech, image and embedding models). Newest first.
+ */
+export async function listServiceModels(provider: 'anthropic' | 'openai', baseUrl: string | null, apiKey: string): Promise<string[]> {
+  if (provider === 'anthropic') {
+    const out: string[] = [];
+    try {
+      for await (const x of new Anthropic({ apiKey }).models.list({ limit: 100 })) out.push(x.id);
+    } catch (e) { throw new ModelError(e instanceof Anthropic.AuthenticationError ? 'Anthropic didn’t accept that key.' : 'Couldn’t reach Anthropic to list its models.', 'model_auth'); }
+    return out;
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/models`, { headers: { authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(15_000) });
+  } catch { throw new ModelError('Couldn’t reach that service. Check its API address.', 'model_unreachable'); }
+  if (res.status === 401 || res.status === 403) throw new ModelError('The service didn’t accept that key.', 'model_auth');
+  if (!res.ok) throw new ModelError(`The service didn’t list its models (${res.status}). Type the model’s name instead.`, 'model_error');
+  const j = (await res.json().catch(() => null)) as { data?: { id?: string; created?: number }[] } | null;
+  const NOT_CHAT = /embed|whisper|tts|dall-e|gpt-image|moderation|transcribe|audio|realtime|search|davinci|babbage|sora|computer-use/i;
+  return (j?.data ?? []).filter((x) => typeof x.id === 'string' && !(isOpenAI(baseUrl) && NOT_CHAT.test(x.id)))
+    .sort((a, b) => (b.created ?? 0) - (a.created ?? 0)).map((x) => x.id!).slice(0, 300);
+}

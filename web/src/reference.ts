@@ -129,6 +129,7 @@ export const ENDPOINTS: Endpoint[] = ([
   ['Assistants', 'GET', '/api/mcp', 'public', 'Not used: answers 405. POST JSON-RPC messages instead.'],
   ['Assistants', 'DELETE', '/api/mcp', 'public', 'Not used: answers 405. The MCP server keeps no sessions.'],
   ['AI', 'GET', '/api/ai/providers', 'session', 'The kinds of AI service a model can come from: Claude (Anthropic), or any OpenAI-compatible service.'],
+  ['AI', 'POST', '/api/ai/providers/models', 'session', 'The models a service offers, to pick one when adding it: { provider, apiKey, baseUrl? }. Nothing is saved.'],
   ['AI', 'GET', '/api/ai/models', 'session', 'The owner’s AI models: label, provider, model name, API address, the assistant it acts as, and the last characters of its API key (never the key).'],
   ['AI', 'POST', '/api/ai/models', 'session', 'Add a model { label?, provider: anthropic|openai, model, apiKey, baseUrl? (openai) }. It becomes an assistant that sees everything but secret details and suggests changes, changeable on its page.'],
   ['AI', 'PATCH', '/api/ai/models/{id}', 'session', 'Change a model’s label, model name, API address, key, or its own extra standing instructions.'],

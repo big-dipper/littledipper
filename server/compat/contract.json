@@ -123,6 +123,7 @@
     "POST /api/ai/chats",
     "POST /api/ai/chats/{}/messages",
     "POST /api/ai/models",
+    "POST /api/ai/providers/models",
     "POST /api/auth/fallback/disable",
     "POST /api/auth/logout",
     "POST /api/auth/passkeys/options",

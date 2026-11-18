@@ -6,17 +6,41 @@
  * Sending a message answers with a stream (text/event-stream): each event is one JSON line, `data: {...}`.
  */
 import type { FastifyInstance } from 'fastify';
-import { requireSession } from '../auth.js';
+import { bad, requireSession } from '../auth.js';
 import { audit, ownerActor } from '../audit.js';
 import { ctx } from '../ctx.js';
 import { chatOut, chatSummary, createChat, getChat, runTurn, type ChatDoc, type Event } from '../ai/engine.js';
 import { addModel, getModel, listModels, modelOut, PROVIDERS, removeModel, updateModel } from '../ai/models.js';
 import { getSettings, saveSettings } from '../ai/settings.js';
+import { listServiceModels, ModelError } from '../ai/providers.js';
 
 export default async function aiRoutes(app: FastifyInstance) {
   app.get('/api/ai/providers', async (req) => {
     await requireSession(req);
     return { providers: PROVIDERS };
+  });
+
+  /** The models a service offers, to pick from when adding one: { provider, apiKey, baseUrl? }. Nothing is saved. */
+  app.post('/api/ai/providers/models', async (req) => {
+    await requireSession(req);
+    const b = (req.body || {}) as { provider?: unknown; baseUrl?: unknown; apiKey?: unknown };
+    const provider = b.provider === 'anthropic' ? 'anthropic' : b.provider === 'openai' ? 'openai' : null;
+    if (!provider) throw bad('invalid_value', 'provider: anthropic or openai');
+    const apiKey = String(b.apiKey ?? '').trim();
+    if (!apiKey || apiKey.length > 500) throw bad('invalid_value', 'apiKey: the key from the service');
+    let baseUrl: string | null = null;
+    if (provider === 'openai') {
+      baseUrl = String(b.baseUrl ?? '').trim().replace(/\/+$/, '');
+      let url: URL;
+      try { url = new URL(baseUrl); } catch { throw bad('invalid_value', 'baseUrl: the service\'s API address, e.g. https://api.openai.com/v1'); }
+      if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw bad('invalid_value', 'baseUrl must use https');
+    }
+    try {
+      return { models: await listServiceModels(provider, baseUrl, apiKey) };
+    } catch (e) {
+      if (e instanceof ModelError) throw bad(e.code, e.message);
+      throw e;
+    }
   });
 
   app.get('/api/ai/models', async (req) => {
