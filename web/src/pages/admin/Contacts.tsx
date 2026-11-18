@@ -25,9 +25,9 @@ export default function Contacts() {
   const { refresh } = useAdmin();
   const { run } = useAction();
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<'all' | 'family' | 'node' | 'person' | 'organisation' | 'assistant'>('all');
   // ?connect=<invite or address>: someone's invite, opened from their page or after setup, ready to send.
   const [params, setParams] = useSearchParams();
+  const [filter, setFilter] = useState<'all' | 'family' | 'sort' | 'node' | 'person' | 'organisation' | 'assistant'>(params.get('show') === 'sort' ? 'sort' : 'all');
   const [connect] = useState(() => params.get('connect') || '');
   const [modal, setModal] = useState<null | 'person' | 'node' | 'invite'>(connect ? 'node' : null);
   const { data, error, reload } = useAsync(() => get<{ items: Contact[] }>('/api/parties'), []);
@@ -37,11 +37,12 @@ export default function Contacts() {
     const opts = catalog.find((d) => d.id === 'relationships')?.parts.find((p) => p.key === 'relation')?.options ?? [];
     const by = new Map<string, string[]>();
     const family = new Set<string>();
+    const any = new Set(items.map((r) => String(r.data.party)));
     for (const r of items) if (r.current) {
       by.set(String(r.data.party), [...(by.get(String(r.data.party)) ?? []), opts.find(([k]) => k === r.data.relation)?.[1] ?? String(r.data.relation)]);
       if (FAMILY.has(String(r.data.relation))) family.add(String(r.data.party));
     }
-    return { by, family };
+    return { by, family, any };
   }, []);
   const { data: reqs, reload: reloadReqs } = useAsync(() => get<{ items: Req[] }>('/api/federation/requests?status=pending&direction=in'), []);
 
@@ -50,7 +51,10 @@ export default function Contacts() {
   const names = new Map((data?.items || []).map((c) => [c.id, c.name]));
   const worksAt = (c: Contact) => c.affiliations.map((a) => names.get(a.party)).filter(Boolean).join(', ');
   const how = (c: Contact) => (rels?.by.get(c.id) ?? []).join(', ');
-  const kept = (c: Contact) => filter === 'all' || (filter === 'family' ? !!rels?.family.has(c.id) : filter === 'node' ? !!c.node : c.type === filter);
+  // To sort: people you haven't said how you know yet (an import brings many).
+  const unsorted = (c: Contact) => c.type === 'person' && !c.node && !!rels && !rels.any.has(c.id);
+  const toSort = (data?.items || []).filter(unsorted).length;
+  const kept = (c: Contact) => filter === 'all' || (filter === 'family' ? !!rels?.family.has(c.id) : filter === 'sort' ? unsorted(c) : filter === 'node' ? !!c.node : c.type === filter);
   const rows = (data?.items || []).filter((c) => kept(c) && (!term || [c.name, worksAt(c), how(c)].some((s) => s.toLowerCase().includes(term))));
 
   const decline = async (r: Req) => {
@@ -64,6 +68,7 @@ export default function Contacts() {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div><h1>Relationships</h1><p className="text-muted" style={{ margin: 0 }}>People who also run Little Dipper can connect with you securely. You choose exactly what each of them can see.</p></div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => nav('/admin/relationships/import')}>Import</button>
           <button className="btn btn-secondary" onClick={() => setModal('invite')}>Invite link</button>
           <button className="btn btn-primary" onClick={() => setModal('person')}>Add someone</button>
         </div>
@@ -89,7 +94,7 @@ export default function Contacts() {
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '24px 0 12px', flexWrap: 'wrap' }}>
         <input className="input" aria-label="Search relationships" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 320 }} />
-        <Pills value={filter} options={[['all', 'All'], ['family', 'Family'], ['node', 'On Little Dipper'], ['person', 'People'], ['organisation', 'Organisations'], ['assistant', 'Assistants']]} onChange={setFilter} />
+        <Pills value={filter} options={[['all', 'All'], ['family', 'Family'], ...(toSort ? [['sort', `To sort · ${toSort}`] as ['sort', string]] : []), ['node', 'On Little Dipper'], ['person', 'People'], ['organisation', 'Organisations'], ['assistant', 'Assistants']]} onChange={setFilter} />
       </div>
       {!data ? <Loading /> : (
         <div style={{ overflowX: 'auto' }}>

@@ -14,6 +14,7 @@ import Category from './pages/admin/Category';
 import Lifestream from './pages/admin/Lifestream';
 import Calendar from './pages/admin/Calendar';
 import Contacts from './pages/admin/Contacts';
+import ImportPeople from './pages/admin/ImportPeople';
 import Activity from './pages/admin/Activity';
 import TasksPage from './pages/admin/TasksPage';
 import ContactDetail from './pages/admin/ContactDetail';
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="documents" element={<Documents />} />
             <Route path="documents/:id" element={<Documents />} />
             <Route path="relationships" element={<Contacts />} />
+            <Route path="relationships/import" element={<ImportPeople />} />
             <Route path="relationships/:id" element={<ContactDetail />} />
             <Route path="contacts" element={<Navigate to="/admin/relationships" replace />} />
             <Route path="contacts/:id" element={<ContactRedirect />} />

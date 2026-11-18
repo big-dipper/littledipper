@@ -102,7 +102,7 @@ export function anthropicAdapter(m: AiModelDoc, apiKey: string): Adapter {
         model: m.model,
         max_tokens: 32000,
         system: [{ type: 'text' as const, text: system, cache_control: { type: 'ephemeral' as const } }],
-        tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema, eager_input_streaming: true })),
+        ...(tools.length ? { tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema, eager_input_streaming: true })) } : {}),
         messages: await expand(history),
         ...(MODERN.test(m.model) ? { output_config: { effort: 'medium' as const } } : {}),
         // If a safety classifier declines, the API retries on a model it picks, inside the same call.
@@ -177,7 +177,7 @@ export function openaiAdapter(m: AiModelDoc, apiKey: string): Adapter {
           body: JSON.stringify({
             model: m.model, stream: true, stream_options: { include_usage: true }, max_tokens: 16000,
             messages: [{ role: 'system', content: system }, ...(await expand(history))],
-            tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })),
+            ...(tools.length ? { tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.inputSchema } })) } : {}),
           }),
           signal: AbortSignal.timeout(300_000),
         });

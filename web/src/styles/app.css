@@ -402,3 +402,29 @@ a.pp-contact:hover { background: var(--color-neutral-100); }
 .ai-quoting { display: flex; gap: 8px; align-items: flex-start; }
 .ai-quoting .ai-quote { flex: 1; margin: 0; white-space: pre-wrap; }
 .ai-quoting button { cursor: pointer; color: inherit; opacity: 0.6; padding: 0 4px; }
+
+/* ── Import people ─────────────────────────────────────────────────── */
+.imp-card { margin-top: 20px; border: 1px solid var(--color-divider); border-radius: 24px; padding: 18px 22px; background: var(--color-surface, transparent); }
+.imp-done { background: var(--color-accent-2-100); border-color: transparent; }
+.imp-how { margin: 8px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.6; color: var(--color-neutral-700); }
+.imp-drop { margin-top: 14px; border: 2px dashed var(--color-neutral-400); border-radius: 24px; padding: 42px 20px; text-align: center; cursor: pointer; display: grid; gap: 4px; transition: background .15s, border-color .15s; }
+.imp-drop:hover, .imp-drop.on { background: var(--color-accent-100); border-color: var(--color-accent-500); }
+.imp-counts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; font-size: 14px; }
+.imp-h { font-size: 18px; margin: 28px 0 10px; }
+.imp-presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.imp-preset { text-align: left; border: 1px solid var(--color-divider); border-radius: 18px; padding: 14px 16px; background: transparent; cursor: pointer; display: grid; gap: 4px; color: inherit; font: inherit; }
+.imp-preset[data-on="1"] { border-color: var(--color-accent-600); background: var(--color-accent-100); box-shadow: 0 0 0 1px var(--color-accent-600) inset; }
+.imp-words { margin-top: 12px; display: grid; gap: 8px; }
+.imp-words textarea { resize: vertical; min-height: 56px; }
+.imp-said { font-size: 14px; padding: 10px 14px; border-radius: 14px; background: var(--color-accent-2-100); }
+.imp-fine { margin-top: 14px; }
+.imp-fine > summary { cursor: pointer; font-size: 14px; color: var(--color-neutral-700); }
+.imp-toggles { display: grid; gap: 8px; margin-top: 12px; }
+.imp-toggle { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.imp-labels { margin-top: 12px; }
+.imp-plan { display: grid; gap: 6px; }
+.imp-group { border: 1px solid var(--color-divider); border-radius: 14px; padding: 10px 14px; }
+.imp-group > summary { cursor: pointer; font-weight: 500; }
+.imp-group[data-kind="skip"] > summary { color: var(--color-neutral-600); font-weight: 400; }
+.imp-names { margin-top: 8px; font-size: 13px; line-height: 1.6; color: var(--color-neutral-700); }
+.imp-past { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid var(--color-divider); border-radius: 14px; padding: 10px 14px; }

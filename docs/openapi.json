@@ -57,6 +57,9 @@
       "name": "Federation"
     },
     {
+      "name": "Imports"
+    },
+    {
       "name": "Keys"
     },
     {
@@ -2681,6 +2684,166 @@
           }
         ],
         "x-scope": "documents:read",
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/imports": {
+      "get": {
+        "tags": [
+          "Imports"
+        ],
+        "operationId": "getApiImports",
+        "summary": "Past imports, newest first",
+        "description": "Past imports, newest first.\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/imports/{id}/plan": {
+      "post": {
+        "tags": [
+          "Imports"
+        ],
+        "operationId": "postApiImportsIdPlan",
+        "summary": "What",
+        "description": "What { rules } would do, in plain words: groups (combine, add as family, to sort later, leave out…) with the names in each.\n\n**Who:** The owner, signed in (passkey session).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/imports/{id}/rules": {
+      "post": {
+        "tags": [
+          "Imports"
+        ],
+        "operationId": "postApiImportsIdRules",
+        "summary": "The owner says how it should go",
+        "description": "The owner says how it should go ({ text, model, rules? }); their assistant writes the rules from the file’s counts, never its contents. Answers { said, rules, plan, usage }.\n\n**Who:** The owner, signed in (passkey session).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/imports/{id}/run": {
+      "post": {
+        "tags": [
+          "Imports"
+        ],
+        "operationId": "postApiImportsIdRun",
+        "summary": "Import with",
+        "description": "Import with { rules }: people become parties, how the owner knows them a Relationships entry. Answers the import with its counts.\n\n**Who:** The owner, signed in (passkey session).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/imports/{id}/undo": {
+      "post": {
+        "tags": [
+          "Imports"
+        ],
+        "operationId": "postApiImportsIdUndo",
+        "summary": "Take an import back",
+        "description": "Take an import back: its Relationships entries go (restorable for 30 days), the people it added go unless used since, and details it added to people already here come off.\n\n**Who:** The owner, signed in (passkey session).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
+          }
+        }
+      }
+    },
+    "/api/imports/contacts": {
+      "post": {
+        "tags": [
+          "Imports"
+        ],
+        "operationId": "postApiImportsContacts",
+        "summary": "Open a contacts file",
+        "description": "Open a contacts file (body: text/vcard, ?name=). Answers with what’s in it as counts (cards, duplicates, labels, companies…) and ready-made rules. The file is held for an hour; nothing is stored until it’s imported.\n\n**Who:** The owner, signed in (passkey session).",
+        "security": [
+          {
+            "ownerSession": []
+          }
+        ],
         "responses": {
           "default": {
             "description": "JSON. Errors are `{ code, message }` with a matching HTTP status: branch on `code` (stable), never on `message` (for people, may change)."
@@ -7951,6 +8114,7 @@
     "copies",
     "documents",
     "documents.share-links",
+    "imports.contacts",
     "mcp",
     "messages",
     "oauth",

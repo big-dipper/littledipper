@@ -1135,6 +1135,64 @@ async function main() {
       }
     }
 
+    console.log('importing people from a contacts file');
+    {
+      const K = await startNode(4209, path.join(tmp, 'k'));
+      extra.push(K.proc);
+      const ku = new Client('http://localhost:4209');
+      await claim(ku, K.claimUrl, 'Maya Lind', new SoftKey());
+      const vcf = [
+        'BEGIN:VCARD', 'VERSION:3.0', 'FN:Ana Ruiz', 'N:Ruiz;Ana;;;', 'EMAIL:ana@example.com', 'TEL;TYPE=CELL:(503) 555-0101', 'BDAY:1988-02-03', 'CATEGORIES:myContacts,Friends', 'END:VCARD',
+        'BEGIN:VCARD', 'VERSION:3.0', 'FN:Ana Ruiz', 'TEL:503-555-0101', 'ORG:Acme Corp', 'TITLE:Designer', 'END:VCARD',
+        'BEGIN:VCARD', 'VERSION:3.0', 'FN:Dan Ortiz', 'EMAIL:dan@acme.com', 'END:VCARD',
+        'BEGIN:VCARD', 'VERSION:3.0', 'FN:Rosa Hollings', 'ADR;TYPE=HOME:;;12 Oak St;Portland;OR;97201;United States', 'CATEGORIES:Family', 'END:VCARD',
+        'BEGIN:VCARD', 'VERSION:2.1', 'FN;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:Jos=C3=A9 Mu=C3=B1oz', 'TEL;CELL:5035550177', 'PHOTO;ENCODING=BASE64;JPEG:/9j/4AAQ', ' AAAQ', 'END:VCARD',
+        'BEGIN:VCARD', 'VERSION:3.0', 'EMAIL:noreply@shop.example', 'END:VCARD',
+        'BEGIN:VCARD', 'VERSION:3.0', 'FN:Joe Plumbing', 'ORG:Joe Plumbing', 'X-ABShowAs:COMPANY', 'TEL:503-555-0123', 'END:VCARD',
+      ].join('\r\n');
+      const cookie = [...ku.jar].map(([k, v]) => `${k}=${v}`).join('; ');
+      const up = async (body: string, who = cookie) => fetch('http://localhost:4209/api/imports/contacts?name=c.vcf', { method: 'POST', headers: { origin: 'http://localhost:4209', 'content-type': 'text/vcard', cookie: who }, body });
+      ok((await up(vcf, '')).status === 401, 'only the signed-in owner can open a contacts file');
+      ok((await up('hello')).status === 400, 'a file with no contacts is turned away');
+      const opened = await (await up(vcf)).json() as any;
+      ok(opened.summary.cards === 7 && opened.summary.duplicates === 1 && opened.summary.businesses === 1, 'the file is counted: cards, duplicates, businesses');
+      ok(opened.summary.labels.some((l: any) => l.name === 'Friends') && !opened.summary.labels.some((l: any) => /mycontacts/i.test(l.name)), 'labels come through, without the ones exports add on their own');
+      const clean = opened.presets.find((p: any) => p.id === 'clean').rules;
+      ok(clean.relations.Friends === 'friend' && clean.relations.Family === 'other_family', 'labels like Friends and Family are read as relations');
+      const rules = { ...clean, companies: [{ match: 'acme.com', relation: 'colleague' }] };
+      const plan = await ku.call('POST', `/api/imports/${opened.id}/plan`, { rules });
+      const g = (id: string) => plan.groups.find((x: any) => x.id === id);
+      ok(g('merge')?.names[0] === 'Ana Ruiz (2 cards)', 'the plan combines duplicate cards');
+      ok(g('relation:colleague')?.names.includes('Dan Ortiz'), 'an email at a company domain makes a colleague');
+      ok(g('sort')?.names.includes('José Muñoz'), 'someone with no label waits to be sorted (and an old-style name is decoded)');
+      ok(g('skip:email_only') || g('skip:no_name'), 'a card that is only an email is left out');
+      ok(g('skip:business')?.names.includes('Joe Plumbing'), 'businesses are left out unless asked for');
+      await ku.call('POST', `/api/imports/${opened.id}/plan`, { rules: { ...rules, relations: { Friends: 'bestie' } } }, [400]);
+      await ku.call('POST', `/api/imports/${opened.id}/rules`, { text: 'only friends', model: 'aim_nope' }, [404]);
+      const before = (await ku.call('GET', '/api/parties')).items.length;
+      const done = await ku.call('POST', `/api/imports/${opened.id}/run`, { rules });
+      ok(done.counts.people === 4 && done.counts.relationships === 3 && done.counts.organisations === 1, 'the import adds the people, how you know them, and where they work');
+      const parties = (await ku.call('GET', '/api/parties')).items;
+      const ana = parties.find((p: any) => p.name === 'Ana Ruiz');
+      ok(ana && ana.methods.length === 2 && ana.birthDate === '1988-02-03' && ana.affiliations.length === 1, 'a combined person keeps every detail once, with their workplace');
+      ok(parties.find((p: any) => p.name === 'Rosa Hollings')?.methods[0]?.value?.country === 'US', 'a postal address’s country is read');
+      const rels = (await ku.call('GET', '/api/data/relationships')).items;
+      ok(rels.some((r: any) => r.title === 'Ana Ruiz (Friend)'), 'Relationships entries say how you know them');
+      await ku.call('POST', `/api/imports/${opened.id}/run`, { rules }, [404]);
+      // Importing the same file again fills in, it doesn't duplicate.
+      const again = await (await up(vcf)).json() as any;
+      ok(again.summary.alreadyHere >= 4, 'a second import sees who is already here');
+      const second = await ku.call('POST', `/api/imports/${again.id}/run`, { rules });
+      ok(second.counts.people === 0, 'and adds no one twice');
+      await ku.call('POST', `/api/imports/${second.id}/undo`);
+      const undone = await ku.call('POST', `/api/imports/${opened.id}/undo`);
+      ok(undone.relationships === 3 && undone.kept.length === 0, 'undo takes the import back');
+      ok((await ku.call('GET', '/api/parties')).items.length === before, 'and everyone it added is gone');
+      await ku.call('POST', `/api/imports/${opened.id}/undo`, undefined, [400]);
+      ok((await ku.call('GET', '/api/imports')).imports.every((i: any) => i.undoneAt), 'past imports show they were undone');
+      await new Promise((r) => { K.proc.once('exit', r); K.proc.kill(); });
+    }
+
     console.log('preset claim code');
     // Railway's template sets LD_CLAIM_TOKEN; the owner may claim days later, after restarts.
     const preset = 'rw' + crypto.randomBytes(16).toString('hex');
