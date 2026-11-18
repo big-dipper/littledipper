@@ -471,9 +471,10 @@ function Companions({ d, saved, vals, onDone }: { d: Domain; saved: Rec; vals: R
     setDone((x) => new Set(x).add(`doc:${kind}`));
   };
   return (
-    <div className="dialog-backdrop" style={{ zIndex: 50, placeItems: 'stretch end', padding: 0 }} onClick={onDone}>
+    <div className="dialog-backdrop" style={{ zIndex: 50, display: 'flex', justifyContent: 'flex-end', padding: 0 }} onClick={onDone}>
       <aside role="dialog" aria-modal="true" aria-label="What goes with it" onClick={(e) => e.stopPropagation()}
-        style={{ width: 'min(540px, 100%)', height: '100dvh', maxHeight: '100dvh', background: 'var(--color-bg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', borderRadius: '32px 0 0 32px', padding: '28px', gap: 16 }}>
+        style={{ // The backdrop is the window, always: the panel fills it and its middle scrolls (100dvh overshoots when the page is zoomed).
+        width: 'min(540px, 100%)', height: '100%', maxHeight: '100%', background: 'var(--color-bg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', borderRadius: '32px 0 0 32px', padding: '28px', gap: 16 }}>
         <div className="card-kicker" style={{ color: groupOf(d.group).ink }}>{d.label} · saved</div>
         <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22 }}>{saved.title}</div>
         <p className="text-muted" style={{ margin: 0 }}>Want to add what goes with it? Each is linked to it, and you can skip any of them.</p>
@@ -762,9 +763,10 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   if (after) return <Companions d={d} saved={after} vals={vals} onDone={() => onSaved(after)} />;
 
   return (
-    <div className="dialog-backdrop" style={{ zIndex: 50, placeItems: 'stretch end', padding: 0 }} onClick={onClose}>
+    <div className="dialog-backdrop" style={{ zIndex: 50, display: 'flex', justifyContent: 'flex-end', padding: 0 }} onClick={onClose}>
       <aside role="dialog" aria-modal="true" aria-label={rec ? `Edit ${d.noun}` : `Add ${d.noun}`} onClick={(e) => e.stopPropagation()}
-        style={{ width: 'min(540px, 100%)', height: '100dvh', maxHeight: '100dvh', background: 'var(--color-bg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', borderRadius: '32px 0 0 32px' }}>
+        style={{ // The backdrop is the window, always: the panel fills it and its middle scrolls (100dvh overshoots when the page is zoomed).
+        width: 'min(540px, 100%)', height: '100%', maxHeight: '100%', background: 'var(--color-bg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', borderRadius: '32px 0 0 32px' }}>
         <div style={{ padding: '26px 28px 16px', display: 'flex', gap: 14, alignItems: 'center' }}>
           <Mono d={d} size={44} />
           <div style={{ flex: 1, minWidth: 0 }}>
