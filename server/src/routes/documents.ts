@@ -28,7 +28,7 @@ const who = (p: Principal) => (p.isSession ? 'You' : p.key.name);
 
 function bodyBytes(req: FastifyRequest) {
   const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-  if (!Buffer.isBuffer(req.body)) throw new HttpError(415, 'unsupported_type', 'Send a photo (JPEG, PNG, WebP, HEIC) or a PDF as the request body');
+  if (!Buffer.isBuffer(req.body)) throw new HttpError(415, 'unsupported_type', 'Send a photo (JPEG, PNG, WebP, HEIC), a PDF or a contacts file (text/vcard) as the request body');
   return { type, data: req.body };
 }
 

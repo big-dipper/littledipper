@@ -19,7 +19,11 @@ const SIGNATURES: Record<string, (b: Buffer) => boolean> = {
   'image/heic': (b) => b.subarray(4, 8).toString('latin1') === 'ftyp',
   'image/heif': (b) => b.subarray(4, 8).toString('latin1') === 'ftyp',
   'application/pdf': (b) => b.subarray(0, 5).toString('latin1') === '%PDF-',
+  // Contact exports from Google, iCloud and Outlook, for the assistant to read.
+  'text/vcard': (b) => /^(\ufeff)?\s*BEGIN:VCARD/i.test(b.subarray(0, 64).toString('utf8')),
 };
+/** Types read as text rather than as images or PDFs. */
+export const TEXT_TYPES = ['text/vcard'];
 export const FILE_TYPES = Object.keys(SIGNATURES);
 
 export type Source = { type: 'owner' | 'app' | 'peer' | 'system'; id: string };
@@ -41,7 +45,7 @@ export type FileRef = { id: string; name: string; type: string; size: number };
 export const fileRef = (f: FileDoc): FileRef => ({ id: f._id, name: f.name, type: f.type, size: f.size });
 
 export async function saveFile(name: string, type: string, data: Buffer, source: Source, documentId: string | null = null): Promise<FileDoc> {
-  if (!SIGNATURES[type]) throw bad('unsupported_type', 'Upload a photo (JPEG, PNG, WebP, HEIC) or a PDF');
+  if (!SIGNATURES[type]) throw bad('unsupported_type', 'Upload a photo (JPEG, PNG, WebP, HEIC), a PDF or a contacts file (.vcf)');
   if (!data.length) throw bad('empty_file', 'That file is empty');
   if (data.length > MAX_FILE_BYTES) throw bad('file_too_large', 'Files can be up to 10 MB');
   if (!SIGNATURES[type](data)) throw bad('type_mismatch', 'The file’s contents don’t match its type');

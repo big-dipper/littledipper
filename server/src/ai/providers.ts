@@ -11,7 +11,7 @@
  * before each request, so stored conversations stay small and every request sends the same bytes.
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { readFile } from '../files.js';
+import { readFile, TEXT_TYPES } from '../files.js';
 import type { AiModelDoc } from './models.js';
 
 export type ToolSpec = { name: string; description: string; inputSchema: Record<string, unknown> };
@@ -59,7 +59,7 @@ export function checkInput(schema: Record<string, unknown>, input: unknown): str
 async function fileBytes(fileId: string) {
   const f = await readFile(fileId);
   if (!f) return null;
-  return { type: f.doc.type, name: f.doc.name, base64: f.data.toString('base64') };
+  return { type: f.doc.type, name: f.doc.name, base64: f.data.toString('base64'), text: TEXT_TYPES.includes(f.doc.type) ? f.data.toString('utf8') : null };
 }
 
 type LdFile = { type: 'ld_file'; fileId: string };
@@ -84,6 +84,7 @@ export function anthropicAdapter(m: AiModelDoc, apiKey: string): Adapter {
         if (!isLdFile(b)) { content.push(b); continue; }
         const f = await fileBytes(b.fileId);
         if (!f) content.push({ type: 'text', text: '(A page that has since been deleted.)' });
+        else if (f.text !== null) content.push({ type: 'text', text: `The file ${f.name}:\n\n${f.text}` });
         else if (f.type === 'application/pdf') content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.base64 } });
         else if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(f.type)) content.push({ type: 'image', source: { type: 'base64', media_type: f.type, data: f.base64 } });
         else content.push({ type: 'text', text: `(A page in a format this model can't read: ${f.type}.)` });
@@ -155,7 +156,8 @@ export function openaiAdapter(m: AiModelDoc, apiKey: string): Adapter {
       for (const b of msg.content as unknown[]) {
         if (!isLdFile(b)) { content.push(b); continue; }
         const f = await fileBytes(b.fileId);
-        if (f && f.type.startsWith('image/')) content.push({ type: 'image_url', image_url: { url: `data:${f.type};base64,${f.base64}` } });
+        if (f && f.text !== null) content.push({ type: 'text', text: `The file ${f.name}:\n\n${f.text}` });
+        else if (f && f.type.startsWith('image/')) content.push({ type: 'image_url', image_url: { url: `data:${f.type};base64,${f.base64}` } });
         else content.push({ type: 'text', text: f ? `(A ${f.type === 'application/pdf' ? 'PDF' : f.type} page this kind of model can't read.)` : '(A page that has since been deleted.)' });
       }
       out.push({ ...msg, content });

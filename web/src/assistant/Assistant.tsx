@@ -168,12 +168,14 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
 
   /** Files dropped or picked go into Documents (the inbox), then into the next message for the model to read and file. */
   async function upload(list: FileList | File[]) {
-    const files = [...list].filter((f) => f.type.startsWith('image/') || f.type === 'application/pdf');
-    if (!files.length) { setError('Drop a photo, scan or PDF.'); return; }
+    // A contacts file (.vcf) comes with several names for its type, or none.
+    const typeOf = (f: File) => (/\.vcf$/i.test(f.name) || /vcard/i.test(f.type) ? 'text/vcard' : f.type);
+    const files = [...list].filter((f) => typeOf(f).startsWith('image/') || typeOf(f) === 'application/pdf' || typeOf(f) === 'text/vcard');
+    if (!files.length) { setError('Drop a photo, scan, PDF or contacts file.'); return; }
     setUploading(true); setError('');
     try {
       for (const f of files.slice(0, 6)) {
-        const res = await fetch(`/api/documents?name=${encodeURIComponent(f.name)}&status=inbox`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': f.type }, body: f });
+        const res = await fetch(`/api/documents?name=${encodeURIComponent(f.name)}&status=inbox`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': typeOf(f) }, body: f });
         const j = await res.json().catch(() => null);
         if (!res.ok) throw new Error(j?.message || `Couldn’t add ${f.name}`);
         setAdded((a) => [...a, j as Doc]);
@@ -371,7 +373,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
                   <button type="button" className="btn btn-primary" disabled={busy || uploading || (!text.trim() && !added.length)} onClick={() => send(text)}>Send</button>
                 </div>
                 <div className="ai-compose-tools">
-                  <input ref={picker} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => { if (e.target.files) upload(e.target.files); e.target.value = ''; }} />
+                  <input ref={picker} type="file" accept="image/*,application/pdf,.vcf,text/vcard" multiple hidden onChange={(e) => { if (e.target.files) upload(e.target.files); e.target.value = ''; }} />
                   <button type="button" className="bare fb-plain" disabled={busy || uploading} onClick={() => picker.current?.click()}>{uploading ? 'Adding…' : 'Add a file'}</button>
                   {settings.prompts.length > 0 && <button type="button" className="bare fb-plain" onClick={() => setShowPrompts(!showPrompts)} aria-expanded={showPrompts}>Your prompts</button>}
                   {text.trim() && !quote && !settings.prompts.some((p) => p.text === text.trim()) && <button type="button" className="bare fb-plain" onClick={() => savePrompts([...settings.prompts, { text: text.trim() }])}>Save as a prompt</button>}
