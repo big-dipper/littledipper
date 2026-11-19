@@ -171,7 +171,7 @@ pre.code { margin: 0; background: var(--color-neutral-900); color: var(--color-n
 @media (prefers-reduced-motion: reduce) { .cal-day, .cal-entry { transition: none; } }
 
 /* ── Action bar: the right side is for doing, as the left is for going ─────────────── */
-.actionbar { --icon-fill: var(--color-accent-200); width: 64px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 10px; overflow-y: auto; border-left: 1px solid var(--color-divider); transition: width .18s ease, padding .18s ease; }
+.actionbar { --icon-fill: var(--color-accent-200); width: 64px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 9px; overflow-y: auto; overflow-x: hidden; border-left: 1px solid var(--color-divider); transition: width .18s ease, padding .18s ease; }
 .actionbar[data-open='1'] { width: 380px; align-items: stretch; gap: 22px; padding: 16px 20px 28px; }
 .ab-rail-btn { position: relative; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; cursor: pointer; color: var(--color-text); }
 .ab-rail-btn:hover { background: var(--color-surface); }
