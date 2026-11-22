@@ -12,6 +12,8 @@ import { del, get, patch, post, put } from '../api';
 import { Icon } from '../icons';
 import { useAdmin } from '../pages/admin/Layout';
 import { readWhen, sayWhen } from '../quickAdd';
+import { fetchCatalog, type Domain } from '../life';
+import { AccessChooser, accessPayload, accessReady, emptyAccess } from '../assistantAccess';
 
 type Provider = 'anthropic' | 'openai';
 type Model = { id: string; label: string; provider: Provider; baseUrl: string | null; model: string; apiKey: string; instructions: string; privacy: Privacy; assistant: { id: string; name: string } | null };
@@ -550,6 +552,12 @@ function Models({ models, onChange }: { models: Model[]; onChange: (newId?: stri
   const [error, setError] = useState('');
   const [offered, setOffered] = useState<string[]>([]);
   const [listing, setListing] = useState('');
+  // Step 2: the owner chooses what it sees and what it can change before it's added. Nothing pre-chosen.
+  const [step, setStep] = useState<'details' | 'access'>('details');
+  const [access, setAccess] = useState(emptyAccess);
+  const [catalog, setCatalog] = useState<Domain[] | null>(null);
+  useEffect(() => { if (step === 'access' && !catalog) fetchCatalog().then(setCatalog).catch((e) => setError((e as Error).message)); }, [step, catalog]);
+  const shownName = label.trim() || (service === 'anthropic' ? 'Claude' : service === 'chatgpt' ? 'ChatGPT' : model.split('/').pop() || 'this model');
   const pick = (x: typeof service) => {
     setService(x); setOffered([]); setListing('');
     setModel(x === 'anthropic' ? 'claude-opus-5-5' : '');
@@ -579,8 +587,8 @@ function Models({ models, onChange }: { models: Model[]; onChange: (newId?: stri
   async function add() {
     setBusy(true); setError('');
     try {
-      const m = await post<Model>('/api/ai/models', { provider, model, apiKey, label: label || (service === 'chatgpt' ? 'ChatGPT' : undefined), ...(provider === 'openai' ? { baseUrl: address } : {}) });
-      setApiKey(''); setLabel('');
+      const m = await post<Model>('/api/ai/models', { provider, model, apiKey, label: label || (service === 'chatgpt' ? 'ChatGPT' : undefined), ...(provider === 'openai' ? { baseUrl: address } : {}), access: accessPayload(access) });
+      setApiKey(''); setLabel(''); setStep('details'); setAccess(emptyAccess());
       await onChange(m.id);
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
@@ -601,6 +609,7 @@ function Models({ models, onChange }: { models: Model[]; onChange: (newId?: stri
         ))}
       </>}
 
+      {step === 'details' && <>
       <div className="fb-label">{models.length ? 'Add another' : 'Add a model to talk to'}</div>
       {!models.length && <p className="text-muted" style={{ fontSize: 13.5, marginTop: 0 }}>Bring your own API key. Your Little Dipper talks to the model directly; you pay the service for what you use. What the model reads goes to the service that runs it.</p>}
       <div className="fb-kinds" role="radiogroup" aria-label="Where the model runs">
@@ -623,11 +632,23 @@ function Models({ models, onChange }: { models: Model[]; onChange: (newId?: stri
       {(listing || offered.length > 0) && <p className="text-muted" style={{ fontSize: 12.5, margin: '6px 0 0' }}>{listing || `${offered.length} models available: start typing or pick from the list.`}</p>}
       <div className="fb-label">Name <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span></div>
       <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={service === 'anthropic' ? 'Claude' : service === 'chatgpt' ? 'ChatGPT' : 'e.g. Qwen'} style={{ width: '100%' }} />
-      {error && <p className="fb-error" style={{ marginTop: 12 }}>{error}</p>}
       <div style={{ marginTop: 16 }}>
-        <button type="button" className="btn btn-primary" disabled={busy || !model.trim() || !apiKey.trim() || (provider === 'openai' && !address)} onClick={add}>{busy ? 'Adding…' : 'Add model'}</button>
+        <button type="button" className="btn btn-primary" disabled={!model.trim() || !apiKey.trim() || (provider === 'openai' && !address)} onClick={() => { setError(''); setStep('access'); }}>Next: what it can do</button>
       </div>
-      <p className="text-muted" style={{ fontSize: 12.5, marginTop: 14 }}>It starts out seeing everything except secret details, and its changes wait for you in Review. Change that on its page any time.</p>
+        {error && <p className="fb-error" style={{ marginTop: 12 }}>{error}</p>}
+        <p className="text-muted" style={{ fontSize: 12.5, marginTop: 14 }}>Next, you choose what it sees and what it can change.</p>
+      </>}
+      {step === 'access' && <>
+        <div className="fb-label">Set up {shownName}</div>
+        <p style={{ fontSize: 13.5, marginTop: 0 }}>Decide what {shownName} can see and do. It’s most helpful when it sees more; what it reads goes to the service that runs it. You can change this on its page any time.</p>
+        {catalog ? <AccessChooser catalog={catalog} value={access} onChange={setAccess} name={shownName} /> : <p className="text-muted">Loading…</p>}
+        {error && <p className="fb-error" style={{ marginTop: 12 }}>{error}</p>}
+        <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-primary" disabled={busy || !accessReady(access)} onClick={add}>{busy ? 'Adding…' : `Add ${shownName}`}</button>
+          <button type="button" className="bare fb-plain" onClick={() => setStep('details')}>Back</button>
+        </div>
+        {!accessReady(access) && <p className="text-muted" style={{ fontSize: 12.5, marginTop: 8 }}>Choose what it sees and what it can change to continue.</p>}
+      </>}
     </section>
   );
 }

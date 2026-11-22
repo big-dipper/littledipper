@@ -1106,7 +1106,10 @@ async function main() {
         await iu.call('POST', '/api/ai/providers/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', apiKey: 'wrong-key-0000' }, [400]);
         await iu.call('POST', '/api/ai/models', { provider: 'openai', model: 'fake-1', apiKey: 'test-key-1234' }, [400]);
         await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'ftp://nope', model: 'fake-1', apiKey: 'test-key-1234' }, [400]);
-        const m = await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', model: 'fake-1', apiKey: 'test-key-1234', label: 'Fake' });
+        // The owner must choose what it sees and can change: no silent defaults.
+        await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', model: 'fake-1', apiKey: 'test-key-1234', label: 'Fake' }, [400]);
+        await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', model: 'fake-1', apiKey: 'test-key-1234', label: 'Fake', access: { everything: { includeSecret: false } } }, [400]);
+        const m = await iu.call('POST', '/api/ai/models', { provider: 'openai', baseUrl: 'http://localhost:4211/v1', model: 'fake-1', apiKey: 'test-key-1234', label: 'Fake', access: { everything: { includeSecret: false }, write: 'suggest' } });
         ok(m.apiKey === '…1234' && !JSON.stringify(await iu.call('GET', '/api/ai/models')).includes('test-key'), 'a model is added, and its API key never comes back');
         ok(m.privacy.level === 'local' && m.privacy.goesTo === 'localhost' && m.privacy.does.startsWith('Suggests') && m.privacy.verifiedPrivate === false, 'each model says plainly where your words go and what it can do');
         const asParty = await iu.call('GET', `/api/parties/${m.assistant.id}`);

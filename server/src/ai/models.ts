@@ -12,7 +12,7 @@ import { bad, HttpError, issueKey, notFound, type ApiKeyDoc } from '../auth.js';
 import { decrypt, encrypt, newId } from '../crypto.js';
 import { ctx } from '../ctx.js';
 import type { PartyDoc } from '../federation.js';
-import { setLiveShare } from '../shares.js';
+import { setLiveShare, WRITE_MODES, type WriteMode } from '../shares.js';
 import { checkInstructions } from './settings.js';
 
 export type Provider = 'anthropic' | 'openai';
@@ -139,10 +139,14 @@ function checkInput(b: Record<string, unknown>, partial = false) {
 export async function addModel(b: Record<string, unknown>) {
   const v = checkInput(b);
   if (v.provider === 'openai' && !v.baseUrl) throw bad('invalid_value', 'baseUrl: the service\'s API address, e.g. https://openrouter.ai/api/v1');
-  const { assistantParty } = await import('../routes/oauth.js');
+  const { assistantParty, checkChoice } = await import('../routes/oauth.js');
+  // The owner chooses what it sees and what it can change before it exists: no silent defaults.
+  const access = (b.access && typeof b.access === 'object' ? b.access : null) as Record<string, unknown> | null;
+  if (!access) throw bad('access_required', 'Choose what this model sees and what it can change');
+  if (!WRITE_MODES.includes(access.write as WriteMode)) throw bad('access_required', 'Choose what this model can change');
+  const choice = await checkChoice(access);
   const party = await assistantParty(`${v.label} (in Little Dipper)`);
-  // A sensible start the owner changes on the assistant's page: everything but secrets, changes wait for them.
-  await setLiveShare(party._id, { everything: { includeSecret: false }, basic: true, categories: [], lines: [], entries: [], write: 'suggest', expiresAt: null });
+  await setLiveShare(party._id, { everything: choice.everything, basic: choice.basic, categories: choice.categories, lines: [], entries: [], write: choice.write, expiresAt: choice.expiresAt });
   for (const old of await ctx.store.find<ApiKeyDoc>('apiKeys', { kind: 'app', contactId: party._id })) {
     if (!old.revokedAt) await ctx.store.update('apiKeys', old._id, { revokedAt: now() }); // one key per relationship
   }

@@ -1,24 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, get, post } from '../api';
-import { fetchCatalog, GROUPS, type Domain } from '../life';
+import { fetchCatalog, type Domain } from '../life';
 import { Brand, Circle, Loading, Pills } from '../ui';
+import { AccessChooser, accessFrom, accessPayload, accessReady, emptyAccess, type AccessChoice } from '../assistantAccess';
 
 /**
  * The consent page an AI assistant sends you to when it connects (OAuth). The same choices as sharing with anyone:
  * what it sees (categories, with or without their secret details, or Everything), what it can change, and until when.
  * The assistant becomes one of your relationships; you can change all of this later on its page.
  */
-type Write = 'none' | 'suggest' | 'make';
-type Cat = { domain: string; scope: 'all' | 'current'; includeSecret: boolean };
-type Choice = { everything: { includeSecret: boolean } | null; basic: boolean; categories: Cat[]; write: Write };
-type Info = { client: { name: string; uri: string | null; verified: boolean; redirectHost: string }; previous: Choice | null };
-
-const WRITES: [Write, string, string][] = [
-  ['none', 'Nothing', 'It answers questions from what you let it see, and changes nothing.'],
-  ['suggest', 'Suggests changes', 'Its changes wait for you to approve them. Documents it adds wait in your inbox.'],
-  ['make', 'Makes changes', 'Its changes are saved straight away, and you can see and undo them.'],
-];
+type Info = { client: { name: string; uri: string | null; verified: boolean; redirectHost: string }; previous: AccessChoice | null };
 
 export default function Authorize() {
   const [params] = useSearchParams();
@@ -27,11 +19,8 @@ export default function Authorize() {
   const [info, setInfo] = useState<Info | null>(null);
   const [catalog, setCatalog] = useState<Domain[] | null>(null);
   const [error, setError] = useState('');
-  const [preset, setPreset] = useState<'custom' | 'everything'>('custom');
-  const [everySecret, setEverySecret] = useState(false);
-  const [basic, setBasic] = useState(true);
-  const [cats, setCats] = useState<Record<string, Cat>>({});
-  const [write, setWrite] = useState<Write>('suggest');
+  // Nothing pre-chosen the first time: the owner decides what it sees and can change.
+  const [access, setAccess] = useState(emptyAccess);
   const [until, setUntil] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -40,14 +29,7 @@ export default function Authorize() {
       .then((i) => {
         setInfo(i);
         // Connected before: start from what you chose last time.
-        const p = i.previous;
-        if (p) {
-          setPreset(p.everything ? 'everything' : 'custom');
-          setEverySecret(!!p.everything?.includeSecret);
-          setBasic(p.basic);
-          setCats(Object.fromEntries(p.categories.map((c) => [c.domain, c])));
-          setWrite(p.write);
-        }
+        if (i.previous) setAccess(accessFrom(i.previous));
         return fetchCatalog().then(setCatalog);
       })
       .catch((e) => {
@@ -56,17 +38,14 @@ export default function Authorize() {
       });
   }, [params, nav]);
 
-  const hasSecrets = (d: Domain) => d.parts.some((p) => p.sensitivity === 'secret' && !p.deprecated);
-  const toggle = (d: Domain, on: boolean) => setCats((c) => { const n = { ...c }; if (on) n[d.id] = { domain: d.id, scope: 'all', includeSecret: false }; else delete n[d.id]; return n; });
-  const nothing = preset === 'custom' && !basic && !Object.keys(cats).length;
 
   const answer = async (approve: boolean) => {
     setBusy(true);
     setError('');
     try {
       const r = await post<{ redirect: string }>('/api/oauth/authorize', {
-        ...request, approve, write,
-        ...(preset === 'everything' ? { everything: { includeSecret: everySecret } } : { basic, categories: Object.values(cats) }),
+        ...request, approve,
+        ...(approve ? accessPayload(access) : { write: 'none' }),
         expiresAt: until ? new Date(`${until}T23:59:59`).toISOString() : null,
       });
       window.location.assign(r.redirect);
@@ -99,64 +78,7 @@ export default function Authorize() {
               <div style={{ fontSize: 14 }}><strong>Worth knowing:</strong> what it reads leaves your Little Dipper and goes to the company that runs {name}. You can see everything it does, undo its changes, and end its access any time.</div>
             </div>
 
-            <h3 style={{ marginTop: 28 }}>What it sees</h3>
-            <Pills value={preset} onChange={setPreset} options={[['custom', 'Choose'], ['everything', 'Everything']]} />
-            {preset === 'everything' ? (
-              <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
-                <div className="text-muted" style={{ fontSize: 13 }}>Every category, your profile and every document, including anything you add later.</div>
-                <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={everySecret} onChange={(e) => setEverySecret(e.target.checked)} />
-                  Include secret details too (ID and account numbers, and the like)
-                </label>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gap: 14, marginTop: 12 }}>
-                <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={basic} onChange={(e) => setBasic(e.target.checked)} />
-                  Your basic profile (the lines every connection gets)
-                </label>
-                {GROUPS.map((g) => {
-                  // One-at-a-time categories (tasks, notes) are never handed over whole; Everything includes them.
-                  const ds = catalog.filter((d) => d.group === g.id && !(d as Domain & { oneAtATime?: boolean }).oneAtATime);
-                  if (!ds.length) return null;
-                  return (
-                    <div key={g.id}>
-                      <div className="text-muted" style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 4 }}>{g.label}</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 4 }}>
-                        {ds.map((d) => {
-                          const c = cats[d.id];
-                          return (
-                            <div key={d.id} style={{ display: 'grid', gap: 2 }}>
-                              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, cursor: 'pointer' }}>
-                                <input type="checkbox" checked={!!c} onChange={(e) => toggle(d, e.target.checked)} />
-                                {d.label}
-                              </label>
-                              {c && hasSecrets(d) && (
-                                <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, paddingLeft: 24, cursor: 'pointer' }} className="text-muted">
-                                  <input type="checkbox" checked={c.includeSecret} onChange={(e) => setCats({ ...cats, [d.id]: { ...c, includeSecret: e.target.checked } })} />
-                                  with secret details
-                                </label>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <h3 style={{ marginTop: 28 }}>What it can change</h3>
-            <div style={{ display: 'grid', gap: 6 }}>
-              {WRITES.map(([m, label, text]) => (
-                <label key={m} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', padding: '10px 14px', borderRadius: 16, border: `1px solid ${write === m ? 'var(--color-accent)' : 'var(--color-divider)'}`, background: write === m ? 'var(--color-accent-100)' : 'transparent' }}>
-                  <input type="radio" name="write" checked={write === m} onChange={() => setWrite(m)} style={{ marginTop: 3 }} />
-                  <span><span style={{ fontWeight: 600 }}>{label}</span><br /><span className="text-muted" style={{ fontSize: 13 }}>{text}</span></span>
-                </label>
-              ))}
-            </div>
-            <p className="text-muted" style={{ fontSize: 12.5 }}>Whatever you choose, changes to who you are (legal name, IDs, current address, email, phone) and secret details always wait for you.</p>
+            <div style={{ marginTop: 20 }}><AccessChooser catalog={catalog} value={access} onChange={setAccess} name={name} /></div>
 
             <h3 style={{ marginTop: 28 }}>Until</h3>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -165,9 +87,10 @@ export default function Authorize() {
             </div>
             <p className="text-muted" style={{ fontSize: 12.5 }}>You can change any of this, or end it, on {name}’s page in Relationships. Planning a custom address for your Little Dipper? Set it up first: changing the address later means reconnecting your assistants.</p>
 
+            {!accessReady(access) && <p className="text-muted" style={{ fontSize: 13 }}>Choose what {name} sees and what it can change to continue.</p>}
             {error && <p style={{ color: 'var(--color-accent-700)', fontSize: 13 }}>{error}</p>}
             <div style={{ display: 'flex', gap: 12, marginTop: 24, flexWrap: 'wrap' }}>
-              <button className="btn btn-primary" disabled={busy || nothing} onClick={() => answer(true)} style={{ fontSize: 16, padding: '12px 26px' }}>Connect {name}</button>
+              <button className="btn btn-primary" disabled={busy || !accessReady(access)} onClick={() => answer(true)} style={{ fontSize: 16, padding: '12px 26px' }}>Connect {name}</button>
               <button className="btn btn-secondary" disabled={busy} onClick={() => answer(false)}>Don’t connect</button>
             </div>
           </>

@@ -51,7 +51,7 @@ export default async function aiRoutes(app: FastifyInstance) {
   app.post('/api/ai/models', async (req, reply) => {
     const p = await requireSession(req);
     const m = await addModel((req.body || {}) as Record<string, unknown>);
-    await audit({ actor: ownerActor(p.key._id), action: 'ai.model.add', resource: `aiModels/${m._id}`, text: `You added the AI model ${m.label}. It suggests changes for your OK until you choose otherwise.`, tone: 'owner' });
+    await audit({ actor: ownerActor(p.key._id), action: 'ai.model.add', resource: `aiModels/${m._id}`, text: `You added the AI model ${m.label}, and chose what it sees and what it can change.`, tone: 'owner' });
     reply.code(201);
     return modelOut(m);
   });

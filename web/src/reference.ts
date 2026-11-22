@@ -131,7 +131,7 @@ export const ENDPOINTS: Endpoint[] = ([
   ['AI', 'GET', '/api/ai/providers', 'session', 'The kinds of AI service a model can come from: Claude (Anthropic), or any OpenAI-compatible service.'],
   ['AI', 'POST', '/api/ai/providers/models', 'session', 'The models a service offers, to pick one when adding it: { provider, apiKey, baseUrl? }. Nothing is saved.'],
   ['AI', 'GET', '/api/ai/models', 'session', 'The owner’s AI models: label, provider, model name, API address, the assistant it acts as, and the last characters of its API key (never the key).'],
-  ['AI', 'POST', '/api/ai/models', 'session', 'Add a model { label?, provider: anthropic|openai, model, apiKey, baseUrl? (openai) }. It becomes an assistant that sees everything but secret details and suggests changes, changeable on its page.'],
+  ['AI', 'POST', '/api/ai/models', 'session', 'Add a model { label?, provider: anthropic|openai, model, apiKey, baseUrl? (openai), access: { everything: { includeSecret } | basic + categories, write: none|suggest|make, expiresAt? } }. The owner chooses access up front; it becomes an assistant with exactly that, changeable on its page.'],
   ['AI', 'PATCH', '/api/ai/models/{id}', 'session', 'Change a model’s label, model name, API address, key, or its own extra standing instructions.'],
   ['AI', 'DELETE', '/api/ai/models/{id}', 'session', 'Remove a model. Its assistant key ends at once; its conversations and its page stay.'],
   ['AI', 'GET', '/api/ai/settings', 'session', 'The owner’s standing instructions (every model follows them) and saved prompts: { instructions, prompts: [{ id, text }] }.'],
