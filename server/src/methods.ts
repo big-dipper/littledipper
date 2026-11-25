@@ -10,6 +10,12 @@ export const METHOD_KINDS = ['email', 'phone', 'postal', 'website', 'social', 'm
 /** Kinds whose value is a web address. API and MCP addresses are where an organisation's software (and, later, an assistant acting for you) reaches it. */
 export const URL_KINDS: MethodKind[] = ['website', 'api', 'mcp'];
 export type MethodKind = (typeof METHOD_KINDS)[number];
+/**
+ * What an organisation's method is for, so you (and an assistant acting for you) reach the right door: their billing
+ * line, where to manage or cancel, support, or their published terms. Open: clients show unknown values as general.
+ */
+export const METHOD_PURPOSES = ['billing', 'cancel', 'support', 'terms'] as const;
+export type MethodPurpose = (typeof METHOD_PURPOSES)[number];
 export type PostalAddress = { street1?: string; street2?: string; city?: string; region?: string; postalCode?: string; country: string };
 
 export type ContactMethod = {
@@ -20,6 +26,8 @@ export type ContactMethod = {
   service?: string;
   /** Personal, Work… */
   label?: string;
+  /** For an organisation: what this method is for (billing, cancel, support, terms). Absent means general. */
+  purpose?: MethodPurpose;
   /** The main one of its kind. At most one per kind. */
   primary?: boolean;
   /** Old numbers and addresses are kept as history, so mail from them still matches. */
@@ -115,11 +123,13 @@ export function checkMethod(input: unknown, country = 'US'): ContactMethod {
       break;
   }
   for (const k of ['validFrom', 'validTo'] as const) if (m[k] && !isPartialDate(m[k])) throw bad('invalid_value', `${k}: use YYYY, YYYY-MM or YYYY-MM-DD`);
+  if (m.purpose && !METHOD_PURPOSES.includes(m.purpose)) throw bad('invalid_value', `purpose must be one of ${METHOD_PURPOSES.join(', ')}`);
   return {
     kind, value,
     ...(kind === 'social' || kind === 'messaging' ? { service: String(m.service).trim().slice(0, 60) } : {}),
     ...(m.label ? { label: String(m.label).trim().slice(0, 60) } : {}),
     ...(m.primary ? { primary: true } : {}),
+    ...(m.purpose ? { purpose: m.purpose } : {}),
     ...(m.validFrom ? { validFrom: m.validFrom } : {}),
     ...(m.validTo ? { validTo: m.validTo } : {}),
   };

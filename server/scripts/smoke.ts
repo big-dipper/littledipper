@@ -151,6 +151,18 @@ async function main() {
     const acme = await a.call('POST', '/api/parties', { type: 'organisation', name: 'Acme Corp', methods: [{ kind: 'website', value: 'acme.example' }, { kind: 'phone', value: '(503) 555-0100', label: 'Main' }] });
     ok(acme.methods[0].value === 'https://acme.example/' && acme.methods[1].value === '+15035550100', 'contact methods are checked and stored in a standard form (phone in E.164)');
     await a.call('POST', '/api/parties', { type: 'person', name: 'X', methods: [{ kind: 'phone', value: '020 7946 0958' }] }, [400]);
+    // An organisation's details can say what they're for (where to cancel, its terms); a subscription points to it.
+    const stream = await a.call('POST', '/api/parties', { type: 'organisation', name: 'Streamly', methods: [{ kind: 'website', value: 'streamly.example/cancel', purpose: 'cancel' }] });
+    ok(stream.methods[0].purpose === 'cancel', 'an organisation’s detail keeps what it’s for (manage or cancel)');
+    await a.call('POST', '/api/parties', { type: 'organisation', name: 'X', methods: [{ kind: 'website', value: 'x.example', purpose: 'refunds' }] }, [400]);
+    ok(true, 'an unknown purpose is refused');
+    const sub = await a.call('POST', '/api/data/subscriptions', { data: { provider: stream.id, plan: 'Basic', price: { amount: 9.99, currency: 'USD', period: 'month' }, billedThrough: 'apple' } });
+    const rcpt = await a.call('POST', '/api/data/receipts', { data: { merchant: stream.id, category: 'subscriptions', subscription: sub.id } });
+    const tx = await a.call('POST', '/api/data/transactions', { data: { date: '2026-11-01', direction: 'out', amount: { amount: 9.99, currency: 'USD' }, counterparty: stream.id, category: 'subscriptions', entry: sub.id } });
+    ok(rcpt.data.subscription === sub.id && tx.data.entry === sub.id, 'a receipt and a charge both point to their subscription');
+    ok((await a.call('GET', `/api/parties/${stream.id}`)).usedBy.some((u: { domain: string; part: string }) => u.domain === 'subscriptions' && u.part === 'provider'), 'the provider’s page knows it bills you');
+    for (const id of [tx.id, rcpt.id, sub.id]) await a.call('DELETE', `/api/data/${id === sub.id ? 'subscriptions' : id === tx.id ? 'transactions' : 'receipts'}/${id}`);
+    await a.call('DELETE', `/api/parties/${stream.id}`);
     ok(true, 'a number outside North America needs its country code');
     await a.call('POST', '/api/parties', { type: 'robot', name: 'X' }, [400]);
     ok(true, 'a party is a person or an organisation');

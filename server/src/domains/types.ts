@@ -50,6 +50,8 @@ export type PartDef = {
   remind?: boolean;
   /** money: the value also says per what (hour, week, month, year, once), e.g. pay or a premium. */
   periodic?: boolean;
+  /** money with periodic: the period a new value starts with (a subscription is usually monthly; pay defaults to a year). */
+  periodDefault?: 'hour' | 'week' | 'month' | 'year' | 'once';
   /** record: the categories this link may point to, e.g. ['ids'] for "Proven by". */
   to?: string[];
   /** record: a list of links rather than one. */

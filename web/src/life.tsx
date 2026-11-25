@@ -8,7 +8,7 @@ import { zoneFor, zoneLabel } from './zones';
 // ── types ──────────────────────────────────────────────────────────────
 export type Part = {
   key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean; deprecated?: boolean; system?: boolean;
-  /** money: per what (hour, week, month, year, once). */ periodic?: boolean;
+  /** money: per what (hour, week, month, year, once). */ periodic?: boolean; periodDefault?: string;
   /** record: the categories it may point to, and whether it holds several. */ to?: string[]; many?: boolean;
   /** Only applies when another part holds one of these values (a list: any of them). */ when?: { part: string; in: string[] } | { part: string; in: string[] }[];
   /** A label that follows another part (a contact method's value: Email address, Phone number…). */ labelBy?: { part: string; labels: Record<string, string> };
@@ -163,6 +163,11 @@ export function countries(): [string, string][] {
 export const countryName = (code: string) => countries().find(([c]) => c === code)?.[1] ?? code;
 
 /** Whole amounts without cents; receipts keep theirs. */
+/** What a periodic amount comes to in a month, to add subscriptions up (a year's price is a twelfth; once is nothing). */
+export function perMonth(m: { amount: number; period?: string }) {
+  return m.period === 'month' ? m.amount : m.period === 'year' ? m.amount / 12 : m.period === 'week' ? (m.amount * 52) / 12 : 0;
+}
+
 export function money(m: { amount: number; currency: string }) {
   try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: m.currency, maximumFractionDigits: Number.isInteger(m.amount) ? 0 : 2 }).format(m.amount); } catch { return `${m.amount} ${m.currency}`; }
 }
@@ -268,12 +273,12 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOn
       return <RecordPicker id={id} p={p} value={value} onChange={onChange} />;
     case 'money': {
       const m = (value as { amount?: number | string; currency?: string; period?: string } | null) ?? {};
-      const next = (x: Partial<typeof m>) => ({ amount: m.amount ?? '', currency: m.currency || 'USD', ...(p.periodic ? { period: m.period || 'year' } : {}), ...x });
+      const next = (x: Partial<typeof m>) => ({ amount: m.amount ?? '', currency: m.currency || 'USD', ...(p.periodic ? { period: m.period || p.periodDefault || 'year' } : {}), ...x });
       return (
         <div style={{ display: 'grid', gridTemplateColumns: p.periodic ? '1fr 80px 120px' : '1fr 90px', gap: 6 }}>
           <input id={id} className="input" inputMode="decimal" placeholder={hiddenSaved ? 'Saved and hidden · type to replace' : 'Amount'} value={m.amount ?? ''} onChange={(e) => onChange(e.target.value === '' ? '' : next({ amount: e.target.value }))} />
           <input className="input mono" aria-label="Currency" maxLength={3} value={m.currency ?? 'USD'} onChange={(e) => onChange(next({ currency: e.target.value.toUpperCase() }))} />
-          {p.periodic && <Select value={m.period || 'year'} onChange={(v) => onChange(next({ period: v || 'year' }))} options={PERIODS} />}
+          {p.periodic && <Select value={m.period || p.periodDefault || 'year'} onChange={(v) => onChange(next({ period: v || p.periodDefault || 'year' }))} options={PERIODS} />}
         </div>
       );
     }
@@ -715,7 +720,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
       if (!applies(p, vals)) continue;
       if (p.type === 'money' && v && typeof v === 'object') {
         const m = v as { amount: string | number; currency: string; period?: string };
-        v = m.amount === '' || m.amount === undefined ? null : { amount: Number(m.amount), currency: m.currency || 'USD', ...(p.periodic ? { period: m.period || 'year' } : {}) };
+        v = m.amount === '' || m.amount === undefined ? null : { amount: Number(m.amount), currency: m.currency || 'USD', ...(p.periodic ? { period: m.period || p.periodDefault || 'year' } : {}) };
       }
       if (p.type === 'geo' && v && typeof v === 'object') {
         const g = v as { lat: string | number; lon: string | number };

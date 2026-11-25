@@ -190,7 +190,8 @@ async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> 
       if (!Number.isFinite(amount)) fail('amount must be a number');
       if (!/^[A-Z]{3}$/.test(currency)) fail('bad currency');
       if (!p.periodic) return { amount, currency };
-      const period = (m as { period?: unknown }).period;
+      // Left out, it's the part's usual period (a subscription's price is monthly unless it says otherwise).
+      const period = (m as { period?: unknown }).period ?? p.periodDefault;
       if (!PERIODS.includes(period as never)) fail(`say per what: ${PERIODS.join(', ')}`);
       return { amount, currency, period };
     }

@@ -1320,6 +1320,7 @@
             "income",
             "housing",
             "utilities",
+            "subscriptions",
             "groceries",
             "dining",
             "transport",
@@ -1673,12 +1674,150 @@
           "type": "text",
           "required": false
         },
+        "subscription": {
+          "type": "record",
+          "required": false
+        },
         "returnBy": {
           "type": "date",
           "required": false
         },
         "warrantyUntil": {
           "type": "date",
+          "required": false
+        }
+      }
+    },
+    "subscriptions": {
+      "dated": true,
+      "parts": {
+        "provider": {
+          "type": "party",
+          "required": true
+        },
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "streaming",
+            "music",
+            "news",
+            "software",
+            "cloud",
+            "gaming",
+            "fitness",
+            "delivery",
+            "phone",
+            "internet",
+            "utility",
+            "security",
+            "donation",
+            "other"
+          ]
+        },
+        "plan": {
+          "type": "text",
+          "required": false
+        },
+        "status": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "trial",
+            "active",
+            "paused",
+            "past_due",
+            "cancelled"
+          ]
+        },
+        "price": {
+          "type": "money",
+          "required": false
+        },
+        "nextCharge": {
+          "type": "date",
+          "required": false
+        },
+        "trialEnds": {
+          "type": "date",
+          "required": false
+        },
+        "billedThrough": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "direct",
+            "apple",
+            "google",
+            "amazon",
+            "paypal",
+            "carrier",
+            "roku",
+            "bundle",
+            "other"
+          ]
+        },
+        "bundledWith": {
+          "type": "record",
+          "required": false
+        },
+        "paidWith": {
+          "type": "record",
+          "required": false
+        },
+        "signIn": {
+          "type": "record",
+          "required": false
+        },
+        "accountNumber": {
+          "type": "text",
+          "required": false
+        },
+        "sharedWith": {
+          "type": "party",
+          "required": false
+        },
+        "paidBy": {
+          "type": "party",
+          "required": false
+        },
+        "autoRenews": {
+          "type": "boolean",
+          "required": false
+        },
+        "commitmentEnds": {
+          "type": "date",
+          "required": false
+        },
+        "cancellationFee": {
+          "type": "money",
+          "required": false
+        },
+        "noticeDays": {
+          "type": "number",
+          "required": false
+        },
+        "termsAgreed": {
+          "type": "date",
+          "required": false
+        },
+        "cancelReference": {
+          "type": "text",
+          "required": false
+        },
+        "wish": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "keep",
+            "review",
+            "cancel",
+            "downgrade",
+            "negotiate"
+          ]
+        },
+        "instructions": {
+          "type": "longtext",
           "required": false
         }
       }

@@ -14,7 +14,7 @@ import { getDomain, isPartialDate, listDomains, recordOut, type RecordDoc } from
 export const DOC_KINDS: [string, string][] = [
   ['id', 'ID document'], ['card', 'Card'], ['insurance_card', 'Insurance card'], ['receipt', 'Receipt'], ['invoice', 'Invoice'],
   ['statement', 'Statement'], ['pay_stub', 'Pay stub'], ['tax_form', 'Tax form'], ['medical', 'Medical record'], ['lease', 'Lease'], ['contract', 'Contract'],
-  ['deed', 'Deed'], ['title', 'Title'], ['registration', 'Registration'], ['certificate', 'Certificate'], ['letter', 'Letter'],
+  ['terms', 'Terms & agreement'], ['deed', 'Deed'], ['title', 'Title'], ['registration', 'Registration'], ['certificate', 'Certificate'], ['letter', 'Letter'],
   ['warranty', 'Warranty'], ['manual', 'Manual'], ['resume', 'Résumé / CV'], ['photo', 'Photo'], ['other', 'Other'],
 ];
 const KIND_RE = /^[a-z][a-z0-9_]{0,39}$/;

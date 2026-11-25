@@ -5,7 +5,7 @@ import { Confirm, Dialog, ErrorNote, Loading, useAction, useAsync, useToast, typ
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
 import AssistantPanel from './AssistantPanel';
-import { fetchCatalog, fmtRange, money, PartialDate, RecordEditor, Select, useContactsLite, type Rec } from '../../life';
+import { fetchCatalog, fmtRange, money, PartialDate, perMonth, RecordEditor, Select, useContactsLite, type Rec } from '../../life';
 import { CopyList, SendCopy } from './Copies';
 import SharedWithYou from './SharedWithYou';
 import { loadRelations, RelationsField, saveRelations, type RelDraft, type RelOption } from '../../relations';
@@ -28,6 +28,7 @@ export default function ContactDetail() {
   const [rels, setRels] = useState<{ options: RelOption[]; before: RelDraft[] } | null>(null);
   const [relsKey, setRelsKey] = useState(0);
   const sharing = useSharing();
+  const subs = useSubscriptions(c);
   const [choice, setChoice] = useState<Choice>({ extras: [] });
   const [relation, setRelation] = useState<Relation | ''>('');
   const [preview, setPreview] = useState(false);
@@ -85,6 +86,8 @@ export default function ContactDetail() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
             <span className={`tag ${isNode ? 'tag-accent-2' : 'tag-neutral'}`}>{isNode ? 'On Little Dipper' : isOrg ? 'Organisation' : isAssistant ? 'Assistant' : 'Person'}</span>
             {!isAssistant && <span className={`tag ${STATUS[s][1]}`}>{STATUS[s][0]}</span>}
+            {/* A provider that bills you again and again says so at a glance; the details are under Between you. */}
+            {subs?.current.length ? <Link className="tag tag-accent" to={`/admin/life/subscriptions?q=${encodeURIComponent(c.name)}`} style={{ textDecoration: 'none' }}>{subs.current.length === 1 ? 'Subscription' : `${subs.current.length} subscriptions`}{subs.monthly ? ` · ${subs.monthly} a month` : ''}</Link> : null}
             <span className="text-muted" style={{ fontFamily: isNode ? 'var(--mono)' : 'inherit', fontSize: 12 }}>{sub}</span>
             {c.node?.nodeId && (
               <span className="text-muted" style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>
@@ -123,7 +126,7 @@ export default function ContactDetail() {
           {/* One column, top to bottom, like Home: what they see, how you know them, their details, what they share, then the rest. */}
           <div style={{ display: 'grid', gap: 22, marginTop: 22 }}>
             <div style={{ display: 'grid', gap: 22 }}>
-              {catalog && <BetweenYou c={c} />}
+              {catalog && <BetweenYou c={c} subs={subs} />}
               {/* How you know someone (spouse, mentor…) is about people; with an organisation, Between you says it. */}
               {catalog && !isOrg && !isAssistant && <HowYouKnow key={relsKey} partyId={c.id} first={first} catalog={catalog} notes={isNode ? { text: c.notes, save: (notes) => run(() => patch(`/api/parties/${c.id}`, { notes }), 'Saved').then(reload) } : undefined} />}
               {/* One contact card: what they share (kept up to date by them), plus anything you added yourself. */}
@@ -140,7 +143,7 @@ export default function ContactDetail() {
                 {isNode && c.sharedIn.map((m) => (
                   <Row key={m.key} label={m.label} value={m.key === 'little_dipper' ? m.value.split(' · ')[0] : m.value} />
                 ))}
-                {c.methods.map((m, i) => <Row key={i} label={`${m.label || KIND_LABEL[m.kind]}${m.primary ? ' · main' : ''}`} value={displayMethod(m)} note={isNode ? 'added by you' : undefined} />)}
+                {c.methods.map((m, i) => <Row key={i} label={`${m.label || KIND_LABEL[m.kind]}${m.purpose ? ` · ${PURPOSE_LABEL[m.purpose].toLowerCase()}` : ''}${m.primary ? ' · main' : ''}`} value={displayMethod(m)} note={isNode ? 'added by you' : undefined} />)}
                 {!c.sharedIn.length && !c.methods.length && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>{isNode ? (s === 'active' ? `${first} isn’t sharing contact details yet.` : 'Details arrive once you’re connected.') : 'No details yet.'}</div>}
                 {isNode && c.sharedIn.length > 0 && (
                   <div className="card-meta" style={{ marginTop: 8, flexWrap: 'wrap' }}>
@@ -215,6 +218,10 @@ export default function ContactDetail() {
               <Select value={m.kind} onChange={(v) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, kind: (v || 'email') as ContactMethod['kind'] } : x)) })} options={STRING_KINDS(edit.type).map((k) => [k, KIND_LABEL[k]])} />
               <input className="input" aria-label={KIND_LABEL[m.kind]} value={m.value} placeholder={PLACEHOLDER[m.kind] ?? ''} onChange={(e) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) })} />
               {(m.kind === 'social' || m.kind === 'messaging') && <input className="input" style={{ gridColumn: 2 }} aria-label="Service" placeholder="Service, e.g. Signal" value={m.service ?? ''} onChange={(e) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, service: e.target.value } : x)) })} />}
+              {/* An organisation's billing line, where to cancel, its terms: so you (or your assistant) find the right door. */}
+              {edit.type !== 'person' && ['website', 'email', 'phone'].includes(m.kind) && (
+                <div style={{ gridColumn: 2 }}><Select value={m.purpose ?? ''} onChange={(v) => setEdit({ ...edit, methods: edit.methods.map((x, j) => (j === i ? { ...x, purpose: (v || undefined) as ContactMethod['purpose'] } : x)) })} placeholder="Used for anything" options={Object.entries(PURPOSE_LABEL)} /></div>
+              )}
             </div>
           )))}
           <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 13 }} onClick={() => setEdit({ ...edit, methods: [...edit.methods, nextDetail(edit.type, edit.methods)] })}>Add a detail</button>
@@ -228,6 +235,30 @@ export default function ContactDetail() {
 }
 
 type Edit = { name: string; type: 'person' | 'organisation' | 'assistant'; birthDate: string; notes: string; methods: ContactMethod[]; relations: RelDraft[] };
+/** What an organisation's detail is for. */
+const PURPOSE_LABEL: Record<NonNullable<ContactMethod['purpose']>, string> = { billing: 'Billing', cancel: 'Manage or cancel', support: 'Support', terms: 'Terms and agreements' };
+
+type Subs = { current: Rec[]; monthly: string; text: string };
+/**
+ * The subscriptions this party provides, from your Subscriptions & services entries (never stored on the party: the
+ * entries are the source). Current ones count; what they come to a month is added up per currency.
+ */
+function useSubscriptions(c: CD | null | undefined): Subs | null {
+  const has = !!c?.usedBy.some((u) => u.domain === 'subscriptions' && u.part === 'provider');
+  const { data } = useAsync(async () => (has ? get<{ items: Rec[] }>('/api/data/subscriptions') : null), [c?.id, has]);
+  if (!c || !data) return null;
+  const mine = data.items.filter((r) => r.data.provider === c.id);
+  const today = new Date().toISOString().slice(0, 10);
+  const current = mine.filter((r) => r.data.status !== 'cancelled' && (!r.validTo || r.validTo >= today.slice(0, r.validTo.length)));
+  const by = new Map<string, number>();
+  for (const r of current) { const m = r.data.price as (Money & { period?: string }) | undefined; if (m?.currency) by.set(m.currency, (by.get(m.currency) ?? 0) + perMonth(m)); }
+  const monthly = [...by].filter(([, a]) => a > 0).map(([currency, amount]) => money({ currency, amount: Math.round(amount * 100) / 100 })).join(' + ');
+  const price = (m?: Money & { period?: string }) => (m?.currency ? `${money(m)}${m.period && m.period !== 'once' ? ` a ${m.period}` : ''}` : '');
+  const text = (current.length ? current : mine).slice(0, 2).map((r) => [r.data.plan as string, price(r.data.price as Money)].filter(Boolean).join(' · ') || r.title).join('; ')
+    + (current.length ? '' : ' · ended');
+  return { current, monthly, text };
+}
+
 const KIND_LABEL: Record<ContactMethod['kind'], string> = { email: 'Email', phone: 'Phone', postal: 'Postal address', website: 'Website', social: 'Social', messaging: 'Messaging', api: 'API address', mcp: 'MCP address' };
 /** The details you can type for each kind of party. Organisations lead with their website, and can have the addresses their software answers at. */
 const STRING_KINDS = (type: Edit['type']): ContactMethod['kind'][] => type === 'person' ? ['email', 'phone', 'website', 'social', 'messaging'] : ['website', 'email', 'phone', 'api', 'mcp', 'social', 'messaging'];
@@ -318,7 +349,7 @@ const MONEY: Record<string, { part: string; verb: string }> = { income: { part: 
  * Everything between you and them, from your own entries: money first (payments received, what you spent), then
  * accounts, jobs, policies and anything else that names them. Each line opens that category, searched for them.
  */
-function BetweenYou({ c }: { c: CD }) {
+function BetweenYou({ c, subs }: { c: CD; subs: Subs | null }) {
   const refs = c.usedBy.filter((u) => u.domain !== 'relationships');
   const ids = new Set(refs.map((u) => u.recordId));
   const moneyDomains = [...new Set(refs.map((u) => u.domain))].filter((d) => MONEY[d]);
@@ -337,10 +368,12 @@ function BetweenYou({ c }: { c: CD }) {
       {byDomain.map(([d, list]) => {
         const unique = [...new Map(list.map((u) => [u.recordId, u])).values()];
         const sum = MONEY[d] ? total(d) : '';
+        // Subscriptions: what each one costs, so the line reads like the bill.
+        const subLine = d === 'subscriptions' && subs ? subs.text : '';
         return (
           <Link key={d} to={`/admin/life/${d}?q=${encodeURIComponent(c.name)}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: '1px solid var(--color-divider)', textDecoration: 'none', color: 'inherit', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 14 }}>{list[0].domainLabel} <span className="text-muted">· {unique.length}</span></span>
-            <span className="text-muted" style={{ fontSize: 13, textAlign: 'right' }}>{sum ? `${sum} ${MONEY[d].verb}` : unique.slice(0, 2).map((u) => u.title).join(' · ') + (unique.length > 2 ? ' …' : '')}</span>
+            <span className="text-muted" style={{ fontSize: 13, textAlign: 'right' }}>{subLine || (sum ? `${sum} ${MONEY[d].verb}` : unique.slice(0, 2).map((u) => u.title).join(' · ') + (unique.length > 2 ? ' …' : ''))}</span>
           </Link>
         );
       })}

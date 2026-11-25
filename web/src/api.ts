@@ -40,6 +40,7 @@ export type PostalAddress = { street1?: string; street2?: string; city?: string;
 export type ContactMethod = {
   kind: 'email' | 'phone' | 'postal' | 'website' | 'social' | 'messaging' | 'api' | 'mcp'; value: string | PostalAddress;
   service?: string; label?: string; primary?: boolean; validFrom?: string | null; validTo?: string | null;
+  /** An organisation's method: what it's for. Absent means general. */ purpose?: 'billing' | 'cancel' | 'support' | 'terms';
 };
 export type ContactStatus = 'plain' | 'pending_in' | 'pending_out' | 'active';
 /** A person or organisation in the owner's life. The screens still call them contacts. */

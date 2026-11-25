@@ -413,7 +413,7 @@ const DEFS: Def[] = [
       { key: 'amount', label: 'Amount', type: 'money', required: true },
       { key: 'counterparty', label: 'With', type: 'party', required: true, hint: 'Who you paid or who paid you', when: { part: 'direction', in: ['in', 'out'] } },
       { key: 'category', label: 'What for', type: 'enum', options: o(
-        'income=Income', 'housing=Rent or mortgage', 'utilities=Utilities and phone', 'groceries', 'dining=Eating out', 'transport=Transport and fuel', 'health=Health and medicine',
+        'income=Income', 'housing=Rent or mortgage', 'utilities=Utilities and phone', 'subscriptions=Subscriptions and services', 'groceries', 'dining=Eating out', 'transport=Transport and fuel', 'health=Health and medicine',
         'insurance', 'debt=Debt or loan payment', 'childcare=Childcare and school', 'education', 'shopping', 'personal=Personal care', 'entertainment', 'travel',
         'gifts=Gifts and donations', 'family=Money to or from family', 'savings=Savings and investing', 'fees=Fees and interest', 'taxes', 'refund=Refund', 'cash=Cash withdrawal or deposit', 'other') },
       { key: 'account', label: 'Account', type: 'record', to: ['financial_accounts'], hint: 'The account or card it went through' },
@@ -421,7 +421,7 @@ const DEFS: Def[] = [
       { key: 'method', label: 'How', type: 'enum', options: o('card', 'bank_transfer=Bank transfer', 'direct_deposit=Direct deposit', 'check', 'cash', 'app=Payment app (Venmo, Cash App…)', 'benefits_card=Benefits card (EBT…)', 'autopay=Automatic payment', 'other') },
       { key: 'description', label: 'Description', type: 'text', hint: 'As it reads on your statement' },
       { key: 'reference', label: 'Reference or check number', type: 'text' },
-      { key: 'entry', label: 'Details in', type: 'record', to: ['income', 'receipts', 'insurance', 'vehicles', 'real_estate', 'residences'], hint: 'The income entry, receipt or bill this payment is' },
+      { key: 'entry', label: 'Details in', type: 'record', to: ['income', 'receipts', 'subscriptions', 'insurance', 'vehicles', 'real_estate', 'residences'], hint: 'The income entry, receipt, subscription or bill this payment is' },
     ],
   },
   {
@@ -508,8 +508,55 @@ const DEFS: Def[] = [
       { key: 'paymentMethod', label: 'Paid by', type: 'enum', options: o('card', 'cash', 'bank_transfer=Bank transfer', 'mobile_wallet=Mobile wallet', 'crypto=Crypto / stablecoin', 'gift_card=Gift card', 'other') },
       { key: 'paidWith', label: 'Paid with', type: 'record', to: ['financial_accounts'], when: { part: 'paymentMethod', in: ['card', 'bank_transfer', 'mobile_wallet'] } },
       { key: 'orderNumber', label: 'Order or receipt number', type: 'text' },
+      { key: 'subscription', label: 'Subscription', type: 'record', to: ['subscriptions'], when: { part: 'category', in: ['subscriptions'] }, hint: 'The subscription or service this receipt is for' },
       { key: 'returnBy', label: 'Return by', type: 'date', remind: true },
       { key: 'warrantyUntil', label: 'Warranty until', type: 'date', remind: true },
+    ],
+  },
+  {
+    // One entry per ongoing arrangement with a provider: the terms you agreed to, in one place. Each charge stays a
+    // Transaction (or a Receipt) pointing here through "Details in", so the history of payments isn't repeated. The price
+    // here is what you agreed to; a charge that differs is a price change worth showing. Facts true for everyone (how to
+    // cancel, their published terms) belong on the provider's own page, not here: this is what's true for you.
+    // Started and ended are the entry's dates. Insurance, loans and leases keep their own categories.
+    id: 'subscriptions', label: 'Subscriptions & services', noun: 'subscription', group: 'money', sensitivity: 'sensitive', dated: true, publicable: false,
+    documents: 'invoice', documentsHint: 'Bills, the terms you agreed to, cancellation confirmations',
+    description: 'Streaming, apps, phone, internet, utilities and anything else that bills you again and again: what it costs, how it’s billed and how to get out of it.',
+    title: '{provider} · {plan}',
+    parts: [
+      { key: 'provider', label: 'Provider', type: 'party', expects: 'organisation', required: true, hint: 'Who provides it, e.g. Netflix or your power company' },
+      { key: 'kind', label: 'Kind', type: 'enum', options: o(
+        'streaming=Streaming video', 'music=Music, audio and podcasts', 'news=News and magazines', 'software=Apps and software', 'cloud=Cloud storage', 'gaming=Gaming',
+        'fitness=Gym and fitness', 'delivery=Delivery and meal kits', 'phone=Mobile phone', 'internet=Internet and TV', 'utility=Utility (power, gas, water, trash)',
+        'security=Home security', 'donation=Recurring donation', 'other') },
+      { key: 'plan', label: 'Plan', type: 'text', hint: 'As they name it, e.g. “Premium, 4 screens”' },
+      { key: 'status', label: 'Status', type: 'enum', options: o('trial=Free trial', 'active', 'paused', 'past_due=Past due', 'cancelled') },
+      { key: 'price', label: 'Price', type: 'money', periodic: true, periodDefault: 'month', hint: 'What you agreed to pay. Each charge is a transaction that points here' },
+      { key: 'nextCharge', label: 'Next charge', type: 'date', remind: true },
+      { key: 'trialEnds', label: 'Trial ends', type: 'date', remind: true, when: { part: 'status', in: ['trial'] } },
+      // Where it's billed decides where it's cancelled: a subscription bought in an app is cancelled at Apple or Google, not with the provider.
+      { key: 'billedThrough', label: 'Billed through', type: 'enum', hint: 'Where you pay is usually where you cancel', options: o(
+        'direct=Straight with them', 'apple=Apple (App Store)', 'google=Google Play', 'amazon=Amazon', 'paypal=PayPal', 'carrier=Your phone company', 'roku=Roku', 'bundle=Part of another subscription', 'other') },
+      { key: 'bundledWith', label: 'Part of', type: 'record', to: ['subscriptions'], when: { part: 'billedThrough', in: ['bundle'] }, hint: 'The subscription it comes with' },
+      { key: 'paidWith', label: 'Paid with', type: 'record', to: ['financial_accounts'], hint: 'The card or account it charges' },
+      { key: 'signIn', label: 'Signed up with', type: 'record', to: ['contact_methods'], hint: 'The email or phone the account is under' },
+      { key: 'accountNumber', label: 'Account or customer number', type: 'text', sensitivity: 'sensitive' },
+      { key: 'sharedWith', label: 'Shared with', type: 'party', many: true, hint: 'Everyone on the plan with you: cancelling ends it for them too' },
+      { key: 'paidBy', label: 'Paid by', type: 'party', hint: 'Only if someone else pays for it' },
+      { key: 'autoRenews', label: 'Renews on its own', type: 'boolean' },
+      { key: 'commitmentEnds', label: 'Contract ends', type: 'date', remind: true, hint: 'The end of a minimum term, if there is one' },
+      { key: 'cancellationFee', label: 'Fee to cancel early', type: 'money' },
+      { key: 'noticeDays', label: 'Notice needed (days)', type: 'number', hint: 'How long before you must tell them' },
+      { key: 'termsAgreed', label: 'Terms agreed on', type: 'date', hint: 'The date of the terms you signed up under. Keep a copy in Documents' },
+      { key: 'cancelReference', label: 'Cancellation confirmation', type: 'text', when: { part: 'status', in: ['cancelled'] }, hint: 'The number or code they gave you' },
+      // The owner's intent, so an assistant doing the errand never has to guess.
+      { key: 'wish', label: 'What you want', type: 'enum', options: o('keep', 'review=Look again before it renews', 'cancel', 'downgrade=Move to a cheaper plan', 'negotiate=Ask for a better price') },
+      { key: 'instructions', label: 'Instructions for assistants', type: 'longtext', hint: 'E.g. “Take a discount if it’s under $8, otherwise cancel”' },
+    ],
+    companions: [
+      { document: 'terms', label: 'The terms you agreed to' },
+      { document: 'invoice', label: 'A recent bill' },
+      { domain: 'transactions', label: 'The charges' },
     ],
   },
   // ── things ───────────────────────────────────────────────────────────
@@ -594,7 +641,7 @@ const DEFS: Def[] = [
   {
     id: 'memberships', label: 'Memberships & loyalty', noun: 'membership', group: 'life', sensitivity: 'standard', dated: true, publicable: true, documents: 'card',
     sensitivityBy: { part: 'kind', values: { union: 'sensitive', religious: 'sensitive', political: 'sensitive' } },
-    description: 'Frequent flyer, hotel and loyalty numbers, clubs, associations, unions and subscriptions.',
+    description: 'Frequent flyer, hotel and loyalty numbers, clubs, associations and unions. Anything that bills you again and again lives in Subscriptions & services.',
     title: '{organization}',
     parts: [
       { key: 'kind', label: 'Kind', type: 'enum', options: o('frequent_flyer=Frequent flyer', 'hotel', 'loyalty', 'club', 'association=Professional association', 'union', 'religious=Religious organisation', 'political=Political organisation', 'subscription', 'other') },

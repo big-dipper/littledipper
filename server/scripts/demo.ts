@@ -144,7 +144,7 @@ async function run() {
   await add('ids', { kind: 'drivers_license', number: 'WL7720413', issuer: 'US', authority: 'Oregon', class: 'C', expires: '2029-03-09' });
   await add('citizenship', { country: 'US', status: 'citizen', acquiredBy: 'birth', provenBy: [passport] }, { validFrom: '1984' });
   await add('citizenship', { country: 'CA', status: 'permanent_resident' }, { validFrom: '2020' });
-  await add('contact_methods', { kind: 'phone', value: '(503) 555-0148', label: 'Mobile', primary: true });
+  const mobile = await add('contact_methods', { kind: 'phone', value: '(503) 555-0148', label: 'Mobile', primary: true });
   const landlord = await party('Pat Okoro', 'person');
   await add('residences', { street1: '2214 SE Ankeny St', city: 'Portland', region: 'OR', postalCode: '97214', country: 'US', ownership: 'rent', landlord, primary: true }, { validFrom: '2019-06' });
   await add('residences', { street1: '12 Kungsgatan', city: 'Stockholm', country: 'SE', ownership: 'rent' }, { validFrom: '2012-01', validTo: '2019-05' });
@@ -178,7 +178,7 @@ async function run() {
   const car = await add('vehicles', { kind: 'car', make: 'Subaru', model: 'Outback', year: 2019, vin: '4S4BSANC5K3123456', registeredIn: 'US-OR', registrationExpires: '2027-03', heldAs: 'financed' }, { validFrom: '2019-09' });
   const loan = await add('valuables', { kind: 'jewelry', name: 'Grandmother’s gold ring', value: { amount: 1800, currency: 'USD' }, valueAsOf: '2024-06' });
   await add('financial_accounts', { kind: 'loan', institution: bank, finances: car, status: 'current' }, { validFrom: '2019-09' });
-  await add('financial_accounts', { kind: 'debit_card', institution: bank, cardLast4: '4821', account: checking, status: 'current' }, { validFrom: '2023-02' });
+  const debit = await add('financial_accounts', { kind: 'debit_card', institution: bank, cardLast4: '4821', account: checking, status: 'current' }, { validFrom: '2023-02' });
   const nwMutual = await party('Northwest Mutual');
   await add('insurance', { kind: 'auto', insurer: nwMutual, premium: { amount: 96, currency: 'USD', period: 'month' }, coversThings: [car], coversPeople: [robin] }, { validFrom: '2025-01' });
   const blueBottle = await party('Blue Bottle');
@@ -191,6 +191,17 @@ async function run() {
   for (const day of ['2026-09-15', '2026-10-15']) await add('transactions', { date: day, direction: 'out', amount: usd(412.37), counterparty: bank, category: 'debt', account: checking, method: 'autopay', description: 'HARBOR CU LOAN PMT', entry: car });
   await add('transactions', { date: '2026-10-01', direction: 'out', amount: usd(12.5), counterparty: blueBottle, category: 'dining', method: 'cash', entry: coffee });
   await add('transactions', { date: '2026-10-28', direction: 'out', amount: usd(96), counterparty: nwMutual, category: 'insurance', account: checking, method: 'autopay', description: 'NW MUTUAL AUTO' });
+  // Subscriptions & services: the terms live on the subscription; each charge is a transaction pointing to it.
+  // How to cancel and their published terms are on the provider's own page (true for everyone, not just Maya).
+  const netflix = await party('Netflix', 'organisation', { methods: [
+    { kind: 'website', value: 'netflix.com' }, { kind: 'website', value: 'netflix.com/cancelplan', purpose: 'cancel' }, { kind: 'website', value: 'help.netflix.com/legal/termsofuse', purpose: 'terms' }] });
+  const flix = await add('subscriptions', { provider: netflix, kind: 'streaming', plan: 'Standard', status: 'active', price: { ...usd(17.99), period: 'month' }, nextCharge: '2026-12-09', billedThrough: 'direct', paidWith: debit, signIn: mobile, sharedWith: [robin], autoRenews: true, wish: 'review', instructions: 'If the price goes up again, cancel. Robin uses it too: tell me before you do.' }, { validFrom: '2019-04' });
+  for (const [day, amt] of [['2026-09-09', 15.49], ['2026-10-09', 17.99], ['2026-11-09', 17.99]] as const) await add('transactions', { date: day, direction: 'out', amount: usd(amt), counterparty: netflix, category: 'subscriptions', account: checking, method: 'card', description: 'NETFLIX.COM', entry: flix });
+  const pge = await party('Portland General Electric', 'organisation', { methods: [{ kind: 'website', value: 'portlandgeneral.com' }, { kind: 'phone', value: '(503) 228-6322', purpose: 'billing' }] });
+  await add('subscriptions', { provider: pge, kind: 'utility', plan: 'Residential, equal pay', status: 'active', price: { ...usd(84), period: 'month' }, nextCharge: '2026-12-02', billedThrough: 'direct', paidWith: checking, accountNumber: '0412-118-907', autoRenews: true, wish: 'keep' }, { validFrom: '2019-07' });
+  const headspace = await party('Headspace', 'organisation', { methods: [{ kind: 'website', value: 'headspace.com' }] });
+  const calm = await add('subscriptions', { provider: headspace, kind: 'software', plan: 'Annual', status: 'trial', price: { ...usd(69.99), period: 'year' }, trialEnds: '2026-12-01', nextCharge: '2026-12-01', billedThrough: 'apple', wish: 'cancel', instructions: 'Cancel before the trial ends. It was bought in the iPhone app, so it’s cancelled in Apple settings.' }, { validFrom: '2026-11-17' });
+  await add('receipts', { merchant: headspace, purchased: '2026-11-17', total: usd(0), category: 'subscriptions', subscription: calm, paymentMethod: 'mobile_wallet', orderNumber: 'MT4Q8R2KZP' });
   await add('events', { title: 'Book club', start: { at: '2026-01-12T19:00', tz: 'America/Los_Angeles' }, end: { at: '2026-01-12T21:00', tz: 'America/Los_Angeles' }, repeat: 'FREQ=MONTHLY;BYDAY=2MO', location: 'Powell’s' });
   await add('contact_methods', { kind: 'website', value: 'mayalind.studio' });
   await add('contact_methods', { kind: 'social', service: 'Instagram', value: '@maya.makes' });

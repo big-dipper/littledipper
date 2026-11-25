@@ -1208,6 +1208,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -1275,6 +1276,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -1344,6 +1346,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -1419,6 +1422,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -1494,6 +1498,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -1571,6 +1576,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -1648,6 +1654,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -1733,6 +1740,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -1815,6 +1823,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -1892,6 +1901,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -4012,6 +4022,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -4717,6 +4728,7 @@
                 "tax_returns",
                 "legal",
                 "receipts",
+                "subscriptions",
                 "vehicles",
                 "real_estate",
                 "valuables",
@@ -7098,6 +7110,7 @@
               "income",
               "housing",
               "utilities",
+              "subscriptions",
               "groceries",
               "dining",
               "transport",
@@ -7123,6 +7136,7 @@
               "income": "Income",
               "housing": "Rent or mortgage",
               "utilities": "Utilities and phone",
+              "subscriptions": "Subscriptions and services",
               "groceries": "Groceries",
               "dining": "Eating out",
               "transport": "Transport and fuel",
@@ -7198,7 +7212,7 @@
           },
           "entry": {
             "title": "Details in",
-            "description": "Id of an entry in income or receipts or insurance or vehicles or real_estate or residences.",
+            "description": "Id of an entry in income or receipts or subscriptions or insurance or vehicles or real_estate or residences.",
             "type": "string",
             "x-part-type": "record"
           }
@@ -7701,6 +7715,12 @@
             "type": "string",
             "x-part-type": "text"
           },
+          "subscription": {
+            "title": "Subscription",
+            "description": "Id of an entry in subscriptions.",
+            "type": "string",
+            "x-part-type": "record"
+          },
           "returnBy": {
             "title": "Return by",
             "type": "string",
@@ -7717,6 +7737,228 @@
           }
         },
         "required": []
+      },
+      "Record_subscriptions": {
+        "title": "Subscriptions & services",
+        "description": "Streaming, apps, phone, internet, utilities and anything else that bills you again and again: what it costs, how it’s billed and how to get out of it. One subscription per entry. Default sensitivity: sensitive. Dated: entries carry validFrom and validTo.",
+        "type": "object",
+        "properties": {
+          "provider": {
+            "title": "Provider",
+            "description": "Who provides it, e.g. Netflix or your power company Id of a party: a person or organisation.",
+            "type": "string",
+            "x-part-type": "party"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string",
+            "enum": [
+              "streaming",
+              "music",
+              "news",
+              "software",
+              "cloud",
+              "gaming",
+              "fitness",
+              "delivery",
+              "phone",
+              "internet",
+              "utility",
+              "security",
+              "donation",
+              "other"
+            ],
+            "x-labels": {
+              "streaming": "Streaming video",
+              "music": "Music, audio and podcasts",
+              "news": "News and magazines",
+              "software": "Apps and software",
+              "cloud": "Cloud storage",
+              "gaming": "Gaming",
+              "fitness": "Gym and fitness",
+              "delivery": "Delivery and meal kits",
+              "phone": "Mobile phone",
+              "internet": "Internet and TV",
+              "utility": "Utility (power, gas, water, trash)",
+              "security": "Home security",
+              "donation": "Recurring donation",
+              "other": "Other"
+            },
+            "x-part-type": "enum"
+          },
+          "plan": {
+            "title": "Plan",
+            "description": "As they name it, e.g. “Premium, 4 screens”",
+            "type": "string",
+            "x-part-type": "text"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string",
+            "enum": [
+              "trial",
+              "active",
+              "paused",
+              "past_due",
+              "cancelled"
+            ],
+            "x-labels": {
+              "trial": "Free trial",
+              "active": "Active",
+              "paused": "Paused",
+              "past_due": "Past due",
+              "cancelled": "Cancelled"
+            },
+            "x-part-type": "enum"
+          },
+          "price": {
+            "title": "Price",
+            "description": "What you agreed to pay. Each charge is a transaction that points here",
+            "$ref": "#/components/schemas/Money",
+            "x-part-type": "money"
+          },
+          "nextCharge": {
+            "title": "Next charge",
+            "type": "string",
+            "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$",
+            "description": "Partial ISO date: YYYY, YYYY-MM or YYYY-MM-DD.",
+            "x-part-type": "date"
+          },
+          "trialEnds": {
+            "title": "Trial ends",
+            "type": "string",
+            "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$",
+            "description": "Partial ISO date: YYYY, YYYY-MM or YYYY-MM-DD.",
+            "x-part-type": "date"
+          },
+          "billedThrough": {
+            "title": "Billed through",
+            "description": "Where you pay is usually where you cancel",
+            "type": "string",
+            "enum": [
+              "direct",
+              "apple",
+              "google",
+              "amazon",
+              "paypal",
+              "carrier",
+              "roku",
+              "bundle",
+              "other"
+            ],
+            "x-labels": {
+              "direct": "Straight with them",
+              "apple": "Apple (App Store)",
+              "google": "Google Play",
+              "amazon": "Amazon",
+              "paypal": "PayPal",
+              "carrier": "Your phone company",
+              "roku": "Roku",
+              "bundle": "Part of another subscription",
+              "other": "Other"
+            },
+            "x-part-type": "enum"
+          },
+          "bundledWith": {
+            "title": "Part of",
+            "description": "Id of an entry in subscriptions.",
+            "type": "string",
+            "x-part-type": "record"
+          },
+          "paidWith": {
+            "title": "Paid with",
+            "description": "Id of an entry in financial_accounts.",
+            "type": "string",
+            "x-part-type": "record"
+          },
+          "signIn": {
+            "title": "Signed up with",
+            "description": "Id of an entry in contact_methods.",
+            "type": "string",
+            "x-part-type": "record"
+          },
+          "accountNumber": {
+            "title": "Account or customer number",
+            "type": "string",
+            "x-part-type": "text"
+          },
+          "sharedWith": {
+            "title": "Shared with",
+            "description": "Everyone on the plan with you: cancelling ends it for them too Id of a party: a person or organisation.",
+            "type": "string",
+            "x-part-type": "party"
+          },
+          "paidBy": {
+            "title": "Paid by",
+            "description": "Only if someone else pays for it Id of a party: a person or organisation.",
+            "type": "string",
+            "x-part-type": "party"
+          },
+          "autoRenews": {
+            "title": "Renews on its own",
+            "type": "boolean",
+            "x-part-type": "boolean"
+          },
+          "commitmentEnds": {
+            "title": "Contract ends",
+            "description": "The end of a minimum term, if there is one Partial ISO date: YYYY, YYYY-MM or YYYY-MM-DD.",
+            "type": "string",
+            "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$",
+            "x-part-type": "date"
+          },
+          "cancellationFee": {
+            "title": "Fee to cancel early",
+            "$ref": "#/components/schemas/Money",
+            "x-part-type": "money"
+          },
+          "noticeDays": {
+            "title": "Notice needed (days)",
+            "description": "How long before you must tell them",
+            "type": "number",
+            "x-part-type": "number"
+          },
+          "termsAgreed": {
+            "title": "Terms agreed on",
+            "description": "The date of the terms you signed up under. Keep a copy in Documents Partial ISO date: YYYY, YYYY-MM or YYYY-MM-DD.",
+            "type": "string",
+            "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$",
+            "x-part-type": "date"
+          },
+          "cancelReference": {
+            "title": "Cancellation confirmation",
+            "description": "The number or code they gave you",
+            "type": "string",
+            "x-part-type": "text"
+          },
+          "wish": {
+            "title": "What you want",
+            "type": "string",
+            "enum": [
+              "keep",
+              "review",
+              "cancel",
+              "downgrade",
+              "negotiate"
+            ],
+            "x-labels": {
+              "keep": "Keep",
+              "review": "Look again before it renews",
+              "cancel": "Cancel",
+              "downgrade": "Move to a cheaper plan",
+              "negotiate": "Ask for a better price"
+            },
+            "x-part-type": "enum"
+          },
+          "instructions": {
+            "title": "Instructions for assistants",
+            "description": "E.g. “Take a discount if it’s under $8, otherwise cancel”",
+            "type": "string",
+            "x-part-type": "longtext"
+          }
+        },
+        "required": [
+          "provider"
+        ]
       },
       "Record_vehicles": {
         "title": "Vehicles",
@@ -8042,7 +8284,7 @@
       },
       "Record_memberships": {
         "title": "Memberships & loyalty",
-        "description": "Frequent flyer, hotel and loyalty numbers, clubs, associations, unions and subscriptions. One membership per entry. Default sensitivity: standard. Dated: entries carry validFrom and validTo.",
+        "description": "Frequent flyer, hotel and loyalty numbers, clubs, associations and unions. Anything that bills you again and again lives in Subscriptions & services. One membership per entry. Default sensitivity: standard. Dated: entries carry validFrom and validTo.",
         "type": "object",
         "properties": {
           "kind": {

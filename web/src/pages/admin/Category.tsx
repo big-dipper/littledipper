@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { get, longDate, post, SENS } from '../../api';
+import { get, longDate, post, SENS, shortDate } from '../../api';
 import { ErrorNote, Loading, useAction, useAsync } from '../../ui';
-import { byWhom, Details, duration, EntryCard, fetchCatalog, fmtRange, groupOf, Lock, money, Mono, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec, type Version } from '../../life';
+import { byWhom, Details, duration, EntryCard, fetchCatalog, fmtRange, groupOf, Lock, money, Mono, perMonth, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec, type Version } from '../../life';
 import { plural } from './LifeHub';
 import { CopyList, SendCopy } from './Copies';
 
@@ -57,6 +57,33 @@ function IncomeTotals({ items }: { items: Rec[] }) {
           <div className="text-muted" style={{ fontSize: 12 }}>{recs.length} payment{recs.length === 1 ? '' : 's'}{recs.some(([, w]) => w < 1) ? ', some in part' : ''}{sums(recs, 'gross').length ? ` · ${sumText(sums(recs, 'gross'))} gross where known` : ''}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Subscriptions at a glance, from the entries' agreed prices: what the ones still running come to a month and a year,
+ * and which charge comes next. A cancelled or ended one doesn't count.
+ */
+function SubscriptionTotals({ items, contacts }: { items: Rec[]; contacts: ContactLite[] }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const running = items.filter((r) => r.data.status !== 'cancelled' && (!r.validTo || r.validTo >= today.slice(0, r.validTo.length)));
+  const month = sums(running.map((r) => [{ ...r, data: { price: r.data.price ? { ...(r.data.price as Money), amount: perMonth(r.data.price as Money & { period?: string }) } : undefined } }, 1] as [Rec, number]), 'price');
+  const next = running.filter((r) => typeof r.data.nextCharge === 'string' && r.data.nextCharge >= today).sort((a, b) => String(a.data.nextCharge).localeCompare(String(b.data.nextCharge)))[0];
+  const who = (id: unknown) => contacts.find((c) => c.id === id)?.name ?? '';
+  const trials = running.filter((r) => r.data.status === 'trial').length;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 22 }}>
+      <div className="card" style={{ padding: '18px 22px', gap: 4 }}>
+        <div className="card-kicker">A month</div>
+        <div className="card-title" style={{ fontSize: 24 }}>{sumText(month)}</div>
+        <div className="text-muted" style={{ fontSize: 12 }}>{running.length} running{trials ? `, ${trials} on a free trial` : ''}{month.length ? ` · ${sumText(month.map((m) => ({ ...m, amount: Math.round(m.amount * 12) })))} a year` : ''}</div>
+      </div>
+      <div className="card" style={{ padding: '18px 22px', gap: 4 }}>
+        <div className="card-kicker">Next charge</div>
+        <div className="card-title" style={{ fontSize: 24 }}>{next ? shortDate(`${String(next.data.nextCharge)}T12:00:00`) : 'None on file'}</div>
+        <div className="text-muted" style={{ fontSize: 12 }}>{next ? [who(next.data.provider), next.data.price ? money(next.data.price as Money) : ''].filter(Boolean).join(' · ') : 'Add the next charge date and it shows here and on Home'}</div>
+      </div>
     </div>
   );
 }
@@ -218,6 +245,7 @@ export default function Category() {
       </div>
 
       {d.id === 'income' && data.items.length > 0 && <IncomeTotals items={data.items} />}
+      {d.id === 'subscriptions' && data.items.length > 0 && <SubscriptionTotals items={data.items} contacts={contacts} />}
 
       {searchable && (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 22 }}>
