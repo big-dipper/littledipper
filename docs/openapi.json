@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Little Dipper API",
-    "version": "0.4.9",
+    "version": "0.4.10",
     "summary": "A private home for all of your life's data. Every Little Dipper serves this API at its own address.",
     "description": "Every Little Dipper is one person's own server, so there is no central API: you call **the owner's node** at its address, with their permission.\n\n- **No versions in the paths.** Endpoints only ever get added. Check `capabilities` in `/.well-known/little-dipper` before using a feature; a missing capability means \"do without\", never an error.\n- **Records** live at `/api/data/{category}`. Each built-in category has a schema below; owners can add their own (`x_…`).\n- **Secret values** come back masked unless you ask to reveal them and have permission.\n- **Nodes talk to each other** under `/peer`, with signed envelopes.\n\nGenerated from the code of this release, so it matches exactly what the server does.",
     "license": {
